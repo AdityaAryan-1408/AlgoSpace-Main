@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-easy: var(--easy);
+  --color-easy-bg: var(--easy-bg);
+  --color-medium: var(--medium);
+  --color-medium-bg: var(--medium-bg);
+  --color-hard: var(--hard);
+  --color-hard-bg: var(--hard-bg);
+  --color-tag: var(--tag);
+  --color-tag-bg: var(--tag-bg);
+}
+
+@layer base {
+  :root {
+    --background: #f9fafb;
+    --foreground: #111827;
+    --card: #ffffff;
+    --card-foreground: #111827;
+    --border: #e5e7eb;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+    --primary: #111827;
+    --primary-foreground: #ffffff;
+    
+    --easy: #059669;
+    --easy-bg: #d1fae5;
+    --medium: #d97706;
+    --medium-bg: #fef3c7;
+    --hard: #dc2626;
+    --hard-bg: #fee2e2;
+    
+    /* Changed from Purple to a clean Cyan/Teal */
+    --tag: #0891b2; 
+    --tag-bg: #cffafe;
+  }
+
+  .dark {
+    --background: #000000;
+    --foreground: #f9fafb;
+    --card: #0a0a0a;
+    --card-foreground: #f9fafb;
+    --border: #262626;
+    --muted: #171717;
+    --muted-foreground: #a3a3a3;
+    --primary: #ffffff;
+    --primary-foreground: #000000;
+    
+    --easy: #4ade80;
+    --easy-bg: rgba(74, 222, 128, 0.1);
+    --medium: #fbbf24;
+    --medium-bg: rgba(251, 191, 36, 0.1);
+    --hard: #f87171;
+    --hard-bg: rgba(248, 113, 113, 0.1);
+    
+    /* Changed from Purple to Cyan */
+    --tag: #22d3ee;
+    --tag-bg: rgba(34, 211, 238, 0.1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    user-select: none;
+  }
+  .selectable {
+    user-select: text;
+  }
+  
+  /* Custom Log-Style Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--background);
+    border-left: 1px solid var(--border);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted-foreground);
+    border-radius: 0px; /* Flat, terminal-like edges */
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--foreground);
+  }
+}

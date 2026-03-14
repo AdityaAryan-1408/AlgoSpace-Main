@@ -1,0 +1,29 @@
+{
+    "manifest_version": 3,
+    "name": "AlgoTrack — LeetCode Capture",
+    "version": "1.0.0",
+    "description": "Automatically captures accepted LeetCode submissions and sends them to AlgoTrack.",
+    "permissions": [
+        "activeTab"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://leetcode.com/problems/*"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "css": [
+                "styles.css"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "icons": {},
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "algotrack@extension"
+        }
+    }
+}
