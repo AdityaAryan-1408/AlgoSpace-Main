@@ -5,7 +5,7 @@
 
 // ── Configuration ────────────────────────────────────────────
 // Change this to your production URL when deployed.
-const ALGOTRACK_BASE_URL = "http://localhost:3000";
+const ALGOTRACK_BASE_URL = "https://algo-space-main.vercel.app";
 
 // DOM selectors — update these if LeetCode changes their UI.
 const SELECTORS = {

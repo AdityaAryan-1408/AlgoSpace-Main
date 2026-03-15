@@ -23,7 +23,12 @@
     "icons": {},
     "browser_specific_settings": {
         "gecko": {
-            "id": "algotrack@extension"
+            "id": "algotrack@extension",
+            "data_collection_permissions": {
+                "required": [
+                    "none"
+                ]
+            }
         }
     }
 }
