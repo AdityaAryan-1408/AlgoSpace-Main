@@ -460,7 +460,7 @@ export function AddCardForm({
                     ) : (
                         <Plus className="w-4 h-4" />
                     )}
-                    {isSubmitting ? "Adding..." : submitLabel}
+                    {isSubmitting ? (mode === "edit" ? "Saving..." : "Adding...") : submitLabel}
                 </Button>
             </div>
         </div>

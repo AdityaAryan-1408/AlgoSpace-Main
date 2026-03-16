@@ -1,6 +1,7 @@
 import { mockCards } from "@/data";
 import {
   encodeCardContent,
+  parseCardContent,
   upsertComplexityTags,
   type CardSolutionItem,
   type RelatedProblemLink,
@@ -196,29 +197,46 @@ export async function updateCardById(
   if (updates.url !== undefined) payload.url = updates.url;
   if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty;
   if (updates.notes !== undefined) payload.notes = updates.notes;
-  if (updates.tags !== undefined) payload.tags = updates.tags;
-  if (updates.solution !== undefined) payload.solution = updates.solution;
-  if (updates.timeComplexity !== undefined) payload.time_complexity = updates.timeComplexity;
-  if (updates.spaceComplexity !== undefined) payload.space_complexity = updates.spaceComplexity;
   if (updates.solvedAt !== undefined) payload.solved_at = updates.solvedAt;
   if (updates.topicDomain !== undefined) payload.topic_domain = updates.topicDomain;
   if (updates.topicIds !== undefined) payload.topic_ids = updates.topicIds;
   if (updates.metadata !== undefined) payload.metadata = updates.metadata;
 
-  if (updates.solutions !== undefined) {
-    if (updates.solutions == null) {
-      payload.metadata = { ...(payload.metadata as any || {}), solutions: null };
-    } else {
-      payload.metadata = { ...(payload.metadata as any || {}), solutions: updates.solutions };
+  const hasRichUpdate =
+    updates.solution !== undefined ||
+    updates.solutions !== undefined ||
+    updates.timeComplexity !== undefined ||
+    updates.spaceComplexity !== undefined ||
+    updates.relatedProblems !== undefined;
+
+  let finalTags = updates.tags;
+
+  if (hasRichUpdate) {
+    const existingCard = await getCardById(userId, cardId);
+    if (!existingCard) throw new Error("Card not found");
+
+    if (finalTags === undefined) {
+      finalTags = existingCard.tags;
     }
+
+    const mergedTime = updates.timeComplexity !== undefined ? updates.timeComplexity : existingCard.timeComplexity;
+    const mergedSpace = updates.spaceComplexity !== undefined ? updates.spaceComplexity : existingCard.spaceComplexity;
+
+    finalTags = upsertComplexityTags(finalTags, mergedTime || undefined, mergedSpace || undefined);
+
+    payload.solution = encodeCardContent({
+      fallbackSolution: updates.solution !== undefined ? updates.solution || undefined : existingCard.solution,
+      solutions: updates.solutions !== undefined ? updates.solutions || [] : existingCard.solutions,
+      timeComplexity: mergedTime || undefined,
+      spaceComplexity: mergedSpace || undefined,
+      relatedProblems: updates.relatedProblems !== undefined ? updates.relatedProblems || [] : existingCard.relatedProblems,
+    });
+  } else if (updates.tags !== undefined) {
+    payload.tags = updates.tags;
   }
 
-  if (updates.relatedProblems !== undefined) {
-    if (updates.relatedProblems == null) {
-      payload.metadata = { ...(payload.metadata as any || {}), relatedProblems: null };
-    } else {
-      payload.metadata = { ...(payload.metadata as any || {}), relatedProblems: updates.relatedProblems };
-    }
+  if (finalTags !== undefined) {
+    payload.tags = finalTags;
   }
 
   const { data, error } = await supabase
