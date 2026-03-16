@@ -35,16 +35,36 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const { cardId } = await context.params;
     const body = await request.json();
 
-    if (!body || (body.notes == null && body.tags == null)) {
-      throw new ApiError("At least one field (notes, tags) is required.");
+    const hasUpdate =
+      body?.notes != null ||
+      body?.tags != null ||
+      body?.solvedAt !== undefined ||
+      body?.topicDomain !== undefined ||
+      body?.topicIds != null ||
+      body?.metadata != null;
+
+    if (!body || !hasUpdate) {
+      throw new ApiError(
+        "At least one field (notes, tags, solvedAt, topicDomain, topicIds, metadata) is required.",
+      );
     }
     if (body?.notes != null && typeof body.notes !== "string") {
       throw new ApiError("notes must be a string when provided.");
+    }
+    if (body?.solvedAt != null && typeof body.solvedAt !== "string") {
+      throw new ApiError("solvedAt must be an ISO timestamp string when provided.");
+    }
+    if (body?.topicDomain !== undefined && body.topicDomain != null && typeof body.topicDomain !== "string") {
+      throw new ApiError("topicDomain must be a string when provided.");
     }
 
     const card = await updateCardById(user.id, cardId, {
       notes: body.notes,
       tags: toStringArray(body.tags, "tags"),
+      solvedAt: body.solvedAt,
+      topicDomain: body.topicDomain,
+      topicIds: body.topicIds != null ? toStringArray(body.topicIds, "topicIds") : undefined,
+      metadata: body.metadata,
     });
 
     if (!card) {

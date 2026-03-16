@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Dashboard } from "@/components/Dashboard";
@@ -7,8 +7,14 @@ import { ReviewSession } from "@/components/ReviewSession";
 import type { ReviewResult } from "@/components/ReviewSession";
 import { ReviewComplete } from "@/components/ReviewComplete";
 import { AddCardModal } from "@/components/AddCardModal";
+import { GuideScreen } from "@/components/GuideScreen";
+import { GoalsScreen } from "@/components/GoalsScreen";
+import { AchievementsScreen } from "@/components/AchievementsScreen";
+import { CoachChat } from "@/components/CoachChat";
+import { SkillTreeView } from "@/components/SkillTreeView";
+import { StressModeSession } from "@/components/StressModeSession";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { fetchAllCards, fetchDueCards } from "@/lib/client-api";
 import type { Flashcard } from "@/data";
@@ -16,7 +22,7 @@ import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
 
-type View = "dashboard" | "review-session" | "review-complete";
+type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
 
 interface SessionStats {
@@ -117,6 +123,8 @@ export default function HomePage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [, setTick] = useState(0); // Force re-render for "last synced" label
+  const [isExtraFeaturesOpen, setIsExtraFeaturesOpen] = useState(false);
+  const extraFeaturesRef = useRef<HTMLDivElement>(null);
 
   // Fetch fresh data from API and update cache
   const syncFromApi = useCallback(async (showSpinner = true) => {
@@ -135,6 +143,16 @@ export default function HomePage() {
     } finally {
       if (showSpinner) setIsSyncing(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (extraFeaturesRef.current && !extraFeaturesRef.current.contains(event.target as Node)) {
+        setIsExtraFeaturesOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Initialize: load from cache instantly, then sync if stale
@@ -307,6 +325,73 @@ export default function HomePage() {
               <LayoutDashboard className="w-4 h-4" />
               <span className="hidden sm:inline-block">Dashboard</span>
             </Button>
+            <div className="relative z-50" ref={extraFeaturesRef}>
+              <Button
+                variant={["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode"].includes(view) ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setIsExtraFeaturesOpen(!isExtraFeaturesOpen)}
+                className="gap-2 transition-all"
+              >
+                <Compass className="w-4 h-4" />
+                <span className="hidden sm:inline-block">Extra Features</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExtraFeaturesOpen ? 'rotate-180' : ''}`} />
+              </Button>
+              
+              <AnimatePresence>
+                {isExtraFeaturesOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full left-0 mt-2 w-48 bg-card border border-border rounded-xl shadow-lg overflow-hidden flex flex-col py-1"
+                  >
+                    <button
+                      onClick={() => { setView("guide"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted ${view === "guide" ? 'bg-muted/50 font-medium' : ''}`}
+                    >
+                      <Compass className="w-4 h-4" />
+                      Guide
+                    </button>
+                    <button
+                      onClick={() => { setView("goals"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted ${view === "goals" ? 'bg-muted/50 font-medium' : ''}`}
+                    >
+                      <Target className="w-4 h-4" />
+                      Goals
+                    </button>
+                    <button
+                      onClick={() => { setView("achievements"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-amber-500 hover:bg-amber-500/10 ${view === "achievements" ? 'text-amber-500 bg-amber-500/5 font-medium' : ''}`}
+                    >
+                      <Award className="w-4 h-4" />
+                      Achievements
+                    </button>
+                    <button
+                      onClick={() => { setView("coach"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-blue-500 hover:bg-blue-500/10 ${view === "coach" ? 'text-blue-500 bg-blue-500/5 font-medium' : ''}`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Coach Chat
+                    </button>
+                    <button
+                      onClick={() => { setView("skill-tree"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-purple-500 hover:bg-purple-500/10 ${view === "skill-tree" ? 'text-purple-500 bg-purple-500/5 font-medium' : ''}`}
+                    >
+                      <Network className="w-4 h-4" />
+                      Skill Tree
+                    </button>
+                    <button
+                      onClick={() => { setView("stress-mode"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-red-500 hover:bg-red-500/10 ${view === "stress-mode" ? 'text-red-500 bg-red-500/5 font-medium' : ''}`}
+                    >
+                      <Zap className="w-4 h-4 text-red-500" />
+                      Stress Drill
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -399,6 +484,85 @@ export default function HomePage() {
                   dueCount={dueCards.length}
                   onRefresh={() => syncFromApi(false)}
                 />
+              </motion.div>
+            )}
+            {view === "guide" && (
+              <motion.div
+                key="guide"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <GuideScreen
+                  onNavigateToGoals={() => setView("goals")}
+                  onStartRecovery={() => {
+                    // For now, navigate to guide with recovery focus
+                    // Will be enhanced in later phases
+                    alert("Recovery mode will be available in a future update!");
+                  }}
+                />
+              </motion.div>
+            )}
+            {view === "goals" && (
+              <motion.div
+                key="goals"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <GoalsScreen />
+              </motion.div>
+            )}
+            {view === "achievements" && (
+              <motion.div
+                key="achievements"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <AchievementsScreen />
+              </motion.div>
+            )}
+            {view === "coach" && (
+              <motion.div
+                key="coach"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <CoachChat />
+              </motion.div>
+            )}
+            {view === "skill-tree" && (
+              <motion.div
+                key="skill-tree"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <SkillTreeView />
+              </motion.div>
+            )}
+            {view === "stress-mode" && (
+              <motion.div
+                key="stress-mode"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.05 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-[100] bg-background flex flex-col"
+              >
+                <StressModeSession onExit={() => setView("dashboard")} />
               </motion.div>
             )}
             {view === "review-session" && (

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "easy" | "medium" | "hard" | "tag";
+  variant?: "default" | "easy" | "medium" | "hard" | "tag" | "secondary" | "destructive";
 }
 
 export function Badge({ className, variant = "default", ...props }: BadgeProps) {
@@ -15,6 +15,8 @@ export function Badge({ className, variant = "default", ...props }: BadgeProps) 
           "bg-medium-bg text-medium border border-medium/20": variant === "medium",
           "bg-hard-bg text-hard border border-hard/20": variant === "hard",
           "bg-tag-bg text-tag border border-tag/20": variant === "tag",
+          "bg-muted text-muted-foreground border border-border": variant === "secondary",
+          "bg-red-500/10 text-red-500 border border-red-500/20": variant === "destructive",
         },
         className
       )}

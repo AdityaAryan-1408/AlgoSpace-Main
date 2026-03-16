@@ -9,7 +9,6 @@ import { StreakTracker } from "./StreakTracker";
 import { PerformanceChart } from "./charts/PerformanceChart";
 import { TopicRadarChart } from "./charts/TopicRadarChart";
 import { DailyGoal } from "./DailyGoal";
-import { AchievementBadges } from "./AchievementBadges";
 import { ProblemCountWidget } from "./ProblemCountWidget";
 import { SearchFilter } from "./SearchFilter";
 import { ContestTracker } from "./ContestTracker";
@@ -125,8 +124,6 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
               </div>
             </div>
 
-            {/* Achievement Badges */}
-            <AchievementBadges cards={cards} streak={analytics.streak} />
 
             {/* Contest History */}
             <ContestTracker />

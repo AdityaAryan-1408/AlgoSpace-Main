@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard } from "@/data";
-import { Play, Shuffle, Timer, Repeat } from "lucide-react";
-import { motion } from "motion/react";
+import { Play, Shuffle, Timer, Repeat, MoreHorizontal, MoreVertical } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 interface ReviewModalProps {
   dueCards: Flashcard[];
@@ -18,6 +18,8 @@ export function ReviewModal({
   onClose,
   onStart,
 }: ReviewModalProps) {
+  const [showOptions, setShowOptions] = useState(false);
+
   const queuedCards = useMemo(() => {
     const ratingPriority: Record<Flashcard["lastRating"], number> = {
       AGAIN: 0,
@@ -119,30 +121,65 @@ export function ReviewModal({
           </div>
         )}
 
-        <div className="p-6 border-t border-border flex items-center justify-end gap-3 bg-muted/20">
-          <Button variant="ghost" onClick={onClose} className="font-semibold">
+        <div className="p-4 sm:p-6 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-muted/20 relative">
+          <Button variant="ghost" onClick={onClose} className="font-semibold order-2 sm:order-1">
             Not now
           </Button>
-          {dueCards.length > 0 && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => onStart("reverse")}
-                className="gap-2 font-semibold"
-                title="Show solution first, then reveal problem"
-              >
-                <Repeat className="w-4 h-4" />
-                Reverse
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => onStart("sprint")}
-                className="gap-2 font-semibold"
-                title="Timed 5-minute review sprint"
-              >
-                <Timer className="w-4 h-4" />
-                5-min Sprint
-              </Button>
+          
+          <div className="flex items-center gap-2 order-1 sm:order-2 ml-auto">
+            {totalCards.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full"
+                  onClick={() => setShowOptions(!showOptions)}
+                  title="More review options"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+                
+                <AnimatePresence>
+                  {showOptions && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      className="absolute bottom-full right-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-lg overflow-hidden flex flex-col py-1 z-50 origin-bottom-right"
+                    >
+                      {dueCards.length > 0 && (
+                        <>
+                          <button
+                            onClick={() => { onStart("reverse"); setShowOptions(false); }}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                          >
+                            <Repeat className="w-4 h-4" />
+                            Reverse
+                          </button>
+                          <button
+                            onClick={() => { onStart("sprint"); setShowOptions(false); }}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                          >
+                            <Timer className="w-4 h-4" />
+                            5-min Sprint
+                          </button>
+                        </>
+                      )}
+                      
+                      <button
+                        onClick={() => { onStart("random-quiz"); setShowOptions(false); }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                        Random Quiz
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {dueCards.length > 0 && (
               <Button
                 onClick={() => onStart("standard")}
                 className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-6"
@@ -150,19 +187,19 @@ export function ReviewModal({
                 <Play className="w-4 h-4 fill-current" />
                 Start session
               </Button>
-            </>
-          )}
-          {totalCards.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => onStart("random-quiz")}
-              className="gap-2 font-semibold"
-              title="Pick one random card and test recall"
-            >
-              <Shuffle className="w-4 h-4" />
-              Random Quiz
-            </Button>
-          )}
+            )}
+            
+            {dueCards.length === 0 && (
+               <Button
+                variant="outline"
+                onClick={() => { onStart("random-quiz"); setShowOptions(false); }}
+                className="gap-2 font-semibold rounded-full px-6"
+              >
+                <Shuffle className="w-4 h-4" />
+                Random Quiz
+              </Button>
+            )}
+          </div>
         </div>
       </motion.div>
     </div>

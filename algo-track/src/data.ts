@@ -1,3 +1,5 @@
+import type { CardSource, TopicDomain } from "@/types";
+
 export type Difficulty = "easy" | "medium" | "hard";
 export type CardType = "leetcode" | "cs";
 
@@ -25,6 +27,13 @@ export interface Flashcard {
   relatedProblems?: RelatedProblem[];
   difficulty: Difficulty;
   tags: string[];
+  // New fields for AlgoTrack expansion
+  source: CardSource;
+  solvedAt?: string;        // ISO timestamp
+  topicDomain?: TopicDomain;
+  topicIds: string[];
+  metadata: Record<string, unknown>;
+  // Existing review/SRS fields
   lastReview: string;
   lastRating: "EASY" | "GOOD" | "HARD" | "AGAIN";
   nextReview: string;
@@ -43,6 +52,10 @@ export const mockCards: Flashcard[] = [
     solution: "```python\nclass Solution:\n    def maxSatisfied(self, customers: List[int], grumpy: List[int], minutes: int) -> int:\n        # Calculate initially satisfied customers\n        satisfied = sum(c for c, g in zip(customers, grumpy) if g == 0)\n        \n        # Sliding window for additional satisfied customers\n        max_additional = 0\n        current_additional = 0\n        \n        for i in range(len(customers)):\n            if grumpy[i] == 1:\n                current_additional += customers[i]\n            \n            if i >= minutes and grumpy[i - minutes] == 1:\n                current_additional -= customers[i - minutes]\n                \n            max_additional = max(max_additional, current_additional)\n            \n        return satisfied + max_additional\n```",
     difficulty: "medium",
     tags: ["Sliding Window"],
+    source: "seed",
+    topicDomain: "dsa",
+    topicIds: ["dsa.sliding-window"],
+    metadata: {},
     lastReview: "Feb 25, 2026",
     lastRating: "GOOD",
     nextReview: "Mar 3, 2026",
@@ -59,6 +72,10 @@ export const mockCards: Flashcard[] = [
     solution: "```python\nclass Solution:\n    def findMaxAverage(self, nums: List[int], k: int) -> float:\n        curr_sum = sum(nums[:k])\n        max_sum = curr_sum\n        \n        for i in range(k, len(nums)):\n            curr_sum += nums[i] - nums[i-k]\n            max_sum = max(max_sum, curr_sum)\n            \n        return max_sum / k\n```",
     difficulty: "medium",
     tags: ["Array", "Sliding Window"],
+    source: "seed",
+    topicDomain: "dsa",
+    topicIds: ["dsa.arrays", "dsa.sliding-window"],
+    metadata: {},
     lastReview: "Feb 25, 2026",
     lastRating: "EASY",
     nextReview: "Mar 7, 2026",
@@ -73,6 +90,10 @@ export const mockCards: Flashcard[] = [
     notes: "Remember the bank transfer example: deducting from Account A and adding to Account B must be Atomic. If the system crashes in between, the transaction must rollback.",
     difficulty: "medium",
     tags: ["Database", "Transactions"],
+    source: "seed",
+    topicDomain: "cs",
+    topicIds: ["cs.database.acid"],
+    metadata: {},
     lastReview: "Feb 24, 2026",
     lastRating: "GOOD",
     nextReview: "Mar 5, 2026",
@@ -87,6 +108,10 @@ export const mockCards: Flashcard[] = [
     notes: "Key concepts: Page Table, TLB (Translation Lookaside Buffer), Page Faults. TLB is a hardware cache for the page table to speed up virtual-to-physical address translation.",
     difficulty: "hard",
     tags: ["OS", "Memory"],
+    source: "seed",
+    topicDomain: "cs",
+    topicIds: ["cs.os.virtual-memory", "cs.os.paging"],
+    metadata: {},
     lastReview: "Feb 20, 2026",
     lastRating: "HARD",
     nextReview: "Feb 26, 2026",
@@ -103,6 +128,10 @@ export const mockCards: Flashcard[] = [
     solution: "```python\nclass Solution:\n    def minimumRecolors(self, blocks: str, k: int) -> int:\n        # Count 'W's in the first window\n        min_ops = blocks[:k].count('W')\n        curr_ops = min_ops\n        \n        for i in range(k, len(blocks)):\n            if blocks[i] == 'W':\n                curr_ops += 1\n            if blocks[i-k] == 'W':\n                curr_ops -= 1\n                \n            min_ops = min(min_ops, curr_ops)\n            \n        return min_ops\n```",
     difficulty: "easy",
     tags: ["Sliding Window", "String"],
+    source: "seed",
+    topicDomain: "dsa",
+    topicIds: ["dsa.sliding-window", "dsa.strings"],
+    metadata: {},
     lastReview: "Feb 25, 2026",
     lastRating: "EASY",
     nextReview: "Mar 7, 2026",

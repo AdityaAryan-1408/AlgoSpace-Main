@@ -28,6 +28,12 @@ type CardDbRow = {
   easiness_factor: number | string;
   interval_days: number;
   repetition_count: number;
+  // New fields
+  source: string;
+  solved_at: string | null;
+  topic_domain: string | null;
+  topic_ids: string[] | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type ReviewDbRow = {
@@ -54,6 +60,12 @@ function toCardRow(
     tags: row.tags ?? [],
     good_count: stats.goodCount,
     total_count: stats.totalCount,
+    // New fields
+    source: row.source,
+    solved_at: row.solved_at,
+    topic_domain: row.topic_domain,
+    topic_ids: row.topic_ids,
+    metadata: row.metadata,
   };
 }
 
@@ -98,7 +110,7 @@ export async function listCardsForUser(userId: string, dueOnly = false) {
   let query = supabase
     .from("cards")
     .select(
-      "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count",
+      "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata",
     )
     .eq("user_id", userId)
     .order("next_review_at", { ascending: true })
@@ -132,7 +144,7 @@ export async function getCardById(userId: string, cardId: string) {
   const { data, error } = await supabase
     .from("cards")
     .select(
-      "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count",
+      "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata",
     )
     .eq("user_id", userId)
     .eq("id", cardId)
@@ -159,6 +171,10 @@ export async function updateCardById(
   updates: {
     notes?: string;
     tags?: string[];
+    solvedAt?: string | null;
+    topicDomain?: string | null;
+    topicIds?: string[];
+    metadata?: Record<string, unknown>;
   },
 ) {
   const supabase = getSupabaseAdmin();
@@ -171,6 +187,18 @@ export async function updateCardById(
   }
   if (updates.tags !== undefined) {
     payload.tags = updates.tags;
+  }
+  if (updates.solvedAt !== undefined) {
+    payload.solved_at = updates.solvedAt;
+  }
+  if (updates.topicDomain !== undefined) {
+    payload.topic_domain = updates.topicDomain;
+  }
+  if (updates.topicIds !== undefined) {
+    payload.topic_ids = updates.topicIds;
+  }
+  if (updates.metadata !== undefined) {
+    payload.metadata = updates.metadata;
   }
 
   const { data, error } = await supabase
@@ -207,6 +235,12 @@ export async function addCardForUser(
     relatedProblems?: RelatedProblemLink[];
     url?: string;
     reviewInDays?: number;
+    // New fields
+    source?: string;
+    solvedAt?: string;
+    topicDomain?: string;
+    topicIds?: string[];
+    metadata?: Record<string, unknown>;
   },
 ) {
   const supabase = getSupabaseAdmin();
@@ -241,6 +275,12 @@ export async function addCardForUser(
       solution: serializedSolution,
       url: input.url ?? null,
       next_review_at: reviewDate.toISOString(),
+      // New fields
+      source: input.source ?? "manual",
+      solved_at: input.solvedAt ?? null,
+      topic_domain: input.topicDomain ?? null,
+      topic_ids: input.topicIds ?? [],
+      metadata: input.metadata ?? {},
     })
     .select("id")
     .single();
@@ -540,6 +580,11 @@ export async function seedInitialCards(userId: string) {
     last_rating: card.lastRating,
     last_reviewed_at: new Date(now.getTime() - oneDayMs).toISOString(),
     next_review_at: new Date(now.getTime() + card.dueInDays * oneDayMs).toISOString(),
+    // New fields
+    source: card.source ?? "seed",
+    topic_domain: card.topicDomain ?? null,
+    topic_ids: card.topicIds ?? [],
+    metadata: card.metadata ?? {},
   }));
 
   const { error: insertError } = await supabase.from("cards").insert(rows);

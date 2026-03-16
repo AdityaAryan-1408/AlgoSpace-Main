@@ -124,6 +124,16 @@ export async function POST(request: NextRequest) {
     ) {
       throw new ApiError("reviewInDays must be a non-negative number when provided.");
     }
+    // Validate new fields
+    if (body?.source != null && typeof body.source !== "string") {
+      throw new ApiError("source must be a string when provided.");
+    }
+    if (body?.solvedAt != null && typeof body.solvedAt !== "string") {
+      throw new ApiError("solvedAt must be an ISO timestamp string when provided.");
+    }
+    if (body?.topicDomain != null && typeof body.topicDomain !== "string") {
+      throw new ApiError("topicDomain must be a string when provided.");
+    }
 
     const card = await addCardForUser(user.id, {
       type: body.type,
@@ -139,6 +149,12 @@ export async function POST(request: NextRequest) {
       relatedProblems: toRelatedProblems(body.relatedProblems),
       url: body.url,
       reviewInDays: body.reviewInDays,
+      // New fields
+      source: body.source,
+      solvedAt: body.solvedAt,
+      topicDomain: body.topicDomain,
+      topicIds: toStringArray(body.topicIds, "topicIds"),
+      metadata: body.metadata,
     });
 
     return jsonOk({ card }, 201);

@@ -2,6 +2,7 @@ import { Flashcard } from "@/data";
 import { parseCardContent } from "@/lib/card-content";
 import { daysFromToday, formatHumanDate } from "@/lib/time";
 import { ReviewRating } from "@/lib/srs";
+import type { CardSource, TopicDomain } from "@/types";
 
 interface CardRow {
   id: string;
@@ -18,6 +19,12 @@ interface CardRow {
   tags: string[] | null;
   good_count: number | string | null;
   total_count: number | string | null;
+  // New fields
+  source?: string;
+  solved_at?: string | null;
+  topic_domain?: string | null;
+  topic_ids?: string[] | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 function asNumber(value: number | string | null | undefined) {
@@ -46,6 +53,13 @@ export function mapCardRowToFlashcard(row: CardRow): Flashcard {
     relatedProblems: parsedContent.relatedProblems,
     difficulty: row.difficulty,
     tags: row.tags ?? [],
+    // New fields
+    source: (row.source ?? "manual") as CardSource,
+    solvedAt: row.solved_at ?? undefined,
+    topicDomain: (row.topic_domain ?? undefined) as TopicDomain | undefined,
+    topicIds: row.topic_ids ?? [],
+    metadata: row.metadata ?? {},
+    // SRS / review fields
     lastReview: formatHumanDate(row.last_reviewed_at),
     lastRating: row.last_rating ?? "GOOD",
     nextReview: formatHumanDate(nextReview),
