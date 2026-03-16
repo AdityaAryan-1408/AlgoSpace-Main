@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Plus, Loader2, Github } from "lucide-react";
-import { createCard } from "@/lib/client-api";
+import { Plus, Loader2, Github, X } from "lucide-react";
+import { createCard, updateCard } from "@/lib/client-api";
 import type { Difficulty, CardType } from "@/data";
 
 export interface AddCardFormDefaults {
@@ -15,12 +15,10 @@ export interface AddCardFormDefaults {
     tags?: string;
     notes?: string;
     solution?: string;
+    solutions?: { name: string; content: string }[];
     timeComplexity?: string;
     spaceComplexity?: string;
     relatedProblems?: string;
-    bruteForceSolution?: string;
-    optimalSolution?: string;
-    alternativeSolution?: string;
 }
 
 interface AddCardFormProps {
@@ -28,6 +26,8 @@ interface AddCardFormProps {
     defaults?: AddCardFormDefaults;
     onSubmitted: () => void;
     submitLabel?: string;
+    mode?: "add" | "edit";
+    cardId?: string;
 }
 
 export function AddCardForm({
@@ -35,6 +35,8 @@ export function AddCardForm({
     defaults,
     onSubmitted,
     submitLabel = "Add Card",
+    mode = "add",
+    cardId,
 }: AddCardFormProps) {
     const [title, setTitle] = useState(defaults?.title ?? "");
     const [description, setDescription] = useState(defaults?.description ?? "");
@@ -44,15 +46,16 @@ export function AddCardForm({
     const [platform, setPlatform] = useState("LeetCode");
     const [url, setUrl] = useState(defaults?.url ?? "");
     const [notes, setNotes] = useState(defaults?.notes ?? "");
-    const [bruteForceSolution, setBruteForceSolution] = useState(
-        defaults?.bruteForceSolution ?? "",
+    const [solutions, setSolutions] = useState<{ id: string; name: string; content: string }[]>(
+        defaults?.solutions?.length 
+            ? defaults.solutions.map((s, i) => ({ id: `sol-${Date.now()}-${i}`, name: s.name, content: s.content }))
+            : [
+                  { id: `brute-${Date.now()}`, name: "Brute Force", content: "" },
+                  { id: `optimal-${Date.now()}`, name: "Optimal", content: defaults?.solution ?? "" },
+                  { id: `alt-${Date.now()}`, name: "Alternative", content: "" },
+              ]
     );
-    const [optimalSolution, setOptimalSolution] = useState(
-        defaults?.optimalSolution ?? defaults?.solution ?? "",
-    );
-    const [alternativeSolution, setAlternativeSolution] = useState(
-        defaults?.alternativeSolution ?? "",
-    );
+    const [activeTabId, setActiveTabId] = useState(solutions[1]?.id || solutions[0]?.id);
     const [timeComplexity, setTimeComplexity] = useState(
         defaults?.timeComplexity ?? "",
     );
@@ -63,7 +66,6 @@ export function AddCardForm({
         defaults?.relatedProblems ?? "",
     );
     const [tagsInput, setTagsInput] = useState(defaults?.tags ?? "");
-    const [solutionTab, setSolutionTab] = useState<"brute" | "optimal" | "alternative">("optimal");
     const [reviewInDays, setReviewInDays] = useState(0);
     const [customDays, setCustomDays] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,20 +85,9 @@ export function AddCardForm({
                 .split(",")
                 .map((t) => t.trim())
                 .filter(Boolean);
-            const solutions = [
-                {
-                    name: "Brute Force",
-                    content: bruteForceSolution.trim(),
-                },
-                {
-                    name: "Optimal",
-                    content: optimalSolution.trim(),
-                },
-                {
-                    name: "Alternative",
-                    content: alternativeSolution.trim(),
-                },
-            ].filter((item) => item.content);
+            const compiledSolutions = solutions
+                .filter(item => item.content.trim())
+                .map(item => ({ name: item.name.trim() || "Solution", content: item.content.trim() }));
 
             const relatedProblems = relatedProblemsInput
                 .split("\n")
@@ -116,18 +107,17 @@ export function AddCardForm({
             const finalDays =
                 reviewInDays === -1 ? parseInt(customDays) || 0 : reviewInDays;
 
-            await createCard({
-                type: cardType,
+            const payload = {
                 title: title.trim(),
                 description: description.trim(),
                 difficulty,
                 tags: tags.length > 0 ? tags : undefined,
                 notes: notes.trim() || undefined,
                 solution:
-                    cardType === "leetcode" && solutions[0]?.content
-                        ? solutions[0].content
+                    cardType === "leetcode" && compiledSolutions[0]?.content
+                        ? compiledSolutions[0].content
                         : undefined,
-                solutions: cardType === "leetcode" && solutions.length > 0 ? solutions : undefined,
+                solutions: cardType === "leetcode" && compiledSolutions.length > 0 ? compiledSolutions : undefined,
                 timeComplexity:
                     cardType === "leetcode" && timeComplexity.trim()
                         ? timeComplexity.trim()
@@ -142,11 +132,20 @@ export function AddCardForm({
                         : undefined,
                 url:
                     cardType === "leetcode" && url.trim() ? url.trim() : undefined,
-                reviewInDays: finalDays > 0 ? finalDays : undefined,
-            });
+            };
+
+            if (mode === "edit" && cardId) {
+                await updateCard(cardId, payload);
+            } else {
+                await createCard({
+                    type: cardType,
+                    ...payload,
+                    reviewInDays: finalDays > 0 ? finalDays : undefined,
+                });
+            }
 
             // Fire-and-forget GitHub sync for DSA cards with solutions
-            if (cardType === "leetcode" && solutions.length > 0) {
+            if (cardType === "leetcode" && compiledSolutions.length > 0 && mode !== "edit") {
                 setSyncStatus("syncing");
                 fetch("/api/github-sync", {
                     method: "POST",
@@ -157,7 +156,7 @@ export function AddCardForm({
                         url: url.trim() || undefined,
                         difficulty,
                         tags,
-                        solutions,
+                        solutions: compiledSolutions,
                         timeComplexity: timeComplexity.trim() || undefined,
                         spaceComplexity: spaceComplexity.trim() || undefined,
                     }),
@@ -333,69 +332,63 @@ export function AddCardForm({
                             Solutions
                         </label>
                         {/* Solution Tabs */}
-                        <div className="flex border-b border-border">
-                            {(
-                                [
-                                    { key: "brute", label: "Brute Force" },
-                                    { key: "optimal", label: "Optimal" },
-                                    { key: "alternative", label: "Alternative" },
-                                ] as const
-                            ).map((tab) => {
-                                const isActive = solutionTab === tab.key;
-                                const hasContent =
-                                    tab.key === "brute"
-                                        ? bruteForceSolution.trim()
-                                        : tab.key === "optimal"
-                                            ? optimalSolution.trim()
-                                            : alternativeSolution.trim();
+                        <div className="flex border-b border-border overflow-x-auto custom-scrollbar items-center pb-1">
+                            {solutions.map((tab) => {
+                                const isActive = activeTabId === tab.id;
+                                const hasContent = tab.content.trim().length > 0;
                                 return (
-                                    <button
-                                        key={tab.key}
-                                        onClick={() => setSolutionTab(tab.key)}
-                                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-all cursor-pointer ${isActive
-                                            ? "border-blue-500 text-blue-500"
-                                            : "border-transparent text-muted-foreground hover:text-foreground"
-                                            }`}
-                                    >
-                                        {tab.label}
-                                        {hasContent && !isActive && (
-                                            <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
-                                        )}
-                                    </button>
+                                    <div key={tab.id} className="group relative flex items-center shrink-0">
+                                      <input
+                                          value={tab.name}
+                                          onChange={(e) => setSolutions(solutions.map(s => s.id === tab.id ? { ...s, name: e.target.value } : s))}
+                                          onClick={() => setActiveTabId(tab.id)}
+                                          className={`px-3 py-2 text-sm font-medium border-b-2 transition-all cursor-pointer bg-transparent focus:outline-none focus:bg-muted/30 w-32 md:w-36 ${isActive
+                                              ? "border-blue-500 text-blue-500"
+                                              : "border-transparent text-muted-foreground hover:text-foreground"
+                                              }`}
+                                      />
+                                      {hasContent && !isActive && (
+                                          <span className="absolute right-7 top-4 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block pointer-events-none" />
+                                      )}
+                                      <button 
+                                        onClick={() => {
+                                          if (solutions.length <= 1) return;
+                                          const newS = solutions.filter(s => s.id !== tab.id);
+                                          setSolutions(newS);
+                                          if (isActive) setActiveTabId(newS[0]?.id || "");
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 absolute right-2 top-2 hover:bg-muted p-1 rounded transition-opacity"
+                                        title="Remove solution tab"
+                                      >
+                                        <X size={14} className="text-muted-foreground hover:text-red-500 transition-colors" />
+                                      </button>
+                                    </div>
                                 );
                             })}
+                            <button
+                                onClick={() => {
+                                  const newId = `sol-${Date.now()}`;
+                                  setSolutions([...solutions, { id: newId, name: `Solution ${solutions.length + 1}`, content: "" }]);
+                                  setActiveTabId(newId);
+                                }}
+                                className="ml-2 w-7 h-7 rounded-md flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 border border-border/50"
+                                title="Add another solution tab"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
                         </div>
                         {/* Tab Content */}
-                        {solutionTab === "brute" && (
+                        {solutions.map(tab => tab.id === activeTabId && (
                             <textarea
-                                value={bruteForceSolution}
-                                onChange={(e) => setBruteForceSolution(e.target.value)}
-                                placeholder="Brute force approach (Markdown + code fences supported)"
+                                key={tab.id}
+                                value={tab.content}
+                                onChange={(e) => setSolutions(solutions.map(s => s.id === tab.id ? { ...s, content: e.target.value } : s))}
+                                placeholder={`${tab.name} approach (Markdown + code fences supported)`}
                                 rows={6}
                                 spellCheck={false}
                                 className={`${inputCls} font-mono bg-muted/50 resize-y`}
                             />
-                        )}
-                        {solutionTab === "optimal" && (
-                            <textarea
-                                value={optimalSolution}
-                                onChange={(e) => setOptimalSolution(e.target.value)}
-                                placeholder="Optimal approach (Markdown + code fences supported)"
-                                rows={6}
-                                spellCheck={false}
-                                className={`${inputCls} font-mono bg-muted/50 resize-y`}
-                            />
-                        )}
-                        {solutionTab === "alternative" && (
-                            <textarea
-                                value={alternativeSolution}
-                                onChange={(e) => setAlternativeSolution(e.target.value)}
-                                placeholder="Alternative approach (Markdown + code fences supported)"
-                                rows={6}
-                                spellCheck={false}
-                                className={`${inputCls} font-mono bg-muted/50 resize-y`}
-                            />
-                        )}
+                        ))}
                     </div>
 
                     <div className="flex flex-col gap-1.5">
@@ -413,45 +406,47 @@ export function AddCardForm({
                 </>
             )}
 
-            {/* First Review Timing */}
-            <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">
-                    First Review In
-                </label>
-                <div className="flex gap-2 flex-wrap">
-                    {[
-                        { label: "Now", value: 0 },
-                        { label: "1 day", value: 1 },
-                        { label: "3 days", value: 3 },
-                        { label: "7 days", value: 7 },
-                        { label: "Custom", value: -1 },
-                    ].map((opt) => (
-                        <button
-                            key={opt.value}
-                            onClick={() => setReviewInDays(opt.value)}
-                            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all cursor-pointer ${reviewInDays === opt.value
-                                ? "bg-blue-500/10 text-blue-500 border-blue-500/40"
-                                : "border-border text-muted-foreground hover:border-foreground/30"
-                                }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>
-                {reviewInDays === -1 && (
-                    <div className="flex items-center gap-2 mt-1">
-                        <input
-                            type="number"
-                            min="1"
-                            value={customDays}
-                            onChange={(e) => setCustomDays(e.target.value)}
-                            placeholder="Number of days"
-                            className={`${inputCls} max-w-50`}
-                        />
-                        <span className="text-sm text-muted-foreground">days</span>
-                    </div>
-                )}
-            </div>
+            {/* First Review Timing (Only for New Cards) */}
+            {mode === "add" && (
+              <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                      First Review In
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                      {[
+                          { label: "Now", value: 0 },
+                          { label: "1 day", value: 1 },
+                          { label: "3 days", value: 3 },
+                          { label: "7 days", value: 7 },
+                          { label: "Custom", value: -1 },
+                      ].map((opt) => (
+                          <button
+                              key={opt.value}
+                              onClick={() => setReviewInDays(opt.value)}
+                              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all cursor-pointer ${reviewInDays === opt.value
+                                  ? "bg-blue-500/10 text-blue-500 border-blue-500/40"
+                                  : "border-border text-muted-foreground hover:border-foreground/30"
+                                  }`}
+                          >
+                              {opt.label}
+                          </button>
+                      ))}
+                  </div>
+                  {reviewInDays === -1 && (
+                      <div className="flex items-center gap-2 mt-1">
+                          <input
+                              type="number"
+                              min="1"
+                              value={customDays}
+                              onChange={(e) => setCustomDays(e.target.value)}
+                              placeholder="Number of days"
+                              className={`${inputCls} max-w-50`}
+                          />
+                          <span className="text-sm text-muted-foreground">days</span>
+                      </div>
+                  )}
+              </div>
+            )}
 
             {/* Submit Button */}
             <div className="flex justify-end pt-2">

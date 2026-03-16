@@ -5,9 +5,10 @@ import type { Flashcard } from "@/data";
 import { updateCard, deleteCard } from "@/lib/client-api";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check } from "lucide-react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
+import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
 
 interface CardDetailsModalProps {
   card: Flashcard | null;
@@ -25,6 +26,7 @@ export function CardDetailsModal({
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [aiReview, setAiReview] = useState<StoredAiReview | null>(null);
 
   useEffect(() => {
@@ -127,14 +129,39 @@ export function CardDetailsModal({
                 {card.title}
               </h2>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="rounded-full shrink-0 hover:bg-muted"
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={isEditing ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setIsEditing(!isEditing)}
+                className="hidden sm:flex"
+              >
+                {isEditing ? (
+                  "Cancel Edit"
+                ) : (
+                  <>
+                    <Edit2 className="w-4 h-4 mr-2" /> Edit
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsEditing(!isEditing)}
+                className="sm:hidden rounded-full hover:bg-muted"
+              >
+                {isEditing ? <X className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="rounded-full shrink-0 hover:bg-muted"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -180,8 +207,34 @@ export function CardDetailsModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
-          <section className="flex flex-col gap-3">
+        {isEditing ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <AddCardForm
+              cardType={card.type as any}
+              mode="edit"
+              cardId={card.id}
+              submitLabel="Save Changes"
+              onSubmitted={() => {
+                setIsEditing(false);
+                onSaved();
+              }}
+              defaults={{
+                title: card.title,
+                description: card.description,
+                difficulty: card.difficulty,
+                tags: card.tags?.join(", "),
+                notes: card.notes,
+                solutions: card.solutions || (card.solution ? [{ name: "Solution", content: card.solution }] : undefined),
+                timeComplexity: card.timeComplexity || undefined,
+                spaceComplexity: card.spaceComplexity || undefined,
+                relatedProblems: card.relatedProblems?.map(p => p.url ? `${p.title} | ${p.url}` : p.title).join("\n"),
+                url: card.url || undefined,
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
+            <section className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
               <BookOpen className="w-4 h-4 text-muted-foreground" />
               Description
@@ -218,17 +271,26 @@ export function CardDetailsModal({
                 Solutions
               </h3>
               <div className="flex flex-col gap-3">
-                {solutionBlocks.map((solution, index) => (
-                  <div
-                    key={`${solution.name}-${index}`}
-                    className="w-full p-4 rounded-xl border border-border bg-muted/40"
-                  >
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      {solution.name}
-                    </h4>
-                    <MarkdownContent content={solution.content} />
-                  </div>
-                ))}
+                {solutionBlocks.map((solution, index) => {
+                  const hasCodeFences = /```[\w+-]*\n/.test(solution.content);
+                  return (
+                    <div
+                      key={`${solution.name}-${index}`}
+                      className="w-full p-4 rounded-xl border border-border bg-muted/40"
+                    >
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        {solution.name}
+                      </h4>
+                      {hasCodeFences ? (
+                        <MarkdownContent content={solution.content} />
+                      ) : (
+                        <pre className="text-sm font-mono text-foreground/90 leading-relaxed whitespace-pre-wrap overflow-x-auto selectable">
+                          {solution.content}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -361,8 +423,10 @@ export function CardDetailsModal({
             </section>
           )}
         </div>
+        )}
 
         {/* Footer */}
+        {!isEditing && (
         <div className="p-4 border-t border-border flex items-center justify-between bg-muted/10">
           <div className="flex items-center gap-3">
             <div className="text-xs text-muted-foreground flex items-center gap-4">
@@ -400,6 +464,7 @@ export function CardDetailsModal({
             </Button>
           </div>
         </div>
+        )}
       </motion.div>
     </div>
   );

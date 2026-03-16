@@ -169,8 +169,17 @@ export async function updateCardById(
   userId: string,
   cardId: string,
   updates: {
+    title?: string;
+    description?: string;
+    url?: string | null;
+    difficulty?: "easy" | "medium" | "hard";
     notes?: string;
     tags?: string[];
+    solution?: string | null;
+    solutions?: { name: string; content: string }[] | null;
+    timeComplexity?: string | null;
+    spaceComplexity?: string | null;
+    relatedProblems?: { title: string; url?: string }[] | null;
     solvedAt?: string | null;
     topicDomain?: string | null;
     topicIds?: string[];
@@ -182,23 +191,34 @@ export async function updateCardById(
     updated_at: new Date().toISOString(),
   };
 
-  if (updates.notes !== undefined) {
-    payload.notes = updates.notes;
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.url !== undefined) payload.url = updates.url;
+  if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty;
+  if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.tags !== undefined) payload.tags = updates.tags;
+  if (updates.solution !== undefined) payload.solution = updates.solution;
+  if (updates.timeComplexity !== undefined) payload.time_complexity = updates.timeComplexity;
+  if (updates.spaceComplexity !== undefined) payload.space_complexity = updates.spaceComplexity;
+  if (updates.solvedAt !== undefined) payload.solved_at = updates.solvedAt;
+  if (updates.topicDomain !== undefined) payload.topic_domain = updates.topicDomain;
+  if (updates.topicIds !== undefined) payload.topic_ids = updates.topicIds;
+  if (updates.metadata !== undefined) payload.metadata = updates.metadata;
+
+  if (updates.solutions !== undefined) {
+    if (updates.solutions == null) {
+      payload.metadata = { ...(payload.metadata as any || {}), solutions: null };
+    } else {
+      payload.metadata = { ...(payload.metadata as any || {}), solutions: updates.solutions };
+    }
   }
-  if (updates.tags !== undefined) {
-    payload.tags = updates.tags;
-  }
-  if (updates.solvedAt !== undefined) {
-    payload.solved_at = updates.solvedAt;
-  }
-  if (updates.topicDomain !== undefined) {
-    payload.topic_domain = updates.topicDomain;
-  }
-  if (updates.topicIds !== undefined) {
-    payload.topic_ids = updates.topicIds;
-  }
-  if (updates.metadata !== undefined) {
-    payload.metadata = updates.metadata;
+
+  if (updates.relatedProblems !== undefined) {
+    if (updates.relatedProblems == null) {
+      payload.metadata = { ...(payload.metadata as any || {}), relatedProblems: null };
+    } else {
+      payload.metadata = { ...(payload.metadata as any || {}), relatedProblems: updates.relatedProblems };
+    }
   }
 
   const { data, error } = await supabase

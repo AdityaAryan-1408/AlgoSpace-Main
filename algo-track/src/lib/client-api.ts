@@ -73,8 +73,17 @@ export async function fetchCardDetails(cardId: string): Promise<Flashcard> {
 export async function updateCard(
     cardId: string,
     updates: {
+        title?: string;
+        description?: string;
+        url?: string | null;
+        difficulty?: "easy" | "medium" | "hard";
         notes?: string;
         tags?: string[];
+        solution?: string | null;
+        solutions?: CardSolution[] | null;
+        timeComplexity?: string | null;
+        spaceComplexity?: string | null;
+        relatedProblems?: RelatedProblem[] | null;
         solvedAt?: string | null;
         topicDomain?: string | null;
         topicIds?: string[];
