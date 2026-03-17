@@ -707,6 +707,7 @@ export async function getTopicMastery(userId: string) {
     const reviewed = (row.repetition_count as number) > 0 ? 1 : 0;
 
     for (const tag of tags) {
+      if (/^(Time|Space):/i.test(tag)) continue;
       const existing = tagStats.get(tag) ?? { totalEf: 0, count: 0, reviewed: 0 };
       existing.totalEf += ef;
       existing.count += 1;
@@ -723,8 +724,7 @@ export async function getTopicMastery(userId: string) {
       const mastery = Math.min(100, Math.max(0, Math.round(((avgEf - 1.3) / 1.7) * 100)));
       return { topic, mastery, cardCount: count, reviewedCount: reviewed };
     })
-    .sort((a, b) => b.cardCount - a.cardCount)
-    .slice(0, 12); // Top 12 topics for radar chart
+    .sort((a, b) => b.cardCount - a.cardCount);
 }
 
 /**

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard } from "@/data";
-import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X } from "lucide-react";
 import { MasteryHeatmap } from "./MasteryHeatmap";
 import { CardDetailsModal } from "./CardDetailsModal";
 import { StreakTracker } from "./StreakTracker";
@@ -31,6 +31,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showTopicModal, setShowTopicModal] = useState(false);
 
   const handleFiltered = useCallback((filtered: Flashcard[]) => {
     setFilteredCards(filtered);
@@ -116,11 +117,16 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
 
               {/* Topic Mastery */}
               <div className="rounded-xl border border-border bg-background p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-3">
-                  Topic Mastery
-                  <span className="text-xs text-muted-foreground font-normal ml-2">By tag</span>
-                </h3>
-                <TopicRadarChart data={analytics.topics} />
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Topic Mastery
+                    <span className="text-xs text-muted-foreground font-normal ml-2">By tag</span>
+                  </h3>
+                  <Button variant="ghost" size="icon" className="w-6 h-6 rounded-full text-muted-foreground hover:text-foreground" onClick={() => setShowTopicModal(true)}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+                <TopicRadarChart data={analytics.topics.slice(0, 7)} />
               </div>
             </div>
 
@@ -391,6 +397,46 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
               onRefresh();
             }}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showTopicModal && analytics && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm" onClick={() => setShowTopicModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] border border-border"
+            >
+              <div className="p-4 border-b border-border flex items-center justify-between bg-muted/10">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  All Topics
+                </h3>
+                <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={() => setShowTopicModal(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+                {analytics.topics.map(t => (
+                  <div key={t.topic} className="flex items-center justify-between p-3 rounded-xl border border-border bg-background hover:border-primary/50 transition-colors">
+                    <span className="text-sm font-medium text-foreground">{t.topic}</span>
+                    <Badge variant="secondary" className="bg-muted">
+                        {t.cardCount} {t.cardCount === 1 ? "question" : "questions"}
+                    </Badge>
+                  </div>
+                ))}
+                {analytics.topics.length === 0 && (
+                  <div className="text-center text-sm text-muted-foreground py-8">
+                    No topics found.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -16,10 +16,7 @@ interface Props {
 }
 
 export function TopicRadarChart({ data }: Props) {
-    // Filter out complexity tags (Time: O(N), Space: O(N), etc.)
-    const filtered = data.filter((t) => !/^(Time|Space):/i.test(t.topic));
-
-    if (filtered.length < 3) {
+    if (data.length < 3) {
         return (
             <div className="flex items-center justify-center h-48 text-muted-foreground text-sm italic">
                 Add cards with at least 3 different tags to visualize topic mastery.
@@ -27,7 +24,7 @@ export function TopicRadarChart({ data }: Props) {
         );
     }
 
-    const chartData = filtered.map((t) => ({
+    const chartData = data.map((t) => ({
         topic: truncate(t.topic, 12),
         fullTopic: t.topic,
         cards: t.cardCount,
