@@ -106,7 +106,8 @@ async function listReviewStatsForCards(userId: string, cardIds: string[]) {
 
 export async function listCardsForUser(userId: string, dueOnly = false) {
   const supabase = getSupabaseAdmin();
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const endOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
   let query = supabase
     .from("cards")
@@ -118,7 +119,7 @@ export async function listCardsForUser(userId: string, dueOnly = false) {
     .order("created_at", { ascending: true });
 
   if (dueOnly) {
-    query = query.lte("next_review_at", nowIso);
+    query = query.lte("next_review_at", endOfDayIso);
   }
 
   const { data, error } = await query;
@@ -421,13 +422,14 @@ export async function submitReview(
 
 export async function getDashboardStats(userId: string) {
   const supabase = getSupabaseAdmin();
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const endOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
   const { count: dueCount, error: dueError } = await supabase
     .from("cards")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .lte("next_review_at", nowIso);
+    .lte("next_review_at", endOfDayIso);
 
   if (dueError) {
     throw new Error(dueError.message);
@@ -450,7 +452,8 @@ export async function getDashboardStats(userId: string) {
 
 export async function listUsersDueForReminder() {
   const supabase = getSupabaseAdmin();
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const endOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
   const { data: users, error: usersError } = await supabase
     .from("users")
@@ -472,7 +475,7 @@ export async function listUsersDueForReminder() {
     .from("cards")
     .select("user_id")
     .in("user_id", userIds)
-    .lte("next_review_at", nowIso);
+    .lte("next_review_at", endOfDayIso);
 
   if (dueCardsError) {
     throw new Error(dueCardsError.message);
