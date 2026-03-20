@@ -88,6 +88,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
     const [hintLevel, setHintLevel] = useState(0);
     const [isHinting, setIsHinting] = useState(false);
     const [showLangPicker, setShowLangPicker] = useState(false);
+    const [selectedRating, setSelectedRating] = useState<EvalResult["suggestedRating"] | null>(null);
 
     useEffect(() => {
         const saved = localStorage.getItem(NITPICK_KEY);
@@ -136,6 +137,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
 
             const result: EvalResult = await res.json();
             setEvalResult(result);
+            setSelectedRating(result.suggestedRating);
 
             // Save to localStorage (replaces previous review)
             const stored: StoredAiReview = {
@@ -458,29 +460,37 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                         <Button
                                             key={r}
                                             variant="outline"
-                                            onClick={() => onRate(r)}
+                                            onClick={() => setSelectedRating(r)}
                                             className={`rounded-xl py-6 font-semibold transition-all ${
-                                                r === evalResult.suggestedRating
-                                                    ? `border-2 ${r === 'AGAIN' ? 'border-red-500' : r === 'HARD' ? 'border-orange-500' : r === 'GOOD' ? 'border-blue-500' : 'border-emerald-500'} bg-card hover:bg-muted`
-                                                    : ""
+                                                selectedRating === r
+                                                    ? `border-2 ${r === 'AGAIN' ? 'border-red-500 bg-red-500/5' : r === 'HARD' ? 'border-orange-500 bg-orange-500/5' : r === 'GOOD' ? 'border-blue-500 bg-blue-500/5' : 'border-emerald-500 bg-emerald-500/5'} font-bold`
+                                                    : "opacity-60 hover:opacity-100"
                                             }`}
                                         >
                                             <div className="flex flex-col items-center gap-1">
-                                                <span className={r === evalResult.suggestedRating ? (r === 'AGAIN' ? 'text-red-500' : r === 'HARD' ? 'text-orange-500' : r === 'GOOD' ? 'text-blue-500' : 'text-emerald-500') : ""}>
+                                                <span className={selectedRating === r ? (r === 'AGAIN' ? 'text-red-500' : r === 'HARD' ? 'text-orange-500' : r === 'GOOD' ? 'text-blue-500' : 'text-emerald-500') : ""}>
                                                     {r} {r === evalResult.suggestedRating && "✨"}
                                                 </span>
                                             </div>
                                         </Button>
                                     ))}
                                 </div>
-                                <div className="flex justify-center mt-2">
+                                <div className="flex flex-col items-center gap-2 mt-4">
+                                    <Button
+                                        size="lg"
+                                        disabled={!selectedRating}
+                                        onClick={() => selectedRating && onRate(selectedRating)}
+                                        className="w-full sm:w-64 rounded-full font-bold bg-foreground text-background hover:bg-foreground/90 py-6"
+                                    >
+                                        Continue to Scheduling
+                                    </Button>
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={onCancel}
                                         className="text-muted-foreground"
                                     >
-                                        Skip
+                                        Skip review
                                     </Button>
                                 </div>
                             </div>

@@ -160,6 +160,8 @@ export function ReviewSession({
 
     const handleRate = (rating: Rating) => {
         setPendingRating(rating);
+        setShowAiPractice(false);
+        setShowAnswer(true);
     };
 
     const submitFinalReview = async (manualDays?: number) => {
