@@ -353,6 +353,7 @@ export async function submitReview(
   cardId: string,
   rating: ReviewRating,
   responseMs?: number,
+  manualReviewDays?: number,
 ) {
   const supabase = getSupabaseAdmin();
 
@@ -380,6 +381,13 @@ export async function submitReview(
     rating,
     now,
   );
+
+  if (manualReviewDays !== undefined && manualReviewDays >= 0) {
+    srs.intervalDays = manualReviewDays;
+    const nextDate = new Date(now);
+    nextDate.setDate(nextDate.getDate() + manualReviewDays);
+    srs.nextReviewAt = nextDate;
+  }
 
   const { error: reviewError } = await supabase.from("reviews").insert({
     user_id: userId,

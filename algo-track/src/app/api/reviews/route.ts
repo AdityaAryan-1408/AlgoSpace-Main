@@ -22,12 +22,19 @@ export async function POST(request: NextRequest) {
     ) {
       throw new ApiError("responseMs must be a positive number when provided.");
     }
+    if (
+      body?.manualReviewDays != null &&
+      (typeof body.manualReviewDays !== "number" || !Number.isFinite(body.manualReviewDays) || body.manualReviewDays < 0)
+    ) {
+      throw new ApiError("manualReviewDays must be a positive number when provided.");
+    }
 
     const result = await submitReview(
       user.id,
       body.cardId.trim(),
       body.rating,
       body.responseMs,
+      body.manualReviewDays,
     );
 
     return jsonOk(result, 201);

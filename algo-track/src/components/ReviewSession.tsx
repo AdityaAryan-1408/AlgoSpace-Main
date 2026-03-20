@@ -83,6 +83,7 @@ export function ReviewSession({
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showAnswer, setShowAnswer] = useState(false);
     const [showAiPractice, setShowAiPractice] = useState(false);
+    const [pendingRating, setPendingRating] = useState<Rating | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [results, setResults] = useState<ReviewResult[]>([]);
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(
@@ -150,25 +151,30 @@ export function ReviewSession({
             setCurrentIndex(nextIndex);
             setShowAnswer(false);
             setShowAiPractice(false);
+            setPendingRating(null);
             cardStartTime.current = Date.now();
         } else {
             finishSession(newResults);
         }
     };
 
-    const handleRate = async (rating: Rating) => {
-        if (isSubmitting || completedRef.current) return;
+    const handleRate = (rating: Rating) => {
+        setPendingRating(rating);
+    };
+
+    const submitFinalReview = async (manualDays?: number) => {
+        if (!pendingRating || isSubmitting || completedRef.current) return;
 
         const responseMs = Date.now() - cardStartTime.current;
         setIsSubmitting(true);
 
-        const result: ReviewResult = { card: currentCard, rating, responseMs };
+        const result: ReviewResult = { card: currentCard, rating: pendingRating, responseMs };
         const newResults = [...results, result];
         setResults(newResults);
         resultsRef.current = newResults;
 
         try {
-            await submitCardReview(currentCard.id, rating, responseMs);
+            await submitCardReview(currentCard.id, pendingRating, responseMs, manualDays);
         } catch (err) {
             console.error("Failed to submit review:", err);
         } finally {
@@ -420,31 +426,61 @@ export function ReviewSession({
 
                                 {/* Rating Buttons */}
                                 <div className="mt-2">
-                                    <p className="text-xs text-muted-foreground text-center mb-3">
-                                        How did it go?
-                                    </p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {(
-                                            Object.entries(ratingConfig) as [
-                                                Rating,
-                                                (typeof ratingConfig)[Rating],
-                                            ][]
-                                        ).map(([key, config]) => (
-                                            <motion.button
-                                                key={key}
-                                                whileHover={{ scale: 1.03 }}
-                                                whileTap={{ scale: 0.97 }}
-                                                onClick={() => handleRate(key)}
-                                                disabled={isSubmitting}
-                                                className={`flex flex-col items-center gap-1 py-3 px-4 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 ${config.color}`}
-                                            >
-                                                <span className="text-sm">{config.label}</span>
-                                                <span className="text-[10px] opacity-80">
-                                                    {config.desc}
-                                                </span>
-                                            </motion.button>
-                                        ))}
-                                    </div>
+                                    {!pendingRating ? (
+                                        <>
+                                            <p className="text-xs text-muted-foreground text-center mb-3">
+                                                How did it go?
+                                            </p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                {(
+                                                    Object.entries(ratingConfig) as [
+                                                        Rating,
+                                                        (typeof ratingConfig)[Rating],
+                                                    ][]
+                                                ).map(([key, config]) => (
+                                                    <motion.button
+                                                        key={key}
+                                                        whileHover={{ scale: 1.03 }}
+                                                        whileTap={{ scale: 0.97 }}
+                                                        onClick={() => handleRate(key)}
+                                                        disabled={isSubmitting}
+                                                        className={`flex flex-col items-center gap-1 py-3 px-4 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 ${config.color}`}
+                                                    >
+                                                        <span className="text-sm">{config.label}</span>
+                                                        <span className="text-[10px] opacity-80">
+                                                            {config.desc}
+                                                        </span>
+                                                    </motion.button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-xl border border-border mt-4">
+                                            <p className="text-sm font-semibold text-foreground text-center">
+                                                When do you want to review this next?
+                                            </p>
+                                            <div className="flex flex-wrap items-center justify-center gap-2">
+                                                <Button size="sm" variant="default" onClick={() => submitFinalReview()} disabled={isSubmitting}>
+                                                    Auto (Depends on rating)
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(1)} disabled={isSubmitting}>
+                                                    Tomorrow
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(3)} disabled={isSubmitting}>
+                                                    3 Days
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(7)} disabled={isSubmitting}>
+                                                    7 Days
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(14)} disabled={isSubmitting}>
+                                                    14 Days
+                                                </Button>
+                                            </div>
+                                            <Button variant="ghost" size="sm" onClick={() => setPendingRating(null)} disabled={isSubmitting} className="text-muted-foreground mt-2">
+                                                Wait, let me change rating
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         )}

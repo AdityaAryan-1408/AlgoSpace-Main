@@ -448,12 +448,32 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                             )}
 
                             {/* Accept Rating */}
-                            <div className="flex items-center justify-between pt-2 border-t border-border">
-                                <span className="text-xs text-muted-foreground">
-                                    AI suggests rating this as{" "}
-                                    <strong className="text-foreground">{evalResult.suggestedRating}</strong>
+                            <div className="flex flex-col gap-3 pt-4 border-t border-border mt-4">
+                                <span className="text-sm text-foreground text-center font-medium">
+                                    AI suggests rating this as <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${ratingColors[evalResult.suggestedRating]}`}>{evalResult.suggestedRating}</span>
                                 </span>
-                                <div className="flex items-center gap-2">
+                                <p className="text-xs text-muted-foreground text-center mb-1">Select a rating to continue:</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    {(["AGAIN", "HARD", "GOOD", "EASY"] as const).map((r) => (
+                                        <Button
+                                            key={r}
+                                            variant="outline"
+                                            onClick={() => onRate(r)}
+                                            className={`rounded-xl py-6 font-semibold transition-all ${
+                                                r === evalResult.suggestedRating
+                                                    ? `border-2 ${r === 'AGAIN' ? 'border-red-500' : r === 'HARD' ? 'border-orange-500' : r === 'GOOD' ? 'border-blue-500' : 'border-emerald-500'} bg-card hover:bg-muted`
+                                                    : ""
+                                            }`}
+                                        >
+                                            <div className="flex flex-col items-center gap-1">
+                                                <span className={r === evalResult.suggestedRating ? (r === 'AGAIN' ? 'text-red-500' : r === 'HARD' ? 'text-orange-500' : r === 'GOOD' ? 'text-blue-500' : 'text-emerald-500') : ""}>
+                                                    {r} {r === evalResult.suggestedRating && "✨"}
+                                                </span>
+                                            </div>
+                                        </Button>
+                                    ))}
+                                </div>
+                                <div className="flex justify-center mt-2">
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -461,13 +481,6 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                         className="text-muted-foreground"
                                     >
                                         Skip
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => onRate(evalResult.suggestedRating)}
-                                        className={`rounded-full px-4 font-semibold ${ratingColors[evalResult.suggestedRating]}`}
-                                    >
-                                        Accept {evalResult.suggestedRating}
                                     </Button>
                                 </div>
                             </div>

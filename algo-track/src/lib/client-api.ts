@@ -101,10 +101,11 @@ export async function submitCardReview(
     cardId: string,
     rating: "AGAIN" | "HARD" | "GOOD" | "EASY",
     responseMs?: number,
+    manualReviewDays?: number,
 ): Promise<{ card: Flashcard }> {
     return apiFetch("/reviews", {
         method: "POST",
-        body: JSON.stringify({ cardId, rating, responseMs }),
+        body: JSON.stringify({ cardId, rating, responseMs, manualReviewDays }),
     });
 }
 
