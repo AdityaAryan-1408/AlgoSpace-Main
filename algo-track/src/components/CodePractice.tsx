@@ -79,7 +79,7 @@ interface Props {
 export function CodePractice({ card, onRate, onCancel }: Props) {
     const isDSA = card.type === "leetcode";
     const [code, setCode] = useState("");
-    const [language, setLanguage] = useState("python");
+    const [language, setLanguage] = useState("cpp");
     const [strictMode, setStrictMode] = useState(false);
     const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
     const [isEvaluating, setIsEvaluating] = useState(false);
