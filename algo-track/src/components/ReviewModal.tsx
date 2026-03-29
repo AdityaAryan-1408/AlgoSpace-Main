@@ -2,14 +2,16 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard } from "@/data";
-import { Play, Shuffle, Timer, Repeat, MoreHorizontal, MoreVertical } from "lucide-react";
+import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { rescheduleReviews } from "@/lib/client-api";
 
 interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
   onClose: () => void;
   onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse") => void;
+  onRescheduled?: () => void;
 }
 
 export function ReviewModal({
@@ -17,8 +19,22 @@ export function ReviewModal({
   totalCards,
   onClose,
   onStart,
+  onRescheduled,
 }: ReviewModalProps) {
   const [showOptions, setShowOptions] = useState(false);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+
+  const handleReschedule = async (days: number) => {
+    setIsRescheduling(true);
+    try {
+      await rescheduleReviews(days);
+      onRescheduled?.();
+    } catch (e) {
+      console.error("Failed to reschedule", e);
+      setIsRescheduling(false);
+    }
+  };
 
   const queuedCards = useMemo(() => {
     const ratingPriority: Record<Flashcard["lastRating"], number> = {
@@ -122,9 +138,53 @@ export function ReviewModal({
         )}
 
         <div className="p-4 sm:p-6 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-muted/20 relative">
-          <Button variant="ghost" onClick={onClose} className="font-semibold order-2 sm:order-1">
-            Not now
-          </Button>
+          <div className="flex items-center gap-2 order-2 sm:order-1">
+            <Button variant="ghost" onClick={onClose} className="font-semibold">
+              Not now
+            </Button>
+            {dueCards.length > 0 && (
+              <div className="relative">
+                 <Button
+                    variant="ghost"
+                    className="font-semibold text-muted-foreground hover:text-foreground gap-2"
+                    onClick={() => setShowReschedule(!showReschedule)}
+                    disabled={isRescheduling}
+                 >
+                    {isRescheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                    Reschedule
+                 </Button>
+                 <AnimatePresence>
+                   {showReschedule && (
+                     <motion.div
+                       initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                       animate={{ opacity: 1, scale: 1, y: 0 }}
+                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                       className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-lg overflow-hidden flex flex-col py-1 z-50 origin-bottom-left"
+                     >
+                       <button
+                         onClick={() => { setShowReschedule(false); handleReschedule(1); }}
+                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                       >
+                         Tomorrow (1 day)
+                       </button>
+                       <button
+                         onClick={() => { setShowReschedule(false); handleReschedule(3); }}
+                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                       >
+                         In 3 days
+                       </button>
+                       <button
+                         onClick={() => { setShowReschedule(false); handleReschedule(7); }}
+                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                       >
+                         In a week
+                       </button>
+                     </motion.div>
+                   )}
+                 </AnimatePresence>
+              </div>
+            )}
+          </div>
           
           <div className="flex items-center gap-2 order-1 sm:order-2 ml-auto">
             {totalCards.length > 0 && (

@@ -211,14 +211,25 @@ export function ReviewSession({
                         {formatTimer(remainingSeconds)}
                     </span>
                 )}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onCancel}
-                    className="text-muted-foreground"
-                >
-                    End early
-                </Button>
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => advance(resultsRef.current, currentIndex + 1)}
+                        className="text-muted-foreground hover:text-foreground hover:bg-muted"
+                        title="Skip this question for now"
+                    >
+                        Skip
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onCancel}
+                        className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                    >
+                        End early
+                    </Button>
+                </div>
             </div>
 
             {/* Card */}

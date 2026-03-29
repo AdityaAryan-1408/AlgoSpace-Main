@@ -109,6 +109,13 @@ export async function submitCardReview(
     });
 }
 
+export async function rescheduleReviews(days: number): Promise<{ success: boolean; rescheduledTo: string }> {
+    return apiFetch("/reviews/reschedule", {
+        method: "POST",
+        body: JSON.stringify({ days }),
+    });
+}
+
 export async function fetchDashboardStats(): Promise<{
     cardsDueToday: number;
     totalCards: number;

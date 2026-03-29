@@ -613,6 +613,10 @@ export default function HomePage() {
               totalCards={cards}
               onClose={() => setShowReviewModal(false)}
               onStart={handleStartReview}
+              onRescheduled={() => {
+                setShowReviewModal(false);
+                syncFromApi(false);
+              }}
             />
           )}
         </AnimatePresence>
