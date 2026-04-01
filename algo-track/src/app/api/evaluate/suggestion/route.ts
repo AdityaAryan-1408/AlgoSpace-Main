@@ -32,13 +32,14 @@ RULES:
 - Use "// ← ADD THIS" or "// ← CHANGE THIS" comments to mark changes.
 - If the approach is fundamentally wrong and needs a complete rewrite, set type to "rewrite" and provide a brief explanation of why their approach won't work, then show the reference solution with brief annotations.
 - Be concise. Don't repeat the full feedback — just show the fix.
-- Output valid JSON only, no markdown fences.
+- IMPORTANT: Always wrap any code inside the suggestion field in markdown code fences (e.g. \`\`\`cpp ... \`\`\`). Use the correct language identifier.
+- Output valid JSON only. The outer response must NOT be in markdown fences, but code INSIDE the suggestion string value MUST use markdown fences.
 
 OUTPUT FORMAT (JSON):
 {
   "hasImprovements": true,
   "type": "patch" | "rewrite",
-  "suggestion": "The corrected/improved code with markers OR the reference solution with explanation"
+  "suggestion": "Brief explanation then \`\`\`lang\\ncode here\\n\`\`\`"
 }`
             : `You are a CS professor helping a student improve their explanation.
 
@@ -118,6 +119,16 @@ ${aiFeedback}`;
         }
 
         const parsed = JSON.parse(content);
+
+        // Ensure code in suggestion is wrapped in markdown fences for proper rendering
+        if (parsed.suggestion && parsed.hasImprovements && isDSA) {
+            const s = parsed.suggestion as string;
+            // If it contains code-like patterns but no markdown fences, wrap it
+            if (!s.includes("```") && /[{};()=]/.test(s)) {
+                parsed.suggestion = "```\n" + s + "\n```";
+            }
+        }
+
         return NextResponse.json(parsed);
     } catch (err) {
         console.error("Suggestion error:", err);
