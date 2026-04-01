@@ -116,6 +116,26 @@ export async function rescheduleReviews(days: number): Promise<{ success: boolea
     });
 }
 
+export interface SuggestionResult {
+    hasImprovements: boolean;
+    type?: "patch" | "rewrite";
+    suggestion?: string;
+}
+
+export async function fetchSuggestion(input: {
+    userCode: string;
+    savedSolution: string;
+    problemTitle: string;
+    problemDescription: string;
+    cardType: string;
+    aiFeedback: string;
+}): Promise<SuggestionResult> {
+    return apiFetch("/evaluate/suggestion", {
+        method: "POST",
+        body: JSON.stringify(input),
+    });
+}
+
 export async function fetchDashboardStats(): Promise<{
     cardsDueToday: number;
     totalCards: number;

@@ -12,11 +12,14 @@ import {
     X,
     AlertTriangle,
     ChevronDown,
+    ChevronUp,
     ToggleLeft,
     ToggleRight,
+    Wand2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Flashcard } from "@/data";
+import { fetchSuggestion, type SuggestionResult } from "@/lib/client-api";
 
 const NITPICK_KEY = "algotrack-nitpick-mode";
 
@@ -89,6 +92,9 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
     const [isHinting, setIsHinting] = useState(false);
     const [showLangPicker, setShowLangPicker] = useState(false);
     const [selectedRating, setSelectedRating] = useState<EvalResult["suggestedRating"] | null>(null);
+    const [suggestionResult, setSuggestionResult] = useState<SuggestionResult | null>(null);
+    const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
+    const [showSuggestion, setShowSuggestion] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem(NITPICK_KEY);
@@ -114,6 +120,8 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
         setIsEvaluating(true);
         setEvalError("");
         setEvalResult(null);
+        setSuggestionResult(null);
+        setShowSuggestion(false);
 
         try {
             const res = await fetch("/api/evaluate", {
@@ -150,6 +158,57 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
             setEvalError(err instanceof Error ? err.message : "Evaluation failed");
         } finally {
             setIsEvaluating(false);
+        }
+    };
+
+    const handleShowSuggestion = async () => {
+        // Toggle collapse if already fetched
+        if (suggestionResult) {
+            setShowSuggestion(!showSuggestion);
+            return;
+        }
+
+        if (!evalResult) return;
+
+        // Client-side short-circuit: perfect solution → no improvements
+        if (evalResult.isCorrect && evalResult.suggestedRating === "EASY") {
+            setSuggestionResult({ hasImprovements: false });
+            setShowSuggestion(true);
+            return;
+        }
+
+        // Client-side short-circuit: completely wrong → show stored solution
+        if (!evalResult.isCorrect && evalResult.suggestedRating === "AGAIN") {
+            const stored = getSavedSolution();
+            if (stored) {
+                setSuggestionResult({
+                    hasImprovements: true,
+                    type: "rewrite",
+                    suggestion: `Your approach needs a different strategy. Here's the reference solution:\n\n${stored}`,
+                });
+                setShowSuggestion(true);
+                return;
+            }
+        }
+
+        // Otherwise, call the AI for a targeted suggestion
+        setIsFetchingSuggestion(true);
+        try {
+            const result = await fetchSuggestion({
+                userCode: code,
+                savedSolution: getSavedSolution(),
+                problemTitle: card.title,
+                problemDescription: card.description,
+                cardType: card.type,
+                aiFeedback: evalResult.feedback,
+            });
+            setSuggestionResult(result);
+            setShowSuggestion(true);
+        } catch (err) {
+            console.error("Failed to fetch suggestion:", err);
+            setEvalError("Failed to load suggestion");
+        } finally {
+            setIsFetchingSuggestion(false);
         }
     };
 
@@ -448,6 +507,63 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                     )}
                                 </div>
                             )}
+
+                            {/* Show Suggested Solution */}
+                            <div className="mt-2">
+                                <button
+                                    onClick={handleShowSuggestion}
+                                    disabled={isFetchingSuggestion}
+                                    className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {isFetchingSuggestion ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                                        ) : (
+                                            <Wand2 className="w-4 h-4 text-purple-500" />
+                                        )}
+                                        Show Suggested Solution
+                                    </div>
+                                    {showSuggestion ? (
+                                        <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                    ) : (
+                                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                    )}
+                                </button>
+
+                                <AnimatePresence>
+                                    {showSuggestion && suggestionResult && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: "auto" }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="mt-2 p-4 rounded-xl border border-border bg-muted/20">
+                                                {!suggestionResult.hasImprovements ? (
+                                                    <div className="flex items-center gap-2 text-sm text-emerald-500 font-medium">
+                                                        <Check className="w-4 h-4" />
+                                                        Nothing to improve here — your solution looks great!
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                                                suggestionResult.type === "rewrite" ? "text-orange-500" : "text-purple-500"
+                                                            }`}>
+                                                                {suggestionResult.type === "rewrite" ? "Needs Different Approach" : "Suggested Changes"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-sm text-foreground/90 leading-relaxed">
+                                                            <MarkdownContent content={suggestionResult.suggestion || ""} />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
                             {/* Accept Rating */}
                             <div className="flex flex-col gap-3 pt-4 border-t border-border mt-4">
