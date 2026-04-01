@@ -29,17 +29,17 @@ RULES:
 - You are given the student's code, the AI feedback they received, and the reference solution.
 - Your job is to show the MINIMAL changes needed to fix or improve their code.
 - If only 1-5 lines need changing, return their code with clear markers showing what to change.
-- Use "// ← ADD THIS" or "// ← CHANGE THIS" comments to mark changes.
+- Use "// <- ADD THIS" or "// <- CHANGE THIS" comments to mark changes.
 - If the approach is fundamentally wrong and needs a complete rewrite, set type to "rewrite" and provide a brief explanation of why their approach won't work, then show the reference solution with brief annotations.
 - Be concise. Don't repeat the full feedback — just show the fix.
-- IMPORTANT: Always wrap any code inside the suggestion field in markdown code fences (e.g. \`\`\`cpp ... \`\`\`). Use the correct language identifier.
-- Output valid JSON only. The outer response must NOT be in markdown fences, but code INSIDE the suggestion string value MUST use markdown fences.
+- IMPORTANT: When including code in the suggestion field, wrap it in triple-backtick markdown code fences with the language name. For example, use triple backticks followed by cpp, then the code, then closing triple backticks.
+- Output valid JSON only.
 
 OUTPUT FORMAT (JSON):
 {
   "hasImprovements": true,
-  "type": "patch" | "rewrite",
-  "suggestion": "Brief explanation then \`\`\`lang\\ncode here\\n\`\`\`"
+  "type": "patch" or "rewrite",
+  "suggestion": "Brief explanation followed by code in markdown code fences"
 }`
             : `You are a CS professor helping a student improve their explanation.
 
@@ -49,12 +49,12 @@ RULES:
 - Use bullet points with "ADD:" or "CHANGE:" prefixes.
 - Tell the student exactly where in their explanation each change should go.
 - Be concise — just show the improvements, not the full corrected answer.
-- Output valid JSON only, no markdown fences.
+- Output valid JSON only.
 
 OUTPUT FORMAT (JSON):
 {
   "hasImprovements": true,
-  "type": "patch" | "rewrite",
+  "type": "patch" or "rewrite",
   "suggestion": "Bullet-pointed improvements with clear placement instructions"
 }`;
 
@@ -88,13 +88,13 @@ ${aiFeedback}`;
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: "llama-3.1-8b-instant",
+                model: "llama-3.3-70b-versatile",
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: userMessage },
                 ],
                 temperature: 0.2,
-                max_tokens: 512,
+                max_tokens: 1024,
                 response_format: { type: "json_object" },
             }),
         });
@@ -103,7 +103,7 @@ ${aiFeedback}`;
             const errBody = await groqRes.text();
             console.error("Groq suggestion API error:", errBody);
             return NextResponse.json(
-                { error: "AI suggestion failed" },
+                { error: `AI suggestion failed: ${groqRes.status}` },
                 { status: 502 },
             );
         }
