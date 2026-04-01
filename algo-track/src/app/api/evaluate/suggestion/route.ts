@@ -29,7 +29,8 @@ RULES:
 - You are given the student's code, the AI feedback they received, and the reference solution.
 - Your job is to show the MINIMAL changes needed to fix or improve their code.
 - If only 1-5 lines need changing, return their code with clear markers showing what to change.
-- Use "// <- ADD THIS" or "// <- CHANGE THIS" comments to mark changes.
+- Use plain code comments like "// <- ADD THIS" or "// <- CHANGE THIS" to mark changes.
+- NEVER include HTML tags, CSS classes, or any markup in the code. Output pure code only.
 - If the approach is fundamentally wrong and needs a complete rewrite, set type to "rewrite" and provide a brief explanation of why their approach won't work, then show the reference solution with brief annotations.
 - Be concise. Don't repeat the full feedback — just show the fix.
 - IMPORTANT: When including code in the suggestion field, wrap it in triple-backtick markdown code fences with the language name. For example, use triple backticks followed by cpp, then the code, then closing triple backticks.
@@ -120,12 +121,21 @@ ${aiFeedback}`;
 
         const parsed = JSON.parse(content);
 
-        // Ensure code in suggestion is wrapped in markdown fences for proper rendering
-        if (parsed.suggestion && parsed.hasImprovements && isDSA) {
-            const s = parsed.suggestion as string;
-            // If it contains code-like patterns but no markdown fences, wrap it
-            if (!s.includes("```") && /[{};()=]/.test(s)) {
-                parsed.suggestion = "```\n" + s + "\n```";
+        if (parsed.suggestion && typeof parsed.suggestion === "string") {
+            // Strip any HTML tags/attributes the AI may have injected (e.g. class="text-amber-300">)
+            parsed.suggestion = parsed.suggestion.replace(
+                /\s*class="[^"]*">/g,
+                ""
+            ).replace(
+                /<[^>]*>/g,
+                ""
+            );
+
+            // Ensure code in suggestion is wrapped in markdown fences for proper rendering
+            if (parsed.hasImprovements && isDSA) {
+                if (!parsed.suggestion.includes("```") && /[{};()=]/.test(parsed.suggestion)) {
+                    parsed.suggestion = "```\n" + parsed.suggestion + "\n```";
+                }
             }
         }
 
