@@ -415,11 +415,12 @@ export default function HomePage() {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline-block">Add Card</span>
             </Button>
+            {/* Import button — hidden, remove className="hidden" to restore */}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowImportModal(true)}
-              className="gap-2 transition-all hover:text-purple-500 hover:bg-purple-500/10"
+              className="hidden"
             >
               <FileDown className="w-4 h-4" />
               <span className="hidden sm:inline-block">Import</span>

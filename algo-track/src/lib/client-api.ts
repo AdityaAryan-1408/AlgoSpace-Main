@@ -97,6 +97,22 @@ export async function updateCard(
     return data.card;
 }
 
+export async function pauseCardReview(cardId: string): Promise<Flashcard> {
+    const data = await apiFetch<{ card: Flashcard }>(`/cards/${cardId}/pause`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "pause" }),
+    });
+    return data.card;
+}
+
+export async function resumeCardReview(cardId: string, resumeInDays: number): Promise<Flashcard> {
+    const data = await apiFetch<{ card: Flashcard }>(`/cards/${cardId}/pause`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "resume", resumeInDays }),
+    });
+    return data.card;
+}
+
 export async function submitCardReview(
     cardId: string,
     rating: "AGAIN" | "HARD" | "GOOD" | "EASY",

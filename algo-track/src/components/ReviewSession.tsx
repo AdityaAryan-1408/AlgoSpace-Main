@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { CodePractice } from "@/components/CodePractice";
-import { submitCardReview } from "@/lib/client-api";
-import { Eye, Loader2, Code, ExternalLink, Brain } from "lucide-react";
+import { submitCardReview, pauseCardReview } from "@/lib/client-api";
+import { canPauseCard, isCardPaused } from "@/lib/card-utils";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export interface ReviewResult {
@@ -179,6 +180,30 @@ export function ReviewSession({
             await submitCardReview(currentCard.id, pendingRating, responseMs, manualDays);
         } catch (err) {
             console.error("Failed to submit review:", err);
+        } finally {
+            setIsSubmitting(false);
+            advance(newResults, currentIndex + 1);
+        }
+    };
+
+    const handlePauseReview = async () => {
+        if (!pendingRating || isSubmitting || completedRef.current) return;
+
+        const responseMs = Date.now() - cardStartTime.current;
+        setIsSubmitting(true);
+
+        const result: ReviewResult = { card: currentCard, rating: pendingRating, responseMs };
+        const newResults = [...results, result];
+        setResults(newResults);
+        resultsRef.current = newResults;
+
+        try {
+            // Submit the review first so it counts
+            await submitCardReview(currentCard.id, pendingRating, responseMs);
+            // Then pause the card
+            await pauseCardReview(currentCard.id);
+        } catch (err) {
+            console.error("Failed to pause review:", err);
         } finally {
             setIsSubmitting(false);
             advance(newResults, currentIndex + 1);
@@ -492,6 +517,18 @@ export function ReviewSession({
                                             <Button variant="ghost" size="sm" onClick={() => setPendingRating(null)} disabled={isSubmitting} className="text-muted-foreground mt-2">
                                                 Wait, let me change rating
                                             </Button>
+                                            {canPauseCard(currentCard) && !isCardPaused(currentCard) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handlePauseReview}
+                                                    disabled={isSubmitting}
+                                                    className="text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 gap-1.5 mt-1"
+                                                >
+                                                    <Pause className="w-3.5 h-3.5" />
+                                                    Pause reviews for this card
+                                                </Button>
+                                            )}
                                         </div>
                                     )}
                                 </div>

@@ -2,12 +2,14 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import type { Flashcard } from "@/data";
-import { updateCard, deleteCard } from "@/lib/client-api";
+import { updateCard, deleteCard, pauseCardReview, resumeCardReview } from "@/lib/client-api";
+import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2 } from "lucide-react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
 
 interface CardDetailsModalProps {
@@ -28,6 +30,9 @@ export function CardDetailsModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [aiReview, setAiReview] = useState<StoredAiReview | null>(null);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+  const [showResumeOptions, setShowResumeOptions] = useState(false);
 
   useEffect(() => {
     if (card) {
@@ -87,7 +92,32 @@ export function CardDetailsModal({
     }
   };
 
-  return (
+  const handlePause = async () => {
+    if (!card) return;
+    setIsPausing(true);
+    try {
+      await pauseCardReview(card.id);
+      onSaved();
+    } catch (err) {
+      console.error("Failed to pause card:", err);
+      setIsPausing(false);
+    }
+  };
+
+  const handleResume = async (days: number) => {
+    if (!card) return;
+    setIsResuming(true);
+    try {
+      await resumeCardReview(card.id, days);
+      onSaved();
+    } catch (err) {
+      console.error("Failed to resume card:", err);
+      setIsResuming(false);
+      setShowResumeOptions(false);
+    }
+  };
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm"
       onClick={onClose}
@@ -427,45 +457,107 @@ export function CardDetailsModal({
 
         {/* Footer */}
         {!isEditing && (
-        <div className="p-4 border-t border-border flex items-center justify-between bg-muted/10">
-          <div className="flex items-center gap-3">
-            <div className="text-xs text-muted-foreground flex items-center gap-4">
-              <span>
-                Last reviewed:{" "}
-                <strong className="text-foreground">{card.lastReview}</strong>
-              </span>
-              <span>
-                Next review:{" "}
-                <strong className="text-foreground">{card.nextReview}</strong>
-              </span>
+        <div className="p-4 border-t border-border flex flex-col gap-3 bg-muted/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-muted-foreground flex items-center gap-4">
+                <span>
+                  Last reviewed:{" "}
+                  <strong className="text-foreground">{card.lastReview}</strong>
+                </span>
+                {isCardPaused(card) ? (
+                  <span className="flex items-center gap-1 text-amber-500">
+                    <Pause className="w-3 h-3" />
+                    <strong>Reviews paused</strong>
+                  </span>
+                ) : (
+                  <span>
+                    Next review:{" "}
+                    <strong className="text-foreground">{card.nextReview}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isCardPaused(card) ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowResumeOptions(!showResumeOptions)}
+                  disabled={isResuming}
+                  className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 gap-1.5 rounded-full px-4"
+                >
+                  {isResuming ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  {isResuming ? "Resuming..." : "Resume Reviews"}
+                </Button>
+              ) : canPauseCard(card) ? (
+                <Button
+                  variant="ghost"
+                  onClick={handlePause}
+                  disabled={isPausing || isSaving || isDeleting}
+                  className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 gap-1.5 rounded-full px-4"
+                >
+                  {isPausing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Pause className="w-4 h-4" />
+                  )}
+                  {isPausing ? "Pausing..." : "Pause Reviews"}
+                </Button>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">
+                  Pause available after {pauseThreshold(card)} reviews ({card.history.total}/{pauseThreshold(card)})
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                onClick={handleDelete}
+                disabled={isDeleting || isSaving}
+                className="text-hard hover:text-hard hover:bg-hard-bg gap-1.5 rounded-full px-4"
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                {isDeleting ? "Deleting..." : "Delete"}
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={isSaving || isDeleting}
+                className="rounded-full px-6 font-semibold gap-2"
+              >
+                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isSaving ? "Saving..." : "Save & Close"}
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={handleDelete}
-              disabled={isDeleting || isSaving}
-              className="text-hard hover:text-hard hover:bg-hard-bg gap-1.5 rounded-full px-4"
-            >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-              {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={isSaving || isDeleting}
-              className="rounded-full px-6 font-semibold gap-2"
-            >
-              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isSaving ? "Saving..." : "Save & Close"}
-            </Button>
-          </div>
+
+          {/* Resume options picker */}
+          {showResumeOptions && isCardPaused(card) && (
+            <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
+              <span className="text-xs font-medium text-muted-foreground mr-2">Resume in:</span>
+              {[1, 3, 7, 14].map((d) => (
+                <Button
+                  key={d}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleResume(d)}
+                  disabled={isResuming}
+                  className="rounded-full text-xs"
+                >
+                  {d === 1 ? "Tomorrow" : `${d} Days`}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
         )}
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }
