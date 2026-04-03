@@ -8,7 +8,7 @@ import { MarkdownContent } from "@/components/MarkdownContent";
 import { CodePractice } from "@/components/CodePractice";
 import { submitCardReview, pauseCardReview } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export interface ReviewResult {
@@ -84,6 +84,9 @@ export function ReviewSession({
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showAnswer, setShowAnswer] = useState(false);
     const [showAiPractice, setShowAiPractice] = useState(false);
+    const [showAnswerInput, setShowAnswerInput] = useState(false);
+    const [userAnswer, setUserAnswer] = useState("");
+    const [answerResult, setAnswerResult] = useState<"correct" | "incorrect" | null>(null);
     const [pendingRating, setPendingRating] = useState<Rating | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [results, setResults] = useState<ReviewResult[]>([]);
@@ -152,6 +155,9 @@ export function ReviewSession({
             setCurrentIndex(nextIndex);
             setShowAnswer(false);
             setShowAiPractice(false);
+            setShowAnswerInput(false);
+            setUserAnswer("");
+            setAnswerResult(null);
             setPendingRating(null);
             cardStartTime.current = Date.now();
         } else {
@@ -380,21 +386,66 @@ export function ReviewSession({
                                 )}
 
                                 <div className="mt-2 flex justify-center gap-3">
-                                    <Button
-                                        onClick={() => setShowAnswer(true)}
-                                        className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-8 py-5 text-base"
-                                    >
-                                        <Eye className="w-5 h-5" />
-                                        {isReverse ? "Reveal Problem" : "Reveal Answer"}
-                                    </Button>
-                                    <Button
-                                        onClick={() => setShowAiPractice(true)}
-                                        variant="ghost"
-                                        className="gap-2 font-semibold text-purple-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-full px-6 py-5 text-base border border-purple-500/30"
-                                    >
-                                        <Brain className="w-5 h-5" />
-                                        Practice with AI
-                                    </Button>
+                                    {!showAnswerInput && (
+                                        <Button
+                                            onClick={() => setShowAnswer(true)}
+                                            className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-8 py-5 text-base"
+                                        >
+                                            <Eye className="w-5 h-5" />
+                                            {isReverse ? "Reveal Problem" : "Reveal Answer"}
+                                        </Button>
+                                    )}
+                                    {isReverse ? (
+                                        showAnswerInput ? (
+                                            <form 
+                                                className="flex flex-col gap-2 items-center" 
+                                                onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    if (userAnswer.toLowerCase().trim() === currentCard.title.toLowerCase().trim()) {
+                                                        setAnswerResult("correct");
+                                                        setShowAnswer(true);
+                                                    } else {
+                                                        setAnswerResult("incorrect");
+                                                    }
+                                                }}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        value={userAnswer}
+                                                        onChange={e => { setUserAnswer(e.target.value); setAnswerResult(null); }}
+                                                        placeholder="Question name..." 
+                                                        className="border border-border bg-card rounded-full px-4 py-2.5 outline-none focus:border-blue-500 transition-colors w-64 shadow-sm"
+                                                        autoFocus
+                                                    />
+                                                    <Button type="submit" variant="default" className="rounded-full px-6 py-5">Check</Button>
+                                                    <Button type="button" variant="ghost" onClick={() => { setShowAnswerInput(false); setAnswerResult(null); }} className="rounded-full px-4 py-5 font-semibold">Cancel</Button>
+                                                </div>
+                                                {answerResult === "incorrect" && (
+                                                    <span className="text-red-500 text-sm font-medium animate-in fade-in slide-in-from-top-1">
+                                                        Incorrect, try again!
+                                                    </span>
+                                                )}
+                                            </form>
+                                        ) : (
+                                            <Button
+                                                onClick={() => { setShowAnswerInput(true); setUserAnswer(""); setAnswerResult(null); }}
+                                                variant="ghost"
+                                                className="gap-2 font-semibold text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-full px-6 py-5 text-base border border-blue-500/30"
+                                            >
+                                                <PenLine className="w-5 h-5" />
+                                                Enter your answer
+                                            </Button>
+                                        )
+                                    ) : (
+                                        <Button
+                                            onClick={() => setShowAiPractice(true)}
+                                            variant="ghost"
+                                            className="gap-2 font-semibold text-purple-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-full px-6 py-5 text-base border border-purple-500/30"
+                                        >
+                                            <Brain className="w-5 h-5" />
+                                            Practice with AI
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ) : (

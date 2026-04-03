@@ -237,14 +237,48 @@ export default function HomePage() {
     }, CACHE_TTL_MS);
   };
 
-  const handleStartReview = async (mode: ReviewMode = "standard") => {
+  const handleStartReview = async (mode: ReviewMode = "standard", count?: number) => {
     setShowReviewModal(false);
     try {
+      const modeCount = count || 5;
+
       if (mode === "random-quiz") {
         if (cards.length === 0) return;
-        const randomIndex = Math.floor(Math.random() * cards.length);
-        setReviewSessionCards([cards[randomIndex]]);
+        const shuffled = [...cards].sort(() => 0.5 - Math.random());
+        setReviewSessionCards(shuffled.slice(0, modeCount));
         setReviewSessionConfig({ mode: "random-quiz" });
+        setView("review-session");
+        return;
+      }
+
+      if (mode === "sprint") {
+        if (cards.length === 0) return;
+        let sprintCards = [];
+        const due = await fetchDueCards();
+        if (due.length === 0) {
+          const shuffled = [...cards].sort(() => 0.5 - Math.random());
+          sprintCards = shuffled.slice(0, 5); // 5 random questions for a empty sprint
+        } else {
+          sprintCards = prioritizeDueCards(due);
+        }
+        setReviewSessionCards(sprintCards);
+        setReviewSessionConfig({ mode: "sprint", timeLimitSeconds: 300 });
+        setView("review-session");
+        return;
+      }
+
+      if (mode === "reverse") {
+        if (cards.length === 0) return;
+        let reverseCards = [];
+        const due = await fetchDueCards();
+        if (due.length === 0) {
+          const shuffled = [...cards].sort(() => 0.5 - Math.random());
+          reverseCards = shuffled.slice(0, modeCount);
+        } else {
+          reverseCards = prioritizeDueCards(due).slice(0, Math.min(modeCount, due.length));
+        }
+        setReviewSessionCards(reverseCards);
+        setReviewSessionConfig({ mode: "reverse" });
         setView("review-session");
         return;
       }
@@ -256,7 +290,6 @@ export default function HomePage() {
       setReviewSessionCards(prioritized);
       setReviewSessionConfig({
         mode,
-        timeLimitSeconds: mode === "sprint" ? 300 : undefined,
       });
       setView("review-session");
     } catch (err) {

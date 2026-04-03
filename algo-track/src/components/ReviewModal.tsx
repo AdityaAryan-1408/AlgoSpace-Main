@@ -10,7 +10,7 @@ interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
   onClose: () => void;
-  onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse") => void;
+  onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number) => void;
   onRescheduled?: () => void;
 }
 
@@ -24,6 +24,7 @@ export function ReviewModal({
   const [showOptions, setShowOptions] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [numberSelectMode, setNumberSelectMode] = useState<"random-quiz" | "reverse" | null>(null);
 
   const handleReschedule = async (days: number) => {
     setIsRescheduling(true);
@@ -74,16 +75,38 @@ export function ReviewModal({
       >
         <div className="p-6 md:p-8 flex flex-col gap-2 border-b border-border">
           <h2 className="text-2xl font-bold text-foreground">
-            Ready to review?
+            {numberSelectMode === "random-quiz" ? "Random Quiz" : numberSelectMode === "reverse" ? "Reverse Review" : "Ready to review?"}
           </h2>
           <p className="text-muted-foreground text-sm">
-            {dueCards.length === 0
-              ? "No cards are due right now. Check back later!"
-              : `${dueCards.length} card${dueCards.length !== 1 ? "s" : ""} due today. Hard and recently failed cards are queued first.`}
+            {numberSelectMode 
+              ? "Select the number of questions you want to review."
+              : dueCards.length === 0
+                ? "No cards are due right now. Check back later!"
+                : `${dueCards.length} card${dueCards.length !== 1 ? "s" : ""} due today. Hard and recently failed cards are queued first.`}
           </p>
         </div>
 
-        {dueCards.length > 0 && (
+        {numberSelectMode ? (
+          <div className="flex-1 p-6 md:p-8 flex flex-col items-center justify-center gap-4">
+            <div className="flex gap-4">
+              <Button 
+                variant="outline" 
+                className="w-24 h-24 text-2xl rounded-2xl flex flex-col gap-2 hover:border-foreground hover:bg-muted/50"
+                onClick={() => { onStart(numberSelectMode, 5); setNumberSelectMode(null); }}
+              >
+                <span>5</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-24 h-24 text-2xl rounded-2xl flex flex-col gap-2 hover:border-foreground hover:bg-muted/50"
+                onClick={() => { onStart(numberSelectMode, 10); setNumberSelectMode(null); }}
+              >
+                <span>10</span>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">Maximum 10 questions recommended.</p>
+          </div>
+        ) : dueCards.length > 0 && (
           <div className="flex-1 overflow-y-auto p-6 md:p-8 pt-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-foreground">Up Next</h3>
@@ -139,10 +162,16 @@ export function ReviewModal({
 
         <div className="p-4 sm:p-6 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-muted/20 relative">
           <div className="flex items-center gap-2 order-2 sm:order-1">
-            <Button variant="ghost" onClick={onClose} className="font-semibold">
-              Not now
+            <Button variant="ghost" onClick={() => {
+              if (numberSelectMode) {
+                setNumberSelectMode(null);
+              } else {
+                onClose();
+              }
+            }} className="font-semibold">
+              {numberSelectMode ? "Back" : "Not now"}
             </Button>
-            {dueCards.length > 0 && (
+            {!numberSelectMode && dueCards.length > 0 && (
               <div className="relative">
                  <Button
                     variant="ghost"
@@ -187,7 +216,7 @@ export function ReviewModal({
           </div>
           
           <div className="flex items-center gap-2 order-1 sm:order-2 ml-auto">
-            {totalCards.length > 0 && (
+            {!numberSelectMode && totalCards.length > 0 && (
               <div className="relative">
                 <Button
                   variant="outline"
@@ -207,27 +236,23 @@ export function ReviewModal({
                       exit={{ opacity: 0, scale: 0.95, y: 10 }}
                       className="absolute bottom-full right-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-lg overflow-hidden flex flex-col py-1 z-50 origin-bottom-right"
                     >
-                      {dueCards.length > 0 && (
-                        <>
-                          <button
-                            onClick={() => { onStart("reverse"); setShowOptions(false); }}
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
-                          >
-                            <Repeat className="w-4 h-4" />
-                            Reverse
-                          </button>
-                          <button
-                            onClick={() => { onStart("sprint"); setShowOptions(false); }}
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
-                          >
-                            <Timer className="w-4 h-4" />
-                            5-min Sprint
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => { setNumberSelectMode("reverse"); setShowOptions(false); }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                      >
+                        <Repeat className="w-4 h-4" />
+                        Reverse
+                      </button>
+                      <button
+                        onClick={() => { onStart("sprint"); setShowOptions(false); }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                      >
+                        <Timer className="w-4 h-4" />
+                        5-min Sprint
+                      </button>
                       
                       <button
-                        onClick={() => { onStart("random-quiz"); setShowOptions(false); }}
+                        onClick={() => { setNumberSelectMode("random-quiz"); setShowOptions(false); }}
                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
                       >
                         <Shuffle className="w-4 h-4" />
@@ -239,7 +264,7 @@ export function ReviewModal({
               </div>
             )}
 
-            {dueCards.length > 0 && (
+            {!numberSelectMode && dueCards.length > 0 && (
               <Button
                 onClick={() => onStart("standard")}
                 className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-6"
@@ -249,10 +274,10 @@ export function ReviewModal({
               </Button>
             )}
             
-            {dueCards.length === 0 && (
+            {!numberSelectMode && dueCards.length === 0 && (
                <Button
                 variant="outline"
-                onClick={() => { onStart("random-quiz"); setShowOptions(false); }}
+                onClick={() => { setNumberSelectMode("random-quiz"); setShowOptions(false); }}
                 className="gap-2 font-semibold rounded-full px-6"
               >
                 <Shuffle className="w-4 h-4" />
