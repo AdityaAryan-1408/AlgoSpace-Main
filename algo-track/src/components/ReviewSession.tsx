@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { CodePractice } from "@/components/CodePractice";
-import { submitCardReview, pauseCardReview } from "@/lib/client-api";
+import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
 import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -88,6 +88,7 @@ export function ReviewSession({
     const [userAnswer, setUserAnswer] = useState("");
     const [answerResult, setAnswerResult] = useState<"correct" | "incorrect" | null>(null);
     const [pendingRating, setPendingRating] = useState<Rating | null>(null);
+    const [reviewNote, setReviewNote] = useState<string>("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [results, setResults] = useState<ReviewResult[]>([]);
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(
@@ -97,6 +98,12 @@ export function ReviewSession({
     const sessionStartTime = useRef(Date.now());
     const resultsRef = useRef<ReviewResult[]>([]);
     const completedRef = useRef(false);
+
+    useEffect(() => {
+        if (cards[currentIndex]) {
+            setReviewNote((cards[currentIndex].metadata?.reviewNote as string) || "");
+        }
+    }, [currentIndex, cards]);
 
     const currentCard = cards[currentIndex];
     const progress = (currentIndex / cards.length) * 100;
@@ -184,6 +191,11 @@ export function ReviewSession({
 
         try {
             await submitCardReview(currentCard.id, pendingRating, responseMs, manualDays);
+            if (reviewNote !== (currentCard.metadata?.reviewNote || "")) {
+                await updateCard(currentCard.id, {
+                    metadata: { ...currentCard.metadata, reviewNote }
+                });
+            }
         } catch (err) {
             console.error("Failed to submit review:", err);
         } finally {
@@ -491,6 +503,17 @@ export function ReviewSession({
                                     </div>
                                 )}
 
+                                {(currentCard.metadata?.reviewNote as string) && (
+                                    <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                                        <h4 className="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                            <PenLine className="w-3.5 h-3.5" /> Previous Review Note
+                                        </h4>
+                                        <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap selectable">
+                                            {currentCard.metadata?.reviewNote as string}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {solutionBlocks.length > 0 &&
                                     solutionBlocks.map((solution, index) => {
                                         const hasCodeFences = /```[\w+-]*\n/.test(solution.content);
@@ -545,10 +568,18 @@ export function ReviewSession({
                                         </>
                                     ) : (
                                         <div className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-xl border border-border mt-4">
-                                            <p className="text-sm font-semibold text-foreground text-center">
+                                            <p className="text-sm font-semibold text-foreground text-center mb-1">
                                                 When do you want to review this next?
                                             </p>
-                                            <div className="flex flex-wrap items-center justify-center gap-2">
+                                            <div className="w-full max-w-sm">
+                                                <textarea 
+                                                    value={reviewNote}
+                                                    onChange={(e) => setReviewNote(e.target.value)}
+                                                    placeholder="Add a quick note for your next review (optional)..."
+                                                    className="w-full text-sm p-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none h-16 text-foreground"
+                                                />
+                                            </div>
+                                            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
                                                 <Button size="sm" variant="default" onClick={() => submitFinalReview()} disabled={isSubmitting}>
                                                     Auto (Depends on rating)
                                                 </Button>

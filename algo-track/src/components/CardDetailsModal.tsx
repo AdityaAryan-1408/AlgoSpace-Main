@@ -26,6 +26,7 @@ export function CardDetailsModal({
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [notes, setNotes] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -38,6 +39,7 @@ export function CardDetailsModal({
     if (card) {
       setTags(card.tags);
       setNotes(card.notes);
+      setReviewNote((card.metadata?.reviewNote as string) || "");
       setAiReview(getStoredAiReview(card.id));
     }
   }, [card]);
@@ -67,7 +69,11 @@ export function CardDetailsModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateCard(card.id, { notes, tags });
+      await updateCard(card.id, { 
+        notes, 
+        tags,
+        metadata: { ...card.metadata, reviewNote }
+      });
       onSaved();
     } catch (err) {
       console.error("Failed to save card:", err);
@@ -293,6 +299,19 @@ export function CardDetailsModal({
                 <MarkdownContent content={notes} />
               </div>
             )}
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
+              <FileText className="w-4 h-4 text-emerald-500" />
+              Next Review Note
+            </h3>
+            <textarea
+              className="w-full min-h-[60px] text-sm text-foreground/90 leading-relaxed p-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-y transition-shadow selectable"
+              value={reviewNote}
+              onChange={(e) => setReviewNote(e.target.value)}
+              placeholder="Add a small note to remember during the next review..."
+            />
           </section>
 
           {solutionBlocks.length > 0 && (

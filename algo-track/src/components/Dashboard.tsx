@@ -319,6 +319,11 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
                               </Badge>
                             ))}
                           </div>
+                          {card.metadata?.reviewNote && (
+                            <div className="text-xs text-muted-foreground mt-0.5 bg-muted/40 p-1.5 rounded-md border border-border/50 max-w-[300px] truncate" title={card.metadata.reviewNote as string}>
+                              💡 {card.metadata.reviewNote as string}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-5 align-top">
