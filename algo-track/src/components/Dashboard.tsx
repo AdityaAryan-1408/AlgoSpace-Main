@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard } from "@/data";
-import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause } from "lucide-react";
+import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause, Play, Timer } from "lucide-react";
 import { isCardPaused } from "@/lib/card-utils";
+import { fetchGlobalPauseStatus, resumeAllReviews } from "@/lib/client-api";
+import type { GlobalPauseStatus } from "@/lib/client-api";
 import { MasteryHeatmap } from "./MasteryHeatmap";
 import { CardDetailsModal } from "./CardDetailsModal";
 import { StreakTracker } from "./StreakTracker";
@@ -34,6 +36,8 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [pauseStatus, setPauseStatus] = useState<GlobalPauseStatus | null>(null);
+  const [isResuming, setIsResuming] = useState(false);
 
   const pausedCount = cards.filter(c => isCardPaused(c)).length;
 
@@ -80,8 +84,71 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
       .finally(() => setAnalyticsLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetchGlobalPauseStatus()
+      .then(setPauseStatus)
+      .catch((err) => console.error("Failed to fetch pause status:", err));
+  }, []);
+
+  const handleQuickResume = async () => {
+    setIsResuming(true);
+    try {
+      await resumeAllReviews();
+      setPauseStatus({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
+      onRefresh();
+    } catch (err) {
+      console.error("Failed to resume:", err);
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8">
+      {/* Global Pause Banner */}
+      {pauseStatus?.active && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 backdrop-blur-sm"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                <Pause className="w-4 h-4 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-500">
+                  Reviews Paused
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {pauseStatus.remainingDays != null && pauseStatus.remainingDays > 0
+                    ? `${pauseStatus.remainingDays} day${pauseStatus.remainingDays !== 1 ? "s" : ""} remaining`
+                    : "Paused indefinitely"}
+                  {pauseStatus.autoResume && " · Auto-resume enabled"}
+                  {pauseStatus.until && (
+                    <> · Resumes {new Date(pauseStatus.until).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
+                  )}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleQuickResume}
+              disabled={isResuming}
+              className="rounded-full shrink-0 gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {isResuming ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5" />
+              )}
+              Resume
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       <MasteryHeatmap cards={cards} />
 
       {/* Analytics Section */}

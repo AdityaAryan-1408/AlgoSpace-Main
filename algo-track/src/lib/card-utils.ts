@@ -18,10 +18,10 @@ export function canPauseCard(card: Flashcard): boolean {
 }
 
 /**
- * Returns true if the card's reviews are currently paused.
+ * Returns true if the card's reviews are currently paused individually or globally.
  */
 export function isCardPaused(card: Flashcard): boolean {
-    return card.metadata?.review_paused === true;
+    return card.metadata?.review_paused === true || card.metadata?.globally_paused === true;
 }
 
 /**

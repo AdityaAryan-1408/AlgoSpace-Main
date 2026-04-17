@@ -597,6 +597,312 @@ export async function updateReminderSettings(
   return data;
 }
 
+// ── Global Pause ──────────────────────────────────────────────
+
+export interface GlobalPauseState {
+  active: boolean;
+  startedAt: string | null;
+  until: string | null;
+  autoResume: boolean;
+  remainingDays: number | null; // days left in pause
+}
+
+export async function getGlobalPauseStatus(userId: string): Promise<GlobalPauseState> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("users")
+    .select("metadata")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  const meta = (data?.metadata as Record<string, unknown>) || {};
+  const gp = (meta.global_pause as Record<string, unknown>) || null;
+
+  if (!gp || gp.active !== true) {
+    return { active: false, startedAt: null, until: null, autoResume: false, remainingDays: null };
+  }
+
+  const until = gp.until as string | null;
+  let remainingDays: number | null = null;
+  if (until) {
+    const diff = new Date(until).getTime() - Date.now();
+    remainingDays = Math.max(0, Math.ceil(diff / 86_400_000));
+  }
+
+  return {
+    active: true,
+    startedAt: (gp.started_at as string) || null,
+    until,
+    autoResume: (gp.auto_resume as boolean) || false,
+    remainingDays,
+  };
+}
+
+export async function globalPauseReviews(
+  userId: string,
+  pauseDays: number,
+  autoResume: boolean,
+) {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+  const untilDate = new Date(now);
+  untilDate.setDate(untilDate.getDate() + pauseDays);
+
+  // 1. Get all active (non-paused) cards
+  const { data: cards, error: cardsError } = await supabase
+    .from("cards")
+    .select("id, next_review_at, metadata")
+    .eq("user_id", userId);
+
+  if (cardsError) throw new Error(cardsError.message);
+
+  // 2. For each card, snapshot the EXACT original next_review_at and push to far-future
+  for (const card of cards ?? []) {
+    const currentMeta = (card.metadata as Record<string, unknown>) || {};
+
+    // Skip already individually-paused cards (they already have far-future next_review_at)
+    if (currentMeta.review_paused === true) continue;
+    // Skip already globally_paused cards
+    if (currentMeta.globally_paused === true) continue;
+
+    const { error } = await supabase
+      .from("cards")
+      .update({
+        next_review_at: "9999-12-31T23:59:59.999Z",
+        metadata: {
+          ...currentMeta,
+          original_next_review_at: card.next_review_at,
+          globally_paused: true,
+        },
+        updated_at: now.toISOString(),
+      })
+      .eq("id", card.id)
+      .eq("user_id", userId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  // 3. Update user metadata with global pause state
+  const { data: userData, error: userFetchError } = await supabase
+    .from("users")
+    .select("metadata")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userFetchError) throw new Error(userFetchError.message);
+
+  const userMeta = (userData?.metadata as Record<string, unknown>) || {};
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      metadata: {
+        ...userMeta,
+        global_pause: {
+          active: true,
+          started_at: now.toISOString(),
+          until: untilDate.toISOString(),
+          auto_resume: autoResume,
+        },
+      },
+      updated_at: now.toISOString(),
+    })
+    .eq("id", userId);
+
+  if (userUpdateError) throw new Error(userUpdateError.message);
+
+  return getGlobalPauseStatus(userId);
+}
+
+export async function globalResumeReviews(userId: string) {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+
+  // 1. Restore all globally-paused cards
+  const { data: cards, error: cardsError } = await supabase
+    .from("cards")
+    .select("id, metadata, last_reviewed_at, interval_days")
+    .eq("user_id", userId);
+
+  if (cardsError) throw new Error(cardsError.message);
+
+  for (const card of cards ?? []) {
+    const meta = (card.metadata as Record<string, unknown>) || {};
+
+    // Only restore cards that were globally paused (not individually paused)
+    if (meta.globally_paused !== true) continue;
+
+    // Restore the exact original next_review_at if we have it
+    let nextReviewIso: string;
+    if (meta.original_next_review_at && typeof meta.original_next_review_at === "string") {
+      nextReviewIso = meta.original_next_review_at;
+    } else if (meta.remaining_review_days != null) {
+      // Legacy fallback: reconstruct from remaining_review_days
+      let remainingDays = meta.remaining_review_days as number;
+      if (remainingDays > 10000) remainingDays = 0;
+      const nextReview = new Date(now);
+      nextReview.setDate(nextReview.getDate() + remainingDays);
+      nextReviewIso = nextReview.toISOString();
+    } else if (card.last_reviewed_at != null && card.interval_days != null) {
+      // Recovery: reconstruct from SRS data
+      const lastReview = new Date(card.last_reviewed_at as string);
+      const intendedNext = new Date(lastReview);
+      intendedNext.setDate(intendedNext.getDate() + (card.interval_days as number));
+      nextReviewIso = intendedNext.toISOString();
+    } else {
+      nextReviewIso = now.toISOString();
+    }
+
+    // Clean up the global-pause metadata
+    const { remaining_review_days, globally_paused, original_next_review_at, ...cleanMeta } = meta;
+    void remaining_review_days;
+    void globally_paused;
+    void original_next_review_at;
+
+    const { error } = await supabase
+      .from("cards")
+      .update({
+        next_review_at: nextReviewIso,
+        metadata: cleanMeta,
+        updated_at: now.toISOString(),
+      })
+      .eq("id", card.id)
+      .eq("user_id", userId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  // 2. Clear user pause state
+  const { data: userData, error: userFetchError } = await supabase
+    .from("users")
+    .select("metadata")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userFetchError) throw new Error(userFetchError.message);
+
+  const userMeta = (userData?.metadata as Record<string, unknown>) || {};
+  const { global_pause, ...cleanUserMeta } = userMeta;
+  void global_pause;
+
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      metadata: cleanUserMeta,
+      updated_at: now.toISOString(),
+    })
+    .eq("id", userId);
+
+  if (userUpdateError) throw new Error(userUpdateError.message);
+
+  return { resumed: true };
+}
+
+export async function extendGlobalPause(userId: string, additionalDays: number) {
+  const supabase = getSupabaseAdmin();
+
+  const { data: userData, error: fetchError } = await supabase
+    .from("users")
+    .select("metadata")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(fetchError.message);
+
+  const userMeta = (userData?.metadata as Record<string, unknown>) || {};
+  const gp = (userMeta.global_pause as Record<string, unknown>) || {};
+
+  if (gp.active !== true) {
+    throw new Error("Reviews are not currently paused.");
+  }
+
+  const currentUntil = new Date(gp.until as string);
+  currentUntil.setDate(currentUntil.getDate() + additionalDays);
+
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({
+      metadata: {
+        ...userMeta,
+        global_pause: {
+          ...gp,
+          until: currentUntil.toISOString(),
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  return getGlobalPauseStatus(userId);
+}
+
+/**
+ * Returns users whose global pause expires within the next ~24 hours (for advance email).
+ */
+export async function listUsersWithExpiringPause() {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // We need to search users whose metadata.global_pause.until is between now and tomorrow
+  // Supabase JSON filtering: metadata->global_pause->>until
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, metadata")
+    .not("metadata->global_pause", "is", null);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .filter((user) => {
+      const meta = (user.metadata as Record<string, unknown>) || {};
+      const gp = (meta.global_pause as Record<string, unknown>) || {};
+      if (gp.active !== true || gp.auto_resume !== true) return false;
+      const until = new Date(gp.until as string);
+      // Expires within 24-48h from now (so we send 1 day before)
+      const hoursUntilExpiry = (until.getTime() - now.getTime()) / 3_600_000;
+      return hoursUntilExpiry > 0 && hoursUntilExpiry <= 48;
+    })
+    .map((user) => ({
+      id: user.id,
+      email: user.email as string,
+      until: ((user.metadata as Record<string, unknown>)?.global_pause as Record<string, unknown>)?.until as string,
+    }));
+}
+
+/**
+ * Returns users whose global pause has expired and auto_resume is true.
+ */
+export async function listUsersWithExpiredPause() {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, metadata")
+    .not("metadata->global_pause", "is", null);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .filter((user) => {
+      const meta = (user.metadata as Record<string, unknown>) || {};
+      const gp = (meta.global_pause as Record<string, unknown>) || {};
+      if (gp.active !== true || gp.auto_resume !== true) return false;
+      const until = new Date(gp.until as string);
+      return until.getTime() <= now.getTime();
+    })
+    .map((user) => ({
+      id: user.id,
+      email: user.email as string,
+    }));
+}
+
+
 export async function seedInitialCards(userId: string) {
   const supabase = getSupabaseAdmin();
 

@@ -1,5 +1,11 @@
 import webpush from "web-push";
-import { listPushSubscriptions, listUsersDueForReminder } from "@/lib/repository";
+import {
+  listPushSubscriptions,
+  listUsersDueForReminder,
+  listUsersWithExpiredPause,
+  listUsersWithExpiringPause,
+  globalResumeReviews,
+} from "@/lib/repository";
 
 type ReminderUserResult = {
   userId: string;
@@ -23,6 +29,8 @@ export interface ReminderJobResult {
   emailsSent: number;
   skippedReason?: string;
   users: ReminderUserResult[];
+  pauseAutoResumed: number;
+  pauseExpiryEmailsSent: number;
 }
 
 export async function runDailyReminderJob(): Promise<ReminderJobResult> {
@@ -40,6 +48,8 @@ export async function runDailyReminderJob(): Promise<ReminderJobResult> {
     emailsAttempted: 0,
     emailsSent: 0,
     users: [],
+    pauseAutoResumed: 0,
+    pauseExpiryEmailsSent: 0,
   };
 
   if (!pushSetup.enabled && !resendApiKey) {
@@ -47,6 +57,58 @@ export async function runDailyReminderJob(): Promise<ReminderJobResult> {
       "No reminder transport configured. Set VAPID keys for push and/or RESEND_API_KEY for email.";
   }
 
+  // ── Handle global pause: auto-resume expired pauses ────────
+  try {
+    const expiredPauseUsers = await listUsersWithExpiredPause();
+    for (const user of expiredPauseUsers) {
+      try {
+        await globalResumeReviews(user.id);
+        result.pauseAutoResumed += 1;
+
+        // Send "Your reviews have resumed" email
+        if (resendApiKey && reminderFromEmail) {
+          await sendPauseResumedEmail({
+            apiKey: resendApiKey,
+            from: reminderFromEmail,
+            to: user.email,
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to auto-resume user ${user.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to process expired pauses:", err);
+  }
+
+  // ── Handle global pause: send 1-day-before warning emails ──
+  try {
+    if (resendApiKey && reminderFromEmail) {
+      const expiringUsers = await listUsersWithExpiringPause();
+      for (const user of expiringUsers) {
+        try {
+          const untilDate = new Date(user.until);
+          await sendPauseExpiryWarningEmail({
+            apiKey: resendApiKey,
+            from: reminderFromEmail,
+            to: user.email,
+            resumeDate: untilDate.toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            }),
+          });
+          result.pauseExpiryEmailsSent += 1;
+        } catch (err) {
+          console.error(`Failed to send pause expiry email to ${user.email}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to process expiring pauses:", err);
+  }
+
+  // ── Normal daily reminders (only for non-paused users) ─────
   for (const user of users) {
     const subscriptions = await listPushSubscriptions(user.id);
     const userResult: ReminderUserResult = {
@@ -193,3 +255,78 @@ function buildEmailHtml(dueCount: number) {
     </div>
   `;
 }
+
+async function sendPauseExpiryWarningEmail(input: {
+  apiKey: string;
+  from: string;
+  to: string;
+  resumeDate: string;
+}) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: input.from,
+      to: input.to,
+      subject: "AlgoTrack: Your reviews resume tomorrow",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>⏰ Reviews Resuming Soon</h2>
+          <p>Your paused reviews will automatically resume on <strong>${input.resumeDate}</strong>.</p>
+          <p>If you're not ready yet, open AlgoTrack and extend your pause.</p>
+          <p style="color: #666; font-size: 14px;">You can also manually resume at any time by clicking "Resume Reviews" in the app.</p>
+        </div>
+      `,
+    }),
+  });
+
+  if (response.ok) {
+    return { ok: true as const };
+  }
+
+  const text = await response.text();
+  return {
+    ok: false as const,
+    error: text || `HTTP ${response.status}`,
+  };
+}
+
+async function sendPauseResumedEmail(input: {
+  apiKey: string;
+  from: string;
+  to: string;
+}) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: input.from,
+      to: input.to,
+      subject: "AlgoTrack: Your reviews have resumed!",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+          <h2>✅ Reviews Resumed</h2>
+          <p>Your pause period has ended and your reviews are back on track.</p>
+          <p>Open AlgoTrack to check your review queue and keep your streak alive!</p>
+        </div>
+      `,
+    }),
+  });
+
+  if (response.ok) {
+    return { ok: true as const };
+  }
+
+  const text = await response.text();
+  return {
+    ok: false as const,
+    error: text || `HTTP ${response.status}`,
+  };
+}
+

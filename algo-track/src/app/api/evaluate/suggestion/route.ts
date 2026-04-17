@@ -122,12 +122,21 @@ ${aiFeedback}`;
         const parsed = JSON.parse(content);
 
         if (parsed.suggestion && typeof parsed.suggestion === "string") {
-            // Strip any HTML tags/attributes the AI may have injected (e.g. class="text-amber-300">)
+            // Strip any HTML tags/attributes the AI may have injected
+            // e.g. <span class="text-zinc-500">, </span>, class="text-amber-300">
+            // Step 1: Remove stray class="..." attributes (with or without closing >)
             parsed.suggestion = parsed.suggestion.replace(
                 /\s*class="[^"]*">/g,
                 ""
-            ).replace(
-                /<[^>]*>/g,
+            );
+            // Step 2: Remove all HTML tags (opening, closing, self-closing)
+            parsed.suggestion = parsed.suggestion.replace(
+                /<\/?[a-zA-Z][^>]*\/?>/g,
+                ""
+            );
+            // Step 3: Remove leftover stray class attributes without tags
+            parsed.suggestion = parsed.suggestion.replace(
+                /\s*class="[^"]*"/g,
                 ""
             );
 

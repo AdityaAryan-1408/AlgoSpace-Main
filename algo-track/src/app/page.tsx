@@ -13,10 +13,12 @@ import { AchievementsScreen } from "@/components/AchievementsScreen";
 import { CoachChat } from "@/components/CoachChat";
 import { SkillTreeView } from "@/components/SkillTreeView";
 import { StressModeSession } from "@/components/StressModeSession";
+import { GlobalPauseModal } from "@/components/GlobalPauseModal";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { fetchAllCards, fetchDueCards } from "@/lib/client-api";
+import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus } from "@/lib/client-api";
+import type { GlobalPauseStatus } from "@/lib/client-api";
 import type { Flashcard } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -125,6 +127,18 @@ export default function HomePage() {
   const [, setTick] = useState(0); // Force re-render for "last synced" label
   const [isExtraFeaturesOpen, setIsExtraFeaturesOpen] = useState(false);
   const extraFeaturesRef = useRef<HTMLDivElement>(null);
+  const [globalPauseStatus, setGlobalPauseStatus] = useState<GlobalPauseStatus>({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
+  const [showPauseModal, setShowPauseModal] = useState(false);
+
+  // Fetch global pause status
+  const refreshPauseStatus = useCallback(async () => {
+    try {
+      const status = await fetchGlobalPauseStatus();
+      setGlobalPauseStatus(status);
+    } catch (err) {
+      console.error("Failed to fetch pause status:", err);
+    }
+  }, []);
 
   // Fetch fresh data from API and update cache
   const syncFromApi = useCallback(async (showSpinner = true) => {
@@ -138,12 +152,13 @@ export default function HomePage() {
       setDueCards(due);
       writeCache(all, due);
       setLastSyncTime(Date.now());
+      refreshPauseStatus();
     } catch (err) {
       console.error("Failed to sync cards:", err);
     } finally {
       if (showSpinner) setIsSyncing(false);
     }
-  }, []);
+  }, [refreshPauseStatus]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -158,6 +173,9 @@ export default function HomePage() {
   // Initialize: load from cache instantly, then sync if stale
   useEffect(() => {
     const cached = readCache();
+
+    // Always fetch pause status on mount (not dependent on cache)
+    refreshPauseStatus();
 
     if (cached) {
       // Show cached data immediately — no loading spinner
@@ -425,15 +443,46 @@ export default function HomePage() {
                 )}
               </AnimatePresence>
             </div>
+            {/* Pause/Resume indicator */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPauseModal(true)}
+              className={`gap-1.5 transition-all relative ${
+                globalPauseStatus.active
+                  ? "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title={globalPauseStatus.active ? `Reviews paused (${globalPauseStatus.remainingDays ?? '?'} days left)` : "Pause reviews"}
+            >
+              {globalPauseStatus.active ? (
+                <>
+                  <span className="relative flex items-center justify-center">
+                    <Pause className="w-4 h-4" />
+                    <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                  </span>
+                  <span className="hidden sm:inline-block text-xs font-semibold">Paused</span>
+                </>
+              ) : (
+                <>
+                  <Pause className="w-4 h-4" />
+                </>
+              )}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowReviewModal(true)}
-              className="gap-2 transition-all hover:text-emerald-500 hover:bg-emerald-500/10 relative"
+              disabled={globalPauseStatus.active}
+              className={`gap-2 transition-all relative ${
+                globalPauseStatus.active
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:text-emerald-500 hover:bg-emerald-500/10"
+              }`}
             >
               <PlayCircle className="w-4 h-4" />
               <span className="hidden sm:inline-block">Review</span>
-              {dueCards.length > 0 && (
+              {!globalPauseStatus.active && dueCards.length > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
                   {dueCards.length}
                 </span>
@@ -670,6 +719,19 @@ export default function HomePage() {
               onClose={() => setShowImportModal(false)}
               onImported={() => syncFromApi(false)}
               existingCards={cards}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showPauseModal && (
+            <GlobalPauseModal
+              pauseStatus={globalPauseStatus}
+              onClose={() => setShowPauseModal(false)}
+              onChanged={() => {
+                setShowPauseModal(false);
+                syncFromApi(false);
+              }}
             />
           )}
         </AnimatePresence>

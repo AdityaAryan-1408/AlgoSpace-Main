@@ -372,4 +372,42 @@ export async function completeStressMode(payload: {
     });
 }
 
+// ── Global Pause Reviews ────────────────────────────────────────
 
+export interface GlobalPauseStatus {
+    active: boolean;
+    startedAt: string | null;
+    until: string | null;
+    autoResume: boolean;
+    remainingDays: number | null;
+}
+
+export async function fetchGlobalPauseStatus(): Promise<GlobalPauseStatus> {
+    return apiFetch<GlobalPauseStatus>("/reviews/pause");
+}
+
+export async function pauseAllReviews(
+    days: number,
+    autoResume: boolean,
+): Promise<GlobalPauseStatus> {
+    return apiFetch<GlobalPauseStatus>("/reviews/pause", {
+        method: "POST",
+        body: JSON.stringify({ action: "pause", days, autoResume }),
+    });
+}
+
+export async function resumeAllReviews(): Promise<{ resumed: boolean }> {
+    return apiFetch<{ resumed: boolean }>("/reviews/pause", {
+        method: "POST",
+        body: JSON.stringify({ action: "resume" }),
+    });
+}
+
+export async function extendGlobalPause(
+    additionalDays: number,
+): Promise<GlobalPauseStatus> {
+    return apiFetch<GlobalPauseStatus>("/reviews/pause", {
+        method: "POST",
+        body: JSON.stringify({ action: "extend", additionalDays }),
+    });
+}
