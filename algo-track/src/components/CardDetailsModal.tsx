@@ -6,7 +6,8 @@ import { updateCard, deleteCard, pauseCardReview, resumeCardReview } from "@/lib
 import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play } from "lucide-react";
+import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -343,6 +344,19 @@ export function CardDetailsModal({
               </div>
             </section>
           )}
+
+          {/* Whiteboard */}
+          <section className="flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
+              <Pencil className="w-4 h-4 text-teal-500" />
+              Whiteboard
+            </h3>
+            <WhiteboardCanvas
+              cardId={card.id}
+              compact={false}
+              className="w-full"
+            />
+          </section>
 
           {/* AI Review */}
           {aiReview && (

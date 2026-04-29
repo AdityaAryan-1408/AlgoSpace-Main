@@ -6,9 +6,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { CodePractice } from "@/components/CodePractice";
+import { FeynmanRecorder } from "@/components/FeynmanRecorder";
+import { ConstraintShifter, shouldShowConstraintShifter } from "@/components/ConstraintShifter";
+import { DryRunChallenge } from "@/components/DryRunChallenge";
+import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export interface ReviewResult {
@@ -84,6 +88,9 @@ export function ReviewSession({
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showAnswer, setShowAnswer] = useState(false);
     const [showAiPractice, setShowAiPractice] = useState(false);
+    const [showFeynman, setShowFeynman] = useState(false);
+    const [showDryRun, setShowDryRun] = useState(false);
+    const [showConstraintShifter, setShowConstraintShifter] = useState(true);
     const [showAnswerInput, setShowAnswerInput] = useState(false);
     const [userAnswer, setUserAnswer] = useState("");
     const [answerResult, setAnswerResult] = useState<"correct" | "incorrect" | null>(null);
@@ -162,6 +169,9 @@ export function ReviewSession({
             setCurrentIndex(nextIndex);
             setShowAnswer(false);
             setShowAiPractice(false);
+            setShowFeynman(false);
+            setShowDryRun(false);
+            setShowConstraintShifter(true);
             setShowAnswerInput(false);
             setUserAnswer("");
             setAnswerResult(null);
@@ -175,6 +185,8 @@ export function ReviewSession({
     const handleRate = (rating: Rating) => {
         setPendingRating(rating);
         setShowAiPractice(false);
+        setShowFeynman(false);
+        setShowDryRun(false);
         setShowAnswer(true);
     };
 
@@ -371,8 +383,28 @@ export function ReviewSession({
                                 onRate={handleRate}
                                 onCancel={() => setShowAiPractice(false)}
                             />
+                        ) : showFeynman ? (
+                            <FeynmanRecorder
+                                card={currentCard}
+                                onRate={handleRate}
+                                onCancel={() => setShowFeynman(false)}
+                            />
+                        ) : showDryRun ? (
+                            <DryRunChallenge
+                                card={currentCard}
+                                onRate={handleRate}
+                                onCancel={() => setShowDryRun(false)}
+                            />
                         ) : !showAnswer ? (
                             <div className="flex flex-col gap-4">
+                                {/* Constraint Shifter - shown for mastered cards */}
+                                {showConstraintShifter && shouldShowConstraintShifter(currentCard) && (
+                                    <ConstraintShifter
+                                        card={currentCard}
+                                        onDismiss={() => setShowConstraintShifter(false)}
+                                    />
+                                )}
+
                                 {isReverse ? (
                                     <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
                                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -397,67 +429,100 @@ export function ReviewSession({
                                     </div>
                                 )}
 
-                                <div className="mt-2 flex justify-center gap-3">
-                                    {!showAnswerInput && (
-                                        <Button
-                                            onClick={() => setShowAnswer(true)}
-                                            className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-8 py-5 text-base"
-                                        >
-                                            <Eye className="w-5 h-5" />
-                                            {isReverse ? "Reveal Problem" : "Reveal Answer"}
-                                        </Button>
-                                    )}
-                                    {isReverse ? (
-                                        showAnswerInput ? (
-                                            <form 
-                                                className="flex flex-col gap-2 items-center" 
-                                                onSubmit={(e) => {
-                                                    e.preventDefault();
-                                                    if (userAnswer.toLowerCase().trim() === currentCard.title.toLowerCase().trim()) {
-                                                        setAnswerResult("correct");
-                                                        setShowAnswer(true);
-                                                    } else {
-                                                        setAnswerResult("incorrect");
-                                                    }
-                                                }}
+                                <div className="mt-2 flex flex-col items-center gap-3">
+                                    <div className="flex justify-center gap-3 flex-wrap">
+                                        {!showAnswerInput && (
+                                            <Button
+                                                onClick={() => setShowAnswer(true)}
+                                                className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-8 py-5 text-base"
                                             >
-                                                <div className="flex items-center gap-2">
-                                                    <input 
-                                                        value={userAnswer}
-                                                        onChange={e => { setUserAnswer(e.target.value); setAnswerResult(null); }}
-                                                        placeholder="Question name..." 
-                                                        className="border border-border bg-card rounded-full px-4 py-2.5 outline-none focus:border-blue-500 transition-colors w-64 shadow-sm"
-                                                        autoFocus
-                                                    />
-                                                    <Button type="submit" variant="default" className="rounded-full px-6 py-5">Check</Button>
-                                                    <Button type="button" variant="ghost" onClick={() => { setShowAnswerInput(false); setAnswerResult(null); }} className="rounded-full px-4 py-5 font-semibold">Cancel</Button>
-                                                </div>
-                                                {answerResult === "incorrect" && (
-                                                    <span className="text-red-500 text-sm font-medium animate-in fade-in slide-in-from-top-1">
-                                                        Incorrect, try again!
-                                                    </span>
-                                                )}
-                                            </form>
+                                                <Eye className="w-5 h-5" />
+                                                {isReverse ? "Reveal Problem" : "Reveal Answer"}
+                                            </Button>
+                                        )}
+                                        {isReverse ? (
+                                            showAnswerInput ? (
+                                                <form 
+                                                    className="flex flex-col gap-2 items-center" 
+                                                    onSubmit={(e) => {
+                                                        e.preventDefault();
+                                                        if (userAnswer.toLowerCase().trim() === currentCard.title.toLowerCase().trim()) {
+                                                            setAnswerResult("correct");
+                                                            setShowAnswer(true);
+                                                        } else {
+                                                            setAnswerResult("incorrect");
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            value={userAnswer}
+                                                            onChange={e => { setUserAnswer(e.target.value); setAnswerResult(null); }}
+                                                            placeholder="Question name..." 
+                                                            className="border border-border bg-card rounded-full px-4 py-2.5 outline-none focus:border-blue-500 transition-colors w-64 shadow-sm"
+                                                            autoFocus
+                                                        />
+                                                        <Button type="submit" variant="default" className="rounded-full px-6 py-5">Check</Button>
+                                                        <Button type="button" variant="ghost" onClick={() => { setShowAnswerInput(false); setAnswerResult(null); }} className="rounded-full px-4 py-5 font-semibold">Cancel</Button>
+                                                    </div>
+                                                    {answerResult === "incorrect" && (
+                                                        <span className="text-red-500 text-sm font-medium animate-in fade-in slide-in-from-top-1">
+                                                            Incorrect, try again!
+                                                        </span>
+                                                    )}
+                                                </form>
+                                            ) : (
+                                                <Button
+                                                    onClick={() => { setShowAnswerInput(true); setUserAnswer(""); setAnswerResult(null); }}
+                                                    variant="ghost"
+                                                    className="gap-2 font-semibold text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-full px-6 py-5 text-base border border-blue-500/30"
+                                                >
+                                                    <PenLine className="w-5 h-5" />
+                                                    Enter your answer
+                                                </Button>
+                                            )
                                         ) : (
                                             <Button
-                                                onClick={() => { setShowAnswerInput(true); setUserAnswer(""); setAnswerResult(null); }}
+                                                onClick={() => setShowAiPractice(true)}
                                                 variant="ghost"
-                                                className="gap-2 font-semibold text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-full px-6 py-5 text-base border border-blue-500/30"
+                                                className="gap-2 font-semibold text-purple-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-full px-6 py-5 text-base border border-purple-500/30"
                                             >
-                                                <PenLine className="w-5 h-5" />
-                                                Enter your answer
+                                                <Brain className="w-5 h-5" />
+                                                Practice with AI
                                             </Button>
-                                        )
-                                    ) : (
-                                        <Button
-                                            onClick={() => setShowAiPractice(true)}
-                                            variant="ghost"
-                                            className="gap-2 font-semibold text-purple-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-full px-6 py-5 text-base border border-purple-500/30"
-                                        >
-                                            <Brain className="w-5 h-5" />
-                                            Practice with AI
-                                        </Button>
+                                        )}
+                                    </div>
+
+                                    {/* Feature buttons row */}
+                                    {!isReverse && !showAnswerInput && (
+                                        <div className="flex items-center gap-2 flex-wrap justify-center">
+                                            <Button
+                                                onClick={() => setShowFeynman(true)}
+                                                variant="ghost"
+                                                className="gap-1.5 text-sm font-medium text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 rounded-full px-4 py-3 border border-orange-500/20"
+                                            >
+                                                <Mic className="w-4 h-4" />
+                                                Feynman Mode
+                                            </Button>
+                                            {currentCard.type === "leetcode" && (
+                                                <Button
+                                                    onClick={() => setShowDryRun(true)}
+                                                    variant="ghost"
+                                                    className="gap-1.5 text-sm font-medium text-cyan-500 hover:text-cyan-600 hover:bg-cyan-500/10 rounded-full px-4 py-3 border border-cyan-500/20"
+                                                >
+                                                    <Bug className="w-4 h-4" />
+                                                    Dry-Run
+                                                </Button>
+                                            )}
+                                        </div>
                                     )}
+
+                                    {/* Whiteboard */}
+                                    <WhiteboardCanvas
+                                        cardId={currentCard.id}
+                                        compact
+                                        className="w-full mt-1"
+                                    />
                                 </div>
                             </div>
                         ) : (
