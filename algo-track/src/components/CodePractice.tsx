@@ -16,10 +16,12 @@ import {
     ToggleLeft,
     ToggleRight,
     Wand2,
+    Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Flashcard } from "@/data";
 import { fetchSuggestion, type SuggestionResult } from "@/lib/client-api";
+import { saveCodeSnapshot } from "@/components/CodeEvolution";
 
 const NITPICK_KEY = "algotrack-nitpick-mode";
 
@@ -51,6 +53,13 @@ export interface EvalResult {
         missedPoints: string[];
         misconceptions: string[];
     };
+}
+
+interface EleganceResult {
+    overallScore: number;
+    dimensions: Record<string, { score: number; comment: string }>;
+    improvements: Array<{ description: string; before: string; after: string; technique: string }>;
+    verdict: string;
 }
 
 export interface StoredAiReview {
@@ -95,6 +104,9 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
     const [suggestionResult, setSuggestionResult] = useState<SuggestionResult | null>(null);
     const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
     const [showSuggestion, setShowSuggestion] = useState(false);
+    const [eleganceResult, setEleganceResult] = useState<EleganceResult | null>(null);
+    const [isFetchingElegance, setIsFetchingElegance] = useState(false);
+    const [showElegance, setShowElegance] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem(NITPICK_KEY);
@@ -146,6 +158,9 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
             const result: EvalResult = await res.json();
             setEvalResult(result);
             setSelectedRating(result.suggestedRating);
+
+            // Save code evolution snapshot
+            saveCodeSnapshot(card.id, code, result.suggestedRating);
 
             // Save to localStorage (replaces previous review)
             const stored: StoredAiReview = {
@@ -564,6 +579,123 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                     )}
                                 </AnimatePresence>
                             </div>
+
+                            {/* Code Elegance Score (DSA only) */}
+                            {isDSA && (
+                                <div className="mt-2">
+                                    <button
+                                        onClick={async () => {
+                                            if (eleganceResult) { setShowElegance(!showElegance); return; }
+                                            setIsFetchingElegance(true);
+                                            try {
+                                                const res = await fetch("/api/evaluate/elegance", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({
+                                                        userCode: code,
+                                                        problemTitle: card.title,
+                                                        problemDescription: card.description,
+                                                        language,
+                                                    }),
+                                                });
+                                                if (!res.ok) throw new Error("Failed");
+                                                const result: EleganceResult = await res.json();
+                                                setEleganceResult(result);
+                                                setShowElegance(true);
+                                            } catch { setEvalError("Failed to get elegance score"); }
+                                            finally { setIsFetchingElegance(false); }
+                                        }}
+                                        disabled={isFetchingElegance}
+                                        className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors cursor-pointer disabled:opacity-50"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {isFetchingElegance ? (
+                                                <Loader2 className="w-4 h-4 animate-spin text-cyan-500" />
+                                            ) : (
+                                                <Sparkles className="w-4 h-4 text-cyan-500" />
+                                            )}
+                                            Elegance Score
+                                            {eleganceResult && (
+                                                <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                                                    eleganceResult.overallScore >= 80 ? "bg-emerald-500/10 text-emerald-500" :
+                                                    eleganceResult.overallScore >= 60 ? "bg-amber-500/10 text-amber-500" :
+                                                    "bg-red-500/10 text-red-500"
+                                                }`}>{eleganceResult.overallScore}/100</span>
+                                            )}
+                                        </div>
+                                        {showElegance ? (
+                                            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                        ) : (
+                                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                        )}
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {showElegance && eleganceResult && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: "auto" }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="mt-2 p-4 rounded-xl border border-border bg-muted/20 space-y-4">
+                                                    {/* Overall Score */}
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-xl font-black ${
+                                                            eleganceResult.overallScore >= 80 ? "bg-emerald-500/10 text-emerald-500" :
+                                                            eleganceResult.overallScore >= 60 ? "bg-amber-500/10 text-amber-500" :
+                                                            "bg-red-500/10 text-red-500"
+                                                        }`}>
+                                                            {eleganceResult.overallScore}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-foreground">Elegance Score</p>
+                                                            <p className="text-xs text-muted-foreground">{eleganceResult.verdict}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Dimensions */}
+                                                    <div className="grid grid-cols-5 gap-2">
+                                                        {Object.entries(eleganceResult.dimensions).map(([key, { score, comment }]) => (
+                                                            <div key={key} className="flex flex-col items-center gap-1 p-2 rounded-lg bg-muted/30 border border-border/50" title={comment}>
+                                                                <span className={`text-lg font-black ${
+                                                                    score >= 8 ? "text-emerald-500" : score >= 6 ? "text-amber-500" : "text-red-500"
+                                                                }`}>{score}</span>
+                                                                <span className="text-[9px] font-medium text-muted-foreground capitalize text-center leading-tight">{key}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Improvements */}
+                                                    {eleganceResult.improvements.length > 0 && (
+                                                        <div className="space-y-3">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-500">Suggested Polish</span>
+                                                            {eleganceResult.improvements.map((imp, i) => (
+                                                                <div key={i} className="rounded-lg border border-border overflow-hidden">
+                                                                    <div className="px-3 py-1.5 bg-muted/30 flex items-center gap-2">
+                                                                        <span className="text-[10px] font-bold text-cyan-500 px-1.5 py-0.5 rounded bg-cyan-500/10">{imp.technique}</span>
+                                                                        <span className="text-xs text-foreground/80">{imp.description}</span>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 text-xs font-mono">
+                                                                        <div className="p-2 bg-red-500/5 border-r border-border">
+                                                                            <span className="text-[9px] font-bold text-red-500 uppercase">Before</span>
+                                                                            <pre className="text-foreground/70 whitespace-pre-wrap mt-1">{imp.before}</pre>
+                                                                        </div>
+                                                                        <div className="p-2 bg-emerald-500/5">
+                                                                            <span className="text-[9px] font-bold text-emerald-500 uppercase">After</span>
+                                                                            <pre className="text-foreground/70 whitespace-pre-wrap mt-1">{imp.after}</pre>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            )}
 
                             {/* Accept Rating */}
                             <div className="flex flex-col gap-3 pt-4 border-t border-border mt-4">

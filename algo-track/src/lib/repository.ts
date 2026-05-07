@@ -674,6 +674,7 @@ export async function globalPauseReviews(
         metadata: {
           ...currentMeta,
           original_next_review_at: card.next_review_at,
+          pause_started_at: now.toISOString(),
           globally_paused: true,
         },
         updated_at: now.toISOString(),
@@ -719,61 +720,7 @@ export async function globalResumeReviews(userId: string) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
 
-  // 1. Restore all globally-paused cards
-  const { data: cards, error: cardsError } = await supabase
-    .from("cards")
-    .select("id, metadata, last_reviewed_at, interval_days")
-    .eq("user_id", userId);
-
-  if (cardsError) throw new Error(cardsError.message);
-
-  for (const card of cards ?? []) {
-    const meta = (card.metadata as Record<string, unknown>) || {};
-
-    // Only restore cards that were globally paused (not individually paused)
-    if (meta.globally_paused !== true) continue;
-
-    // Restore the exact original next_review_at if we have it
-    let nextReviewIso: string;
-    if (meta.original_next_review_at && typeof meta.original_next_review_at === "string") {
-      nextReviewIso = meta.original_next_review_at;
-    } else if (meta.remaining_review_days != null) {
-      // Legacy fallback: reconstruct from remaining_review_days
-      let remainingDays = meta.remaining_review_days as number;
-      if (remainingDays > 10000) remainingDays = 0;
-      const nextReview = new Date(now);
-      nextReview.setDate(nextReview.getDate() + remainingDays);
-      nextReviewIso = nextReview.toISOString();
-    } else if (card.last_reviewed_at != null && card.interval_days != null) {
-      // Recovery: reconstruct from SRS data
-      const lastReview = new Date(card.last_reviewed_at as string);
-      const intendedNext = new Date(lastReview);
-      intendedNext.setDate(intendedNext.getDate() + (card.interval_days as number));
-      nextReviewIso = intendedNext.toISOString();
-    } else {
-      nextReviewIso = now.toISOString();
-    }
-
-    // Clean up the global-pause metadata
-    const { remaining_review_days, globally_paused, original_next_review_at, ...cleanMeta } = meta;
-    void remaining_review_days;
-    void globally_paused;
-    void original_next_review_at;
-
-    const { error } = await supabase
-      .from("cards")
-      .update({
-        next_review_at: nextReviewIso,
-        metadata: cleanMeta,
-        updated_at: now.toISOString(),
-      })
-      .eq("id", card.id)
-      .eq("user_id", userId);
-
-    if (error) throw new Error(error.message);
-  }
-
-  // 2. Clear user pause state
+  // 0. Fetch the user-level pause metadata to get fallback started_at
   const { data: userData, error: userFetchError } = await supabase
     .from("users")
     .select("metadata")
@@ -783,6 +730,104 @@ export async function globalResumeReviews(userId: string) {
   if (userFetchError) throw new Error(userFetchError.message);
 
   const userMeta = (userData?.metadata as Record<string, unknown>) || {};
+  const gp = (userMeta.global_pause as Record<string, unknown>) || {};
+  const userPauseStartedAt = gp.started_at
+    ? new Date(gp.started_at as string)
+    : now;
+
+  // 1. Fetch all globally-paused cards
+  const { data: cards, error: cardsError } = await supabase
+    .from("cards")
+    .select("id, metadata, last_reviewed_at, interval_days")
+    .eq("user_id", userId);
+
+  if (cardsError) throw new Error(cardsError.message);
+
+  // Separate cards into those with valid offsets and those that were already overdue
+  const cardsToResume: Array<{
+    id: string;
+    meta: Record<string, unknown>;
+    offsetDays: number;
+  }> = [];
+
+  for (const card of cards ?? []) {
+    const meta = (card.metadata as Record<string, unknown>) || {};
+
+    // Only restore cards that were globally paused (not individually paused)
+    if (meta.globally_paused !== true) continue;
+
+    // Determine the pause start time for this card
+    const cardPauseStartedAt = meta.pause_started_at
+      ? new Date(meta.pause_started_at as string)
+      : userPauseStartedAt;
+
+    // Calculate relative offset: how many days from pause-start to original next_review
+    let offsetDays = 0;
+    if (meta.original_next_review_at && typeof meta.original_next_review_at === "string") {
+      const originalNext = new Date(meta.original_next_review_at as string);
+      const diffMs = originalNext.getTime() - cardPauseStartedAt.getTime();
+      offsetDays = diffMs / 86_400_000; // can be negative if card was already overdue
+    } else if (meta.remaining_review_days != null) {
+      // Legacy fallback
+      let remainingDays = meta.remaining_review_days as number;
+      if (remainingDays > 10000) remainingDays = 0;
+      offsetDays = remainingDays;
+    } else if (card.last_reviewed_at != null && card.interval_days != null) {
+      // Recovery: reconstruct from SRS data relative to pause start
+      const lastReview = new Date(card.last_reviewed_at as string);
+      const intendedNext = new Date(lastReview);
+      intendedNext.setDate(intendedNext.getDate() + (card.interval_days as number));
+      const diffMs = intendedNext.getTime() - cardPauseStartedAt.getTime();
+      offsetDays = diffMs / 86_400_000;
+    }
+
+    cardsToResume.push({ id: card.id, meta, offsetDays });
+  }
+
+  // Sort cards by offsetDays so we can stagger overdue ones
+  cardsToResume.sort((a, b) => a.offsetDays - b.offsetDays);
+
+  // For cards that were already overdue (offset <= 0), stagger them evenly
+  // starting from today (day 0..N) in batches of 7 per day
+  const overdueCards = cardsToResume.filter((c) => c.offsetDays <= 0);
+  const futureCards = cardsToResume.filter((c) => c.offsetDays > 0);
+
+  // Assign staggered days for overdue cards: 7 cards per day starting from day 0
+  const BATCH_SIZE = 7;
+  for (let i = 0; i < overdueCards.length; i++) {
+    overdueCards[i].offsetDays = Math.floor(i / BATCH_SIZE);
+  }
+
+  // Now update all cards in the database
+  const allCards = [...overdueCards, ...futureCards];
+
+  for (const { id, meta, offsetDays } of allCards) {
+    // Calculate new next_review_at relative to now
+    const nextReview = new Date(now);
+    nextReview.setTime(nextReview.getTime() + offsetDays * 86_400_000);
+    const nextReviewIso = nextReview.toISOString();
+
+    // Clean up the global-pause metadata
+    const { remaining_review_days, globally_paused, original_next_review_at, pause_started_at, ...cleanMeta } = meta;
+    void remaining_review_days;
+    void globally_paused;
+    void original_next_review_at;
+    void pause_started_at;
+
+    const { error } = await supabase
+      .from("cards")
+      .update({
+        next_review_at: nextReviewIso,
+        metadata: cleanMeta,
+        updated_at: now.toISOString(),
+      })
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  // 2. Clear user pause state
   const { global_pause, ...cleanUserMeta } = userMeta;
   void global_pause;
 
@@ -797,6 +842,60 @@ export async function globalResumeReviews(userId: string) {
   if (userUpdateError) throw new Error(userUpdateError.message);
 
   return { resumed: true };
+}
+
+/**
+ * Redistribute all currently-due cards into staggered batches.
+ * Cards with next_review_at in the past are split into groups of 7 per day
+ * starting from today. Future-scheduled cards are left untouched.
+ */
+export async function redistributeCards(userId: string) {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  // Fetch all cards for this user that are currently due (next_review_at <= now)
+  const { data: dueCards, error } = await supabase
+    .from("cards")
+    .select("id, next_review_at, metadata")
+    .eq("user_id", userId)
+    .lte("next_review_at", nowIso)
+    .order("next_review_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const cards = (dueCards ?? []).filter((c) => {
+    // Skip individually paused cards
+    const meta = (c.metadata as Record<string, unknown>) || {};
+    return meta.review_paused !== true;
+  });
+
+  if (cards.length === 0) {
+    return { redistributed: 0 };
+  }
+
+  // Stagger: 7 cards per day starting from day 1
+  const BATCH_SIZE = 7;
+  for (let i = 0; i < cards.length; i++) {
+    const dayOffset = Math.floor(i / BATCH_SIZE) + 1; // start from day 1
+    const nextReview = new Date(now);
+    nextReview.setDate(nextReview.getDate() + dayOffset);
+    // Set to start of that day (midnight UTC) for clean scheduling
+    nextReview.setUTCHours(0, 0, 0, 0);
+
+    const { error: updateError } = await supabase
+      .from("cards")
+      .update({
+        next_review_at: nextReview.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("id", cards[i].id)
+      .eq("user_id", userId);
+
+    if (updateError) throw new Error(updateError.message);
+  }
+
+  return { redistributed: cards.length };
 }
 
 export async function extendGlobalPause(userId: string, additionalDays: number) {

@@ -5,6 +5,7 @@ import {
   globalPauseReviews,
   globalResumeReviews,
   extendGlobalPause,
+  redistributeCards,
 } from "@/lib/repository";
 
 export async function GET(request: NextRequest) {
@@ -57,7 +58,12 @@ export async function POST(request: NextRequest) {
       return jsonOk(status);
     }
 
-    throw new ApiError('action must be "pause", "resume", or "extend".', 400);
+    if (action === "redistribute") {
+      const result = await redistributeCards(user.id);
+      return jsonOk(result);
+    }
+
+    throw new ApiError('action must be "pause", "resume", "extend", or "redistribute".', 400);
   } catch (error) {
     return handleApiError(error);
   }

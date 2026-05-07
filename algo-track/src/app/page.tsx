@@ -14,8 +14,15 @@ import { CoachChat } from "@/components/CoachChat";
 import { SkillTreeView } from "@/components/SkillTreeView";
 import { StressModeSession } from "@/components/StressModeSession";
 import { GlobalPauseModal } from "@/components/GlobalPauseModal";
+import { BigODrill } from "@/components/BigODrill";
+import { PatternQuiz } from "@/components/PatternQuiz";
+import { CramMode } from "@/components/CramMode";
+import { Speedrun } from "@/components/Speedrun";
+import { AntiPatterns } from "@/components/AntiPatterns";
+import { ObfuscationChallenge } from "@/components/ObfuscationChallenge";
+import { CrossLanguage } from "@/components/CrossLanguage";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
@@ -24,7 +31,7 @@ import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
 
-type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete";
+type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
 
 interface SessionStats {
@@ -378,7 +385,7 @@ export default function HomePage() {
             </Button>
             <div className="relative z-50" ref={extraFeaturesRef}>
               <Button
-                variant={["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode"].includes(view) ? "secondary" : "ghost"}
+                variant={["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode", "bigo-drill", "pattern-quiz", "cram-mode", "speedrun", "anti-patterns", "obfuscation", "cross-language"].includes(view) ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setIsExtraFeaturesOpen(!isExtraFeaturesOpen)}
                 className="gap-2 transition-all"
@@ -438,6 +445,55 @@ export default function HomePage() {
                     >
                       <Zap className="w-4 h-4 text-red-500" />
                       Stress Drill
+                    </button>
+                    <button
+                      onClick={() => { setView("bigo-drill"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-amber-500 hover:bg-amber-500/10 ${view === "bigo-drill" ? 'text-amber-500 bg-amber-500/5 font-medium' : ''}`}
+                    >
+                      <Timer className="w-4 h-4 text-amber-500" />
+                      Big-O Drills
+                    </button>
+                    <button
+                      onClick={() => { setView("pattern-quiz"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-violet-500 hover:bg-violet-500/10 ${view === "pattern-quiz" ? 'text-violet-500 bg-violet-500/5 font-medium' : ''}`}
+                    >
+                      <Crosshair className="w-4 h-4 text-violet-500" />
+                      Pattern Quiz
+                    </button>
+                    <button
+                      onClick={() => { setView("cram-mode"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-rose-500 hover:bg-rose-500/10 ${view === "cram-mode" ? 'text-rose-500 bg-rose-500/5 font-medium' : ''}`}
+                    >
+                      <Building2 className="w-4 h-4 text-rose-500" />
+                      Cram Mode
+                    </button>
+                    <button
+                      onClick={() => { setView("speedrun"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-amber-500 hover:bg-amber-500/10 ${view === "speedrun" ? 'text-amber-500 bg-amber-500/5 font-medium' : ''}`}
+                    >
+                      <Keyboard className="w-4 h-4 text-amber-500" />
+                      Speedruns
+                    </button>
+                    <button
+                      onClick={() => { setView("anti-patterns"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-red-500 hover:bg-red-500/10 ${view === "anti-patterns" ? 'text-red-500 bg-red-500/5 font-medium' : ''}`}
+                    >
+                      <Bug className="w-4 h-4 text-red-500" />
+                      Anti-Patterns
+                    </button>
+                    <button
+                      onClick={() => { setView("obfuscation"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-violet-500 hover:bg-violet-500/10 ${view === "obfuscation" ? 'text-violet-500 bg-violet-500/5 font-medium' : ''}`}
+                    >
+                      <ShuffleIcon className="w-4 h-4 text-violet-500" />
+                      Obfuscation
+                    </button>
+                    <button
+                      onClick={() => { setView("cross-language"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-sky-500 hover:bg-sky-500/10 ${view === "cross-language" ? 'text-sky-500 bg-sky-500/5 font-medium' : ''}`}
+                    >
+                      <Languages className="w-4 h-4 text-sky-500" />
+                      Cross-Language
                     </button>
                   </motion.div>
                 )}
@@ -648,6 +704,101 @@ export default function HomePage() {
                 <StressModeSession onExit={() => setView("dashboard")} />
               </motion.div>
             )}
+            {view === "bigo-drill" && (
+              <motion.div
+                key="bigo-drill"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <BigODrill cards={cards} onExit={() => setView("dashboard")} />
+              </motion.div>
+            )}
+            {view === "pattern-quiz" && (
+              <motion.div
+                key="pattern-quiz"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <PatternQuiz cards={cards} onExit={() => setView("dashboard")} />
+              </motion.div>
+            )}
+            {view === "cram-mode" && (
+              <motion.div
+                key="cram-mode"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <CramMode
+                  cards={cards}
+                  onStartReview={(cardIds) => {
+                    // Filter cards to prioritized set and start review
+                    const prioritized = cards.filter(c => cardIds.includes(c.id));
+                    if (prioritized.length > 0) {
+                      setDueCards(prioritized);
+                      setView("review-session");
+                    }
+                  }}
+                  onExit={() => setView("dashboard")}
+                />
+              </motion.div>
+            )}
+            {view === "speedrun" && (
+              <motion.div
+                key="speedrun"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <Speedrun onExit={() => setView("dashboard")} />
+              </motion.div>
+            )}
+            {view === "anti-patterns" && (
+              <motion.div
+                key="anti-patterns"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <AntiPatterns cards={cards} onExit={() => setView("dashboard")} />
+              </motion.div>
+            )}
+            {view === "obfuscation" && (
+              <motion.div
+                key="obfuscation"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <ObfuscationChallenge cards={cards} onExit={() => setView("dashboard")} />
+              </motion.div>
+            )}
+            {view === "cross-language" && (
+              <motion.div
+                key="cross-language"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <CrossLanguage cards={cards} onExit={() => setView("dashboard")} />
+              </motion.div>
+            )}
             {view === "review-session" && (
               <motion.div
                 key="review-session"
@@ -659,6 +810,7 @@ export default function HomePage() {
               >
                 <ReviewSession
                   cards={reviewSessionCards}
+                  allCards={cards}
                   onComplete={handleReviewComplete}
                   onCancel={handleReviewCancel}
                   mode={reviewSessionConfig.mode}

@@ -9,6 +9,7 @@ import {
     pauseAllReviews,
     resumeAllReviews,
     extendGlobalPause,
+    redistributeReviews,
     type GlobalPauseStatus,
 } from "@/lib/client-api";
 
@@ -78,6 +79,19 @@ export function GlobalPauseModal({
             onChanged();
         } catch (err) {
             console.error("Failed to extend pause:", err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRedistribute = async () => {
+        setIsSubmitting(true);
+        try {
+            const result = await redistributeReviews();
+            alert(`Redistributed ${result.redistributed} cards across review days (7 per day).`);
+            onChanged();
+        } catch (err) {
+            console.error("Failed to redistribute reviews:", err);
         } finally {
             setIsSubmitting(false);
         }
@@ -346,6 +360,26 @@ export function GlobalPauseModal({
                                     ? "Pausing..."
                                     : `Pause for ${effectiveDays} day${effectiveDays !== 1 ? "s" : ""}`}
                             </Button>
+
+                            {/* Redistribute button */}
+                            <div className="border-t border-border pt-4 mt-1">
+                                <p className="text-xs text-muted-foreground mb-2 text-center">
+                                    Too many reviews piled up? Spread them evenly.
+                                </p>
+                                <Button
+                                    variant="outline"
+                                    onClick={handleRedistribute}
+                                    disabled={isSubmitting}
+                                    className="w-full rounded-full gap-2 text-sm"
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Clock className="w-4 h-4" />
+                                    )}
+                                    Redistribute Reviews (7/day)
+                                </Button>
+                            </div>
                         </>
                     )}
                 </div>

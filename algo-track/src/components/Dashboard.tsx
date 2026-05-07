@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import type { Flashcard } from "@/data";
-import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause, Play, Timer } from "lucide-react";
+import type { Flashcard, CardType } from "@/data";
+import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause, Play, Timer, Code, BookOpen } from "lucide-react";
 import { isCardPaused } from "@/lib/card-utils";
 import { fetchGlobalPauseStatus, resumeAllReviews } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
@@ -38,8 +38,18 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [pauseStatus, setPauseStatus] = useState<GlobalPauseStatus | null>(null);
   const [isResuming, setIsResuming] = useState(false);
+  const [typeTab, setTypeTab] = useState<"all" | CardType>("all");
 
   const pausedCount = cards.filter(c => isCardPaused(c)).length;
+
+  // Pre-filter by type tab before passing to SearchFilter
+  const typeFilteredCards = useMemo(() => {
+    if (typeTab === "all") return cards;
+    return cards.filter(c => c.type === typeTab);
+  }, [cards, typeTab]);
+
+  const dsaCount = useMemo(() => cards.filter(c => c.type === "leetcode").length, [cards]);
+  const csCount = useMemo(() => cards.filter(c => c.type === "cs").length, [cards]);
 
   const handleFiltered = useCallback((filtered: Flashcard[]) => {
     setFilteredCards(filtered);
@@ -232,11 +242,42 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
         </div>
       )}
 
+      {/* Type Tabs (CS / DSA) */}
+      {cards.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border w-fit">
+            {([
+              { key: "all" as const, label: "All Cards", icon: null, count: cards.length },
+              { key: "leetcode" as const, label: "DSA", icon: <Code className="w-3.5 h-3.5" />, count: dsaCount },
+              { key: "cs" as const, label: "CS Core", icon: <BookOpen className="w-3.5 h-3.5" />, count: csCount },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setTypeTab(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  typeTab === tab.key
+                    ? "bg-background text-foreground shadow-sm border border-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                <span className={`text-[10px] font-bold ml-0.5 px-1.5 py-0.5 rounded-full ${
+                  typeTab === tab.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search, Filter & Export */}
       {cards.length > 0 && (
         <div className="flex items-start justify-between gap-4 mb-2">
           <div className="flex-1">
-            <SearchFilter cards={cards} onFiltered={handleFiltered} />
+            <SearchFilter cards={typeFilteredCards} onFiltered={handleFiltered} />
           </div>
           <div className="relative shrink-0 pt-0.5">
             <Button

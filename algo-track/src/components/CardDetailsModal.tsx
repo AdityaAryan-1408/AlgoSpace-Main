@@ -7,6 +7,7 @@ import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
+import { CodeEvolution } from "@/components/CodeEvolution";
 import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
@@ -308,7 +309,7 @@ export function CardDetailsModal({
               Next Review Note
             </h3>
             <textarea
-              className="w-full min-h-[60px] text-sm text-foreground/90 leading-relaxed p-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-y transition-shadow selectable"
+              className="w-full min-h-15 text-sm text-foreground/90 leading-relaxed p-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-y transition-shadow selectable"
               value={reviewNote}
               onChange={(e) => setReviewNote(e.target.value)}
               placeholder="Add a small note to remember during the next review..."
@@ -453,6 +454,11 @@ export function CardDetailsModal({
                 </div>
               </div>
             </section>
+          )}
+
+          {/* Code Evolution */}
+          {card.type === "leetcode" && (
+            <CodeEvolution cardId={card.id} cardTitle={card.title} />
           )}
 
           {(card.relatedProblems?.length ?? 0) > 0 && (

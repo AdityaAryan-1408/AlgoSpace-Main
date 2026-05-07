@@ -411,3 +411,10 @@ export async function extendGlobalPause(
         body: JSON.stringify({ action: "extend", additionalDays }),
     });
 }
+
+export async function redistributeReviews(): Promise<{ redistributed: number }> {
+    return apiFetch<{ redistributed: number }>("/reviews/pause", {
+        method: "POST",
+        body: JSON.stringify({ action: "redistribute" }),
+    });
+}

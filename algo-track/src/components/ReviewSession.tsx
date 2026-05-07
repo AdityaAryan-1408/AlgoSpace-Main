@@ -10,9 +10,12 @@ import { FeynmanRecorder } from "@/components/FeynmanRecorder";
 import { ConstraintShifter, shouldShowConstraintShifter } from "@/components/ConstraintShifter";
 import { DryRunChallenge } from "@/components/DryRunChallenge";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
+import { VagueInterviewer } from "@/components/VagueInterviewer";
+import { SpotTheBug } from "@/components/SpotTheBug";
+import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export interface ReviewResult {
@@ -23,6 +26,7 @@ export interface ReviewResult {
 
 interface ReviewSessionProps {
     cards: Flashcard[];
+    allCards?: Flashcard[];
     onComplete: (results: ReviewResult[], durationMs: number) => void;
     onCancel: () => void;
     mode?: "standard" | "random-quiz" | "sprint" | "reverse";
@@ -80,6 +84,7 @@ function getReversePrompt(card: Flashcard) {
 
 export function ReviewSession({
     cards,
+    allCards,
     onComplete,
     onCancel,
     mode = "standard",
@@ -90,6 +95,8 @@ export function ReviewSession({
     const [showAiPractice, setShowAiPractice] = useState(false);
     const [showFeynman, setShowFeynman] = useState(false);
     const [showDryRun, setShowDryRun] = useState(false);
+    const [showVagueInterviewer, setShowVagueInterviewer] = useState(false);
+    const [showSpotTheBug, setShowSpotTheBug] = useState(false);
     const [showConstraintShifter, setShowConstraintShifter] = useState(true);
     const [showAnswerInput, setShowAnswerInput] = useState(false);
     const [userAnswer, setUserAnswer] = useState("");
@@ -171,6 +178,8 @@ export function ReviewSession({
             setShowAiPractice(false);
             setShowFeynman(false);
             setShowDryRun(false);
+            setShowVagueInterviewer(false);
+            setShowSpotTheBug(false);
             setShowConstraintShifter(true);
             setShowAnswerInput(false);
             setUserAnswer("");
@@ -187,6 +196,8 @@ export function ReviewSession({
         setShowAiPractice(false);
         setShowFeynman(false);
         setShowDryRun(false);
+        setShowVagueInterviewer(false);
+        setShowSpotTheBug(false);
         setShowAnswer(true);
     };
 
@@ -395,6 +406,18 @@ export function ReviewSession({
                                 onRate={handleRate}
                                 onCancel={() => setShowDryRun(false)}
                             />
+                        ) : showVagueInterviewer ? (
+                            <VagueInterviewer
+                                card={currentCard}
+                                onRate={handleRate}
+                                onCancel={() => setShowVagueInterviewer(false)}
+                            />
+                        ) : showSpotTheBug ? (
+                            <SpotTheBug
+                                card={currentCard}
+                                onRate={handleRate}
+                                onCancel={() => setShowSpotTheBug(false)}
+                            />
                         ) : !showAnswer ? (
                             <div className="flex flex-col gap-4">
                                 {/* Constraint Shifter - shown for mastered cards */}
@@ -512,6 +535,24 @@ export function ReviewSession({
                                                 >
                                                     <Bug className="w-4 h-4" />
                                                     Dry-Run
+                                                </Button>
+                                            )}
+                                            <Button
+                                                onClick={() => setShowVagueInterviewer(true)}
+                                                variant="ghost"
+                                                className="gap-1.5 text-sm font-medium text-indigo-500 hover:text-indigo-600 hover:bg-indigo-500/10 rounded-full px-4 py-3 border border-indigo-500/20"
+                                            >
+                                                <MessageSquare className="w-4 h-4" />
+                                                Vague Interviewer
+                                            </Button>
+                                            {currentCard.type === "leetcode" && (currentCard.solution || (currentCard.solutions && currentCard.solutions.length > 0)) && (
+                                                <Button
+                                                    onClick={() => setShowSpotTheBug(true)}
+                                                    variant="ghost"
+                                                    className="gap-1.5 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-full px-4 py-3 border border-red-500/20"
+                                                >
+                                                    <Search className="w-4 h-4" />
+                                                    Spot the Bug
                                                 </Button>
                                             )}
                                         </div>
@@ -633,6 +674,20 @@ export function ReviewSession({
                                         </>
                                     ) : (
                                         <div className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-xl border border-border mt-4">
+                                            {/* Similar Questions (after successful review) */}
+                                            {currentCard.type === "leetcode" && (pendingRating === "GOOD" || pendingRating === "EASY") && allCards && (
+                                                <div className="w-full">
+                                                    <SimilarQuestions
+                                                        card={currentCard}
+                                                        allCards={allCards}
+                                                        onAddToQueue={(cardId) => {
+                                                            // The queue management is handled by parent page
+                                                            console.log("Queue card:", cardId);
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
+
                                             <p className="text-sm font-semibold text-foreground text-center mb-1">
                                                 When do you want to review this next?
                                             </p>

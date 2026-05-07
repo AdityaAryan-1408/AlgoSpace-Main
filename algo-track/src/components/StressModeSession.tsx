@@ -35,7 +35,12 @@ export function StressModeSession({ onExit }: Props) {
 
   // Pre-flight toggles
   const [useWebcam, setUseWebcam] = useState(false);
+  const [useDistractions, setUseDistractions] = useState(true);
   const webcamRef = useRef<HTMLVideoElement>(null);
+
+  // Distraction state
+  const [interruptionText, setInterruptionText] = useState("");
+  const interruptionTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Formatting timer
   const minutes = Math.floor(timeLeft / 60000);
@@ -59,6 +64,60 @@ export function StressModeSession({ onExit }: Props) {
     }
     return () => clearInterval(interval);
   }, [phase]);
+
+  // Distraction interruptions
+  useEffect(() => {
+    if (phase !== "active" || !useDistractions) return;
+
+    const interruptions = [
+      "Can you quickly explain what your current approach's time complexity is?",
+      "Just keeping an eye on the clock — you have about " + minutes + " minutes left.",
+      "Walk me through your thought process for the last few lines you wrote.",
+      "Have you considered edge cases? What happens with an empty input?",
+      "Could you think of an alternative approach? We have time.",
+      "What data structure are you using here and why?",
+      "Let me know when you're ready to discuss your approach.",
+      "Quick check — are you handling the base case correctly?",
+    ];
+
+    const scheduleNext = () => {
+      const delay = 30000 + Math.random() * 60000; // 30-90 seconds
+      interruptionTimer.current = setTimeout(() => {
+        const msg = interruptions[Math.floor(Math.random() * interruptions.length)];
+        setInterruptionText(msg);
+
+        // Play notification sound
+        try {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 800;
+          gain.gain.value = 0.1;
+          osc.start();
+          osc.stop(ctx.currentTime + 0.15);
+          setTimeout(() => {
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.frequency.value = 1000;
+            gain2.gain.value = 0.1;
+            osc2.start();
+            osc2.stop(ctx.currentTime + 0.15);
+          }, 200);
+        } catch {}
+
+        // Auto-dismiss after 8s
+        setTimeout(() => setInterruptionText(""), 8000);
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => { if (interruptionTimer.current) clearTimeout(interruptionTimer.current); };
+  }, [phase, useDistractions, minutes]);
 
   // Request fullscreen on active
   useEffect(() => {
@@ -202,9 +261,26 @@ export function StressModeSession({ onExit }: Props) {
                 <video ref={webcamRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               </div>
             )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                Interview Distractions
+              </span>
+              <Button
+                variant={useDistractions ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUseDistractions(!useDistractions)}
+                className={useDistractions ? "bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30" : ""}
+              >
+                {useDistractions ? "Enabled ✓" : "Enable"}
+              </Button>
+            </div>
+            {useDistractions && (
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Simulated interruptions: random notification sounds &amp; AI interviewer prompts during the session.
+              </p>
+            )}
+          </div>          <div className="grid grid-cols-2 gap-4">
             <Button variant="ghost" onClick={onExit} className="w-full text-muted-foreground">
               Cancel
             </Button>
@@ -286,7 +362,12 @@ export function StressModeSession({ onExit }: Props) {
         </div>
         
         <div className="flex items-center gap-6">
-          <div className={`flex items-center gap-2 font-mono font-bold text-lg tabular-nums ${timeLeft < 300000 ? "text-red-500 animate-pulse" : "text-amber-500"}`}>
+        <div className={`flex items-center gap-2 font-mono font-bold text-lg tabular-nums transition-colors duration-500 ${
+            timeLeft < 120000 ? "text-red-500 animate-pulse scale-110" :
+            timeLeft < 300000 ? "text-red-500 animate-pulse" :
+            timeLeft < 600000 ? "text-orange-500" :
+            "text-amber-500"
+          }`}>
             <Timer className="w-5 h-5 mb-0.5" />
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </div>
@@ -321,6 +402,23 @@ export function StressModeSession({ onExit }: Props) {
                 onCancel={() => handleEarlyExit()} 
                 onRate={(rating) => handleCardEvaluated(rating)}
               />
+            </div>
+          </div>
+        )}
+        {/* Interviewer Interruption Toast */}
+        {interruptionText && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 w-full max-w-md px-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 backdrop-blur-md rounded-xl px-5 py-3 shadow-2xl flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <Activity className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-0.5">Interviewer</p>
+                <p className="text-sm text-foreground/90">{interruptionText}</p>
+              </div>
+              <button onClick={() => setInterruptionText("")} className="text-muted-foreground hover:text-foreground ml-1 shrink-0 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
