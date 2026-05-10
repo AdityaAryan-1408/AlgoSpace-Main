@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Card } from "@/components/ui/Card";
 import { motion } from "motion/react";
 import type { Flashcard } from "@/data";
@@ -14,236 +14,249 @@ interface TopicData {
   type: "pattern" | "cs";
 }
 
-function getHeatmapColor(mastery: number) {
-  if (mastery >= 80)
-    return "bg-emerald-500 text-white border-emerald-600 dark:border-emerald-400 dark:text-emerald-950 hover:bg-emerald-400";
-  if (mastery >= 60)
-    return "bg-emerald-400 text-emerald-950 border-emerald-500 dark:border-emerald-300 hover:bg-emerald-300";
-  if (mastery >= 40)
-    return "bg-emerald-300 text-emerald-950 border-emerald-400 dark:border-emerald-200 hover:bg-emerald-200";
-  if (mastery >= 20)
-    return "bg-emerald-200 text-emerald-900 border-emerald-300 dark:border-emerald-100 hover:bg-emerald-100";
-  return "bg-muted text-muted-foreground border-border hover:bg-muted/80";
-}
+const TARGET_INTERVAL_DAYS = 21;
+const MIN_MASTERY_THRESHOLD = 5;
 
-function getDifficultyBadge(mastery: number) {
-  if (mastery >= 80)
-    return { label: "Strong", className: "bg-easy-bg text-easy border-easy/20" };
-  if (mastery >= 40)
-    return {
-      label: "Medium",
-      className: "bg-medium-bg text-medium border-medium/20",
-    };
-  return { label: "Weak", className: "bg-hard-bg text-hard border-hard/20" };
+function getDifficultyWeight(diff: "easy" | "medium" | "hard") {
+  if (diff === "hard") return 3;
+  if (diff === "medium") return 2;
+  return 1; // easy
 }
 
 export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
-  const [hoveredTopic, setHoveredTopic] = useState<{ topic: TopicData; x: number; y: number } | null>(null);
-
   const { patterns, cs } = useMemo(() => {
     const patternCards = cards.filter((c) => c.type === "leetcode");
     const csCards = cards.filter((c) => c.type === "cs");
 
-    // Group pattern cards by tag
-    const patternMap = new Map<
-      string,
-      { totalGood: number; totalReviews: number; count: number }
-    >();
-    for (const card of patternCards) {
-      for (const tag of card.tags) {
-        // Skip complexity tags — they're not patterns
-        if (/^(Time|Space):/i.test(tag)) continue;
-        const existing = patternMap.get(tag) || {
-          totalGood: 0,
-          totalReviews: 0,
-          count: 0,
-        };
-        existing.totalGood += card.history.good;
-        existing.totalReviews += card.history.total;
-        existing.count += 1;
-        patternMap.set(tag, existing);
+    const calculateTopics = (topicCards: Flashcard[], isPattern: boolean) => {
+      const map = new Map<
+        string,
+        { earned: number; maxPoints: number; count: number }
+      >();
+
+      for (const card of topicCards) {
+        const tagsToUse = isPattern
+          ? card.tags.filter((t) => !/^(Time|Space):/i.test(t))
+          : card.tags.length > 0
+            ? card.tags
+            : [card.title];
+
+        for (const tag of tagsToUse) {
+          const existing = map.get(tag) || {
+            earned: 0,
+            maxPoints: 0,
+            count: 0,
+          };
+
+          const weight = getDifficultyWeight(card.difficulty);
+
+          let intervalDays = 0;
+          if (card.lastReview && card.nextReview) {
+            const last = new Date(card.lastReview).getTime();
+            const next = new Date(card.nextReview).getTime();
+            if (!isNaN(last) && !isNaN(next)) {
+              intervalDays = Math.max(0, (next - last) / (1000 * 3600 * 24));
+            }
+          } else if (card.history.good > 0) {
+            intervalDays = card.history.good * 2;
+          }
+
+          const retentionRatio = Math.min(
+            1.0,
+            intervalDays / TARGET_INTERVAL_DAYS
+          );
+
+          existing.earned += weight * retentionRatio;
+          existing.maxPoints += weight;
+          existing.count += 1;
+
+          map.set(tag, existing);
+        }
       }
-    }
 
-    const patterns: TopicData[] = Array.from(patternMap.entries())
-      .map(([name, stats]) => ({
-        name,
-        mastery:
-          stats.totalReviews > 0
-            ? Math.round((stats.totalGood / stats.totalReviews) * 100)
-            : 0,
-        cardCount: stats.count,
-        type: "pattern" as const,
-      }))
-      .sort((a, b) => b.mastery - a.mastery);
+      return Array.from(map.entries())
+        .map(([name, stats]) => {
+          const denominator = Math.max(MIN_MASTERY_THRESHOLD, stats.maxPoints);
+          const mastery = Math.round((stats.earned / denominator) * 100);
+          return {
+            name,
+            mastery: Math.min(100, mastery),
+            cardCount: stats.count,
+            type: (isPattern ? "pattern" : "cs") as "pattern" | "cs",
+          };
+        })
+        .sort((a, b) => a.mastery - b.mastery);
+    };
 
-    // Group CS cards by tag
-    const csMap = new Map<
-      string,
-      { totalGood: number; totalReviews: number; count: number }
-    >();
-    for (const card of csCards) {
-      const tagsToUse = card.tags.length > 0 ? card.tags : [card.title];
-      for (const tag of tagsToUse) {
-        const existing = csMap.get(tag) || {
-          totalGood: 0,
-          totalReviews: 0,
-          count: 0,
-        };
-        existing.totalGood += card.history.good;
-        existing.totalReviews += card.history.total;
-        existing.count += 1;
-        csMap.set(tag, existing);
-      }
-    }
-
-    const cs: TopicData[] = Array.from(csMap.entries())
-      .map(([name, stats]) => ({
-        name,
-        mastery:
-          stats.totalReviews > 0
-            ? Math.round((stats.totalGood / stats.totalReviews) * 100)
-            : 0,
-        cardCount: stats.count,
-        type: "cs" as const,
-      }))
-      .sort((a, b) => b.mastery - a.mastery);
-
-    return { patterns, cs };
+    return {
+      patterns: calculateTopics(patternCards, true),
+      cs: calculateTopics(csCards, false),
+    };
   }, [cards]);
 
   if (cards.length === 0) return null;
 
-  const handleMouseEnter = (e: React.MouseEvent, topic: TopicData) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setHoveredTopic({
-      topic,
-      x: rect.left + rect.width / 2,
-      y: rect.top,
-    });
+  const targetAreas = patterns.filter((p) => p.mastery < 40);
+  const inProgress = patterns.filter((p) => p.mastery >= 40 && p.mastery < 80);
+  const mastered = patterns.filter((p) => p.mastery >= 80);
+
+  const ProgressPill = ({
+    topic,
+    colorTheme,
+  }: {
+    topic: TopicData;
+    colorTheme: "red" | "amber" | "emerald" | "blue";
+  }) => {
+    const themes = {
+      red: {
+        text: "text-red-900 dark:text-red-200",
+        border: "border-red-500/20 dark:border-red-500/30",
+        bg: "bg-red-500/10 dark:bg-red-500/10",
+        fill: "bg-red-500/20 dark:bg-red-500/30",
+      },
+      amber: {
+        text: "text-amber-900 dark:text-amber-200",
+        border: "border-amber-500/20 dark:border-amber-500/30",
+        bg: "bg-amber-500/10 dark:bg-amber-500/10",
+        fill: "bg-amber-500/20 dark:bg-amber-500/30",
+      },
+      emerald: {
+        text: "text-emerald-900 dark:text-emerald-200",
+        border: "border-emerald-500/20 dark:border-emerald-500/30",
+        bg: "bg-emerald-500/10 dark:bg-emerald-500/10",
+        fill: "bg-emerald-500/20 dark:bg-emerald-500/30",
+      },
+      blue: {
+        text: "text-blue-900 dark:text-blue-200",
+        border: "border-blue-500/20 dark:border-blue-500/30",
+        bg: "bg-blue-500/10 dark:bg-blue-500/10",
+        fill: "bg-blue-500/20 dark:bg-blue-500/30",
+      },
+    };
+
+    const theme = themes[colorTheme];
+
+    return (
+      <div
+        className={`relative overflow-hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium ${theme.bg} ${theme.border} ${theme.text}`}
+      >
+        {/* Background Progress Bar */}
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${topic.mastery}%` }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className={`absolute left-0 top-0 bottom-0 ${theme.fill} z-0`}
+        />
+        {/* Content */}
+        <span className="relative z-10">{topic.name}</span>
+        <span className="relative z-10 opacity-50">|</span>
+        <span className="relative z-10 font-mono opacity-90">
+          {topic.mastery}%
+        </span>
+      </div>
+    );
   };
 
-  const handleMouseLeave = () => {
-    setHoveredTopic(null);
+  const TopicSection = ({
+    title,
+    icon,
+    topics,
+    colorTheme,
+  }: {
+    title: string;
+    icon: string;
+    topics: TopicData[];
+    colorTheme: "red" | "amber" | "emerald";
+  }) => {
+    if (topics.length === 0) return null;
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 text-sm">
+          <span>{icon}</span>
+          <span className="font-medium text-foreground">{title}</span>
+          <span className="text-muted-foreground text-xs">
+            ({topics.length})
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {topics.map((topic) => (
+            <ProgressPill key={topic.name} topic={topic} colorTheme={colorTheme} />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
-      >
-        {patterns.length > 0 && (
-          <Card className="p-6 lg:col-span-2 flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 className="font-semibold text-foreground">
-                DSA Patterns Mastery
-              </h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Weak</span>
-                <div className="flex gap-1">
-                  <div className="w-3 h-3 rounded-sm bg-muted border border-border"></div>
-                  <div className="w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300 dark:border-emerald-100"></div>
-                  <div className="w-3 h-3 rounded-sm bg-emerald-300 border border-emerald-400 dark:border-emerald-200"></div>
-                  <div className="w-3 h-3 rounded-sm bg-emerald-400 border border-emerald-500 dark:border-emerald-300"></div>
-                  <div className="w-3 h-3 rounded-sm bg-emerald-500 border border-emerald-600 dark:border-emerald-400"></div>
-                </div>
-                <span>Strong</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {patterns.map((topic, i) => {
-                const diff = getDifficultyBadge(topic.mastery);
-                return (
-                  <motion.div
-                    key={topic.name}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.02 }}
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    onMouseEnter={(e) => handleMouseEnter(e, topic)}
-                    onMouseLeave={handleMouseLeave}
-                    className={`px-3 py-1.5 rounded-md border text-xs font-medium transition-colors cursor-default flex items-center gap-2 ${getHeatmapColor(topic.mastery)}`}
-                  >
-                    <span>{topic.name}</span>
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded-full border ${diff.className}`}
-                    >
-                      {diff.label}
-                    </span>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-
-        {cs.length > 0 && (
-          <Card
-            className={`p-6 flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow ${patterns.length === 0 ? "lg:col-span-3" : ""}`}
-          >
-            <h3 className="font-semibold text-foreground">CS Core Mastery</h3>
-            <div className="flex flex-col gap-4 mt-2">
-              {cs.map((topic, i) => (
-                <motion.div
-                  key={topic.name}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  onMouseEnter={(e) => handleMouseEnter(e, topic)}
-                  onMouseLeave={handleMouseLeave}
-                  className="flex flex-col gap-1.5 group cursor-default"
-                >
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium text-foreground group-hover:text-blue-500 transition-colors">
-                      {topic.name}
-                    </span>
-                    <span className="text-muted-foreground font-medium">
-                      {topic.mastery}%
-                    </span>
-                  </div>
-                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${topic.mastery}%` }}
-                      transition={{
-                        duration: 1,
-                        delay: 0.2 + i * 0.1,
-                        ease: "easeOut",
-                      }}
-                      className="h-full bg-blue-500 rounded-full"
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </Card>
-        )}
-      </motion.div>
-
-      {/* Hover tooltip */}
-      {hoveredTopic && (
-        <div
-          className="fixed z-50 pointer-events-none"
-          style={{
-            left: hoveredTopic.x,
-            top: hoveredTopic.y,
-            transform: "translate(-50%, calc(-100% - 8px))",
-          }}
-        >
-          <div className="bg-foreground text-background px-3 py-2 rounded-lg shadow-lg text-xs font-medium whitespace-nowrap">
-            <div className="font-bold">{hoveredTopic.topic.name}</div>
-            <div className="flex items-center gap-3 mt-0.5 opacity-90">
-              <span>Mastery: <strong>{hoveredTopic.topic.mastery}%</strong></span>
-              <span>Cards: <strong>{hoveredTopic.topic.cardCount}</strong></span>
-            </div>
-            {/* small arrow */}
-            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-foreground" />
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="flex flex-col lg:flex-row gap-6 mb-8"
+    >
+      {patterns.length > 0 && (
+        <Card className="p-6 shadow-sm flex-1">
+          <div className="flex flex-col gap-1 mb-4">
+            <h3 className="font-semibold text-foreground text-lg">
+              DSA Patterns Focus
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Prioritized by repetition interval & difficulty.
+            </p>
           </div>
-        </div>
+
+          <div className="flex flex-col gap-5">
+            <TopicSection
+              title="Target Areas"
+              icon="🎯"
+              topics={targetAreas}
+              colorTheme="red"
+            />
+            <TopicSection
+              title="In Progress"
+              icon="📈"
+              topics={inProgress}
+              colorTheme="amber"
+            />
+            <TopicSection
+              title="Mastered"
+              icon="🏆"
+              topics={mastered}
+              colorTheme="emerald"
+            />
+          </div>
+        </Card>
       )}
-    </>
+
+      {cs.length > 0 && (
+        <Card className="p-6 shadow-sm lg:w-1/3 shrink-0">
+          <div className="flex flex-col gap-1 mb-4">
+            <h3 className="font-semibold text-foreground text-lg">
+              CS Core Focus
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Fundamentals mastery.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {cs.map((topic) => (
+              <ProgressPill
+                key={topic.name}
+                topic={topic}
+                colorTheme={
+                  topic.mastery >= 80
+                    ? "emerald"
+                    : topic.mastery >= 40
+                    ? "amber"
+                    : "blue"
+                }
+              />
+            ))}
+          </div>
+        </Card>
+      )}
+    </motion.div>
   );
 }
+
