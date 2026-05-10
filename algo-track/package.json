@@ -11,7 +11,9 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@supabase/supabase-js": "^2.98.0",
+    "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "next": "latest",
@@ -19,10 +21,12 @@
     "react-dom": "^19.0.0",
     "recharts": "^3.8.0",
     "tailwind-merge": "^3.5.0",
+    "use-sound": "^5.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.14",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.14.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

@@ -15,8 +15,9 @@ import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import confetti from "canvas-confetti";
 
 export interface ReviewResult {
     card: Flashcard;
@@ -91,6 +92,7 @@ export function ReviewSession({
     timeLimitSeconds,
 }: ReviewSessionProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const [showAnswer, setShowAnswer] = useState(false);
     const [showAiPractice, setShowAiPractice] = useState(false);
     const [showFeynman, setShowFeynman] = useState(false);
@@ -119,6 +121,55 @@ export function ReviewSession({
         }
     }, [currentIndex, cards]);
 
+    const [cheatWarning, setCheatWarning] = useState(false);
+
+    const toggleFullscreen = async () => {
+        if (!isFullscreen) {
+            try {
+                await document.documentElement.requestFullscreen();
+                setIsFullscreen(true);
+            } catch (err) {
+                console.error("Failed to enter fullscreen", err);
+            }
+        } else {
+            if (confirm("Are you sure you want to exit Focus Mode?")) {
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                }
+                setIsFullscreen(false);
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (isFullscreen) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            const fixedContainer = document.querySelector('.fixed.inset-0.overflow-y-auto');
+            if (fixedContainer) fixedContainer.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        const handleFullscreenChange = () => {
+            if (!document.fullscreenElement && isFullscreen) {
+                setIsFullscreen(false);
+            }
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.hidden && document.fullscreenElement) {
+                alert("Warning: You switched tabs or minimized the browser during Focus Mode! Stay focused on your review.");
+                setCheatWarning(true);
+            }
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [isFullscreen]);
+
     const currentCard = cards[currentIndex];
     const progress = (currentIndex / cards.length) * 100;
     const isReverse = mode === "reverse";
@@ -126,9 +177,9 @@ export function ReviewSession({
     const isSprint = mode === "sprint";
     const hidePromptMeta = isReverse && !showAnswer;
     const solutionBlocks =
-        currentCard.solutions && currentCard.solutions.length > 0
+        currentCard?.solutions && currentCard.solutions.length > 0
             ? currentCard.solutions
-            : currentCard.solution
+            : currentCard?.solution
                 ? [{ name: "Solution", content: currentCard.solution }]
                 : [];
 
@@ -136,6 +187,17 @@ export function ReviewSession({
         (finalResults: ReviewResult[]) => {
             if (completedRef.current) return;
             completedRef.current = true;
+            
+            // Gamification: Confetti explosion!
+            if (finalResults.length > 0) {
+                confetti({
+                    particleCount: 150,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#00b8a3', '#ffc01e', '#ff375f', '#3b82f6']
+                });
+            }
+
             const durationMs = Date.now() - sessionStartTime.current;
             onComplete(finalResults, durationMs);
         },
@@ -254,7 +316,8 @@ export function ReviewSession({
     if (!currentCard) return null;
 
     return (
-        <div className="w-full max-w-3xl mx-auto p-4 md:p-8 flex flex-col gap-6">
+        <div className={`transition-all duration-300 ease-in-out w-full mx-auto p-4 md:p-8 flex flex-col gap-6 ${isFullscreen ? "fixed inset-0 z-50 bg-background/90 backdrop-blur-xl max-w-none overflow-y-auto" : "max-w-3xl"}`}>
+          <div className={`w-full mx-auto flex flex-col gap-6 ${isFullscreen ? "max-w-4xl my-auto" : ""}`}>
             {/* Progress bar */}
             <div className="flex items-center justify-between gap-4">
                 <div className="flex-1">
@@ -278,6 +341,15 @@ export function ReviewSession({
                     </span>
                 )}
                 <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleFullscreen}
+                        className="text-muted-foreground hover:text-foreground hover:bg-muted"
+                        title={isFullscreen ? "Exit Focus Mode" : "Enter Focus Mode"}
+                    >
+                        {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </Button>
                     <Button
                         variant="ghost"
                         size="sm"
@@ -306,7 +378,7 @@ export function ReviewSession({
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -30 }}
                     transition={{ duration: 0.25 }}
-                    className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden"
+                    className={`border border-border rounded-2xl shadow-sm overflow-hidden ${isFullscreen ? "bg-card/60 backdrop-blur-2xl shadow-2xl border-white/5" : "bg-card"}`}
                 >
                     {/* Card Header */}
                     <div className="p-6 border-b border-border">
@@ -745,6 +817,7 @@ export function ReviewSession({
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                 </div>
             )}
+          </div>
         </div>
     );
 }

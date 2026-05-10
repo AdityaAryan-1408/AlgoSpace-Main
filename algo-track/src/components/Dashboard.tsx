@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { fetchAnalytics, deleteCard } from "@/lib/client-api";
 import type { AnalyticsData } from "@/lib/client-api";
 import { exportAsJSON, exportAsCSV } from "@/lib/export";
+import { CommandPalette } from "./CommandPalette";
 
 const getIntervalDays = (card: Flashcard) => {
   let intervalDays = 0;
@@ -230,8 +231,16 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
         </div>
 
         {analyticsLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <div className="space-y-6 animate-pulse">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="h-24 bg-muted/60 rounded-xl border border-border/50"></div>
+              <div className="h-24 bg-muted/60 rounded-xl border border-border/50"></div>
+              <div className="h-24 bg-muted/60 rounded-xl border border-border/50"></div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="h-64 bg-muted/60 rounded-xl border border-border/50"></div>
+              <div className="h-64 bg-muted/60 rounded-xl border border-border/50"></div>
+            </div>
           </div>
         ) : analytics ? (
           <div className="space-y-6">
@@ -430,14 +439,17 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center py-16"
+          className="text-center py-20 px-4 rounded-3xl bg-gradient-to-b from-muted/50 to-background border border-border/50 relative overflow-hidden flex flex-col items-center"
         >
-          <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            No cards yet
+          <div className="absolute inset-0 bg-blue-500/5 blur-3xl rounded-full" />
+          <div className="w-16 h-16 rounded-2xl bg-card border border-border/50 shadow-sm flex items-center justify-center mb-6 relative z-10 transform rotate-3">
+            <BookOpen className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-xl font-bold text-foreground mb-2 relative z-10">
+            Your knowledge base is empty
           </h3>
-          <p className="text-muted-foreground text-sm">
-            Click &quot;Add Card&quot; in the navigation to create your first flashcard.
+          <p className="text-muted-foreground text-sm max-w-sm relative z-10">
+            Start building your mastery. Click &quot;Add Card&quot; in the navigation to create your first flashcard.
           </p>
         </motion.div>
       ) : (
@@ -680,6 +692,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
         </AnimatePresence>,
         document.body
       )}
+      <CommandPalette cards={cards} />
     </div>
   );
 }

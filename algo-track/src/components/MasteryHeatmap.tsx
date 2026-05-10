@@ -169,6 +169,21 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
     topics: TopicData[];
     colorTheme: "red" | "amber" | "emerald";
   }) => {
+    const container = {
+      hidden: { opacity: 0 },
+      show: {
+        opacity: 1,
+        transition: {
+          staggerChildren: 0.05
+        }
+      }
+    };
+
+    const item = {
+      hidden: { opacity: 0, scale: 0.9, y: 5 },
+      show: { opacity: 1, scale: 1, y: 0 }
+    };
+
     if (topics.length === 0) return null;
     return (
       <motion.div 
@@ -184,11 +199,18 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
             ({topics.length})
           </span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <motion.div 
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="flex flex-wrap gap-2"
+        >
           {topics.map((topic) => (
-            <ProgressPill key={topic.name} topic={topic} colorTheme={colorTheme} />
+            <motion.div key={topic.name} variants={item}>
+              <ProgressPill topic={topic} colorTheme={colorTheme} />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </motion.div>
     );
   };
