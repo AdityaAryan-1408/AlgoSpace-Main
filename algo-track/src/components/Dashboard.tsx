@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard, CardType } from "@/data";
-import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause, Play, Timer, Code, BookOpen } from "lucide-react";
+import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause, Play, Timer, Code, BookOpen, LayoutGrid, List } from "lucide-react";
 import { isCardPaused } from "@/lib/card-utils";
 import { fetchGlobalPauseStatus, resumeAllReviews } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
@@ -20,6 +20,66 @@ import { motion, AnimatePresence } from "motion/react";
 import { fetchAnalytics, deleteCard } from "@/lib/client-api";
 import type { AnalyticsData } from "@/lib/client-api";
 import { exportAsJSON, exportAsCSV } from "@/lib/export";
+
+const getIntervalDays = (card: Flashcard) => {
+  let intervalDays = 0;
+  if (card.lastReview && card.nextReview) {
+    const last = new Date(card.lastReview).getTime();
+    const next = new Date(card.nextReview).getTime();
+    if (!isNaN(last) && !isNaN(next)) {
+      intervalDays = Math.max(0, (next - last) / (1000 * 3600 * 24));
+    }
+  } else if (card.history.good > 0) {
+    intervalDays = card.history.good * 2;
+  }
+  return intervalDays;
+};
+
+const HealthRing = ({ interval }: { interval: number }) => {
+  const target = 21;
+  const ratio = Math.min(1, Math.max(0, interval / target));
+  const percentage = Math.round(ratio * 100);
+  
+  let color = "text-red-500";
+  if (percentage >= 80) color = "text-emerald-500";
+  else if (percentage >= 40) color = "text-amber-500";
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative w-7 h-7 flex items-center justify-center shrink-0">
+        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+          <path
+            className="text-muted/30"
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className={color}
+            strokeDasharray={`${percentage}, 100`}
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+      <div className="flex flex-col justify-center">
+        <span className="text-sm font-semibold text-foreground leading-none">{percentage}%</span>
+        <span className="text-[9px] text-muted-foreground uppercase tracking-wider leading-none mt-1">Mastery</span>
+      </div>
+    </div>
+  );
+};
+
+const getDifficultyColor = (diff: string) => {
+  if (diff === "easy") return "bg-[#00b8a3]/10 text-[#00b8a3] border-[#00b8a3]/20";
+  if (diff === "medium") return "bg-[#ffc01e]/10 text-[#ffc01e] border-[#ffc01e]/20";
+  if (diff === "hard") return "bg-[#ff375f]/10 text-[#ff375f] border-[#ff375f]/20";
+  return "bg-muted text-muted-foreground border-border";
+};
 
 interface DashboardProps {
   cards: Flashcard[];
@@ -39,6 +99,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
   const [pauseStatus, setPauseStatus] = useState<GlobalPauseStatus | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [typeTab, setTypeTab] = useState<"all" | CardType>("all");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const pausedCount = cards.filter(c => isCardPaused(c)).length;
 
@@ -275,12 +336,35 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
 
       {/* Search, Filter & Export */}
       {cards.length > 0 && (
-        <div className="flex items-start justify-between gap-4 mb-2">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
+          <div className="flex-1 w-full">
             <SearchFilter cards={typeFilteredCards} onFiltered={handleFiltered} />
           </div>
-          <div className="relative shrink-0 pt-0.5">
-            <Button
+          <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto pt-0.5">
+            <div className="flex items-center bg-muted/50 p-1 rounded-lg border">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded-md transition-all duration-200 ${
+                  viewMode === "table"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-md transition-all duration-200 ${
+                  viewMode === "grid"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="relative">
+              <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowExportMenu(!showExportMenu)}
@@ -301,11 +385,11 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
                   onClick={() => { exportAsCSV(cards); setShowExportMenu(false); }}
                   className="w-full text-left px-4 py-2 text-sm hover:bg-muted/50 cursor-pointer"
                 >
-                  CSV
                 </button>
               </div>
             )}
           </div>
+        </div>
         </div>
       )}
 
@@ -357,168 +441,186 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
           </p>
         </motion.div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="w-full">
           {filteredCards.length === 0 && cards.length > 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
               No cards match your filters.
             </div>
+          ) : viewMode === "grid" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-8">
+              <AnimatePresence>
+                {filteredCards.map((card, index) => (
+                  <motion.div
+                    key={card.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.02 }}
+                    onClick={() => setSelectedCard(card)}
+                    className="bg-card p-4 rounded-xl border border-border cursor-pointer hover:border-primary/50 hover:shadow-md transition-all flex flex-col gap-3 relative group"
+                  >
+                    <div className="absolute top-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
+                       <input type="checkbox" checked={selectedIds.has(card.id)} onChange={() => toggleSelect(card.id)} className="rounded border-border cursor-pointer" />
+                    </div>
+                    
+                    <div className="pr-6">
+                      <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2">{card.title}</h4>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 mt-auto">
+                       <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold border ${getDifficultyColor(card.difficulty)}`}>{card.difficulty}</span>
+                       {card.tags.slice(0, 2).map(t => <span key={t} className="px-1.5 py-0.5 bg-muted rounded text-[10px] text-muted-foreground truncate max-w-[80px]">{t}</span>)}
+                       {card.tags.length > 2 && <span className="text-[10px] text-muted-foreground">+{card.tags.length - 2}</span>}
+                    </div>
+                    
+                    <div className="text-[10px] text-muted-foreground flex items-center justify-between mt-1">
+                      {card.history.total > 0 ? (
+                        <span>{card.history.total} review{card.history.total !== 1 ? 's' : ''} • Last: {card.lastReview}</span>
+                      ) : (
+                        <span className="italic opacity-70">Not reviewed yet</span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-3 border-t mt-1">
+                      <HealthRing interval={getIntervalDays(card)} />
+                      <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                         {isCardPaused(card) ? (
+                           <Pause className="w-3.5 h-3.5" />
+                         ) : card.dueInDays <= 0 ? (
+                           <Clock className="w-3.5 h-3.5 text-medium" />
+                         ) : (
+                           <CheckCircle2 className="w-3.5 h-3.5 text-easy" />
+                         )}
+                         {isCardPaused(card) ? "Paused" : card.dueInDays <= 0 ? "Due Now" : `${card.dueInDays}d`}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           ) : (
-            <table className="w-full text-sm text-left border-collapse">
-              <thead className="text-xs text-muted-foreground uppercase tracking-wider bg-background border-b border-border">
-                <tr>
-                  <th className="px-2 py-4 w-8">
-                    <input
-                      type="checkbox"
-                      checked={filteredCards.length > 0 && selectedIds.size === filteredCards.length}
-                      onChange={toggleSelectAll}
-                      className="rounded border-border cursor-pointer"
-                    />
-                  </th>
-                  <th className="px-2 py-4 font-semibold w-8">#</th>
-                  <th className="px-4 py-4 font-semibold">Card</th>
-                  <th className="px-4 py-4 font-semibold">Difficulty</th>
-                  <th className="px-4 py-4 font-semibold">Review History</th>
-                  <th className="px-4 py-4 font-semibold">Next Review</th>
-                </tr>
-              </thead>
-              <tbody>
-                <AnimatePresence>
-                  {filteredCards.map((card, index) => (
-                    <motion.tr
-                      key={card.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.03, duration: 0.3 }}
-                      className="border-b border-border hover:bg-muted/40 transition-all duration-200 group cursor-pointer relative"
-                      onClick={() => setSelectedCard(card)}
-                    >
-                      <td className="px-2 py-5 align-top" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(card.id)}
-                          onChange={() => toggleSelect(card.id)}
-                          className="rounded border-border cursor-pointer"
-                        />
-                      </td>
-                      <td className="px-2 py-5 text-muted-foreground align-top transition-colors group-hover:text-foreground">
-                        {index + 1}
-                      </td>
-                      <td className="px-4 py-5 align-top">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground text-base group-hover:text-blue-500 transition-colors">
-                              {card.title}
-                            </span>
-                            {card.dueInDays === 0 && (
-                              <span className="w-2 h-2 rounded-full bg-medium animate-pulse" />
+            <div className="overflow-x-auto pb-8">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="text-xs text-muted-foreground uppercase tracking-wider bg-background border-b border-border">
+                  <tr>
+                    <th className="px-2 py-4 w-8">
+                      <input
+                        type="checkbox"
+                        checked={filteredCards.length > 0 && selectedIds.size === filteredCards.length}
+                        onChange={toggleSelectAll}
+                        className="rounded border-border cursor-pointer"
+                      />
+                    </th>
+                    <th className="px-2 py-4 font-semibold w-8">#</th>
+                    <th className="px-4 py-4 font-semibold">Card</th>
+                    <th className="px-4 py-4 font-semibold">Difficulty</th>
+                    <th className="px-4 py-4 font-semibold">Card Mastery</th>
+                    <th className="px-4 py-4 font-semibold">Next Review</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <AnimatePresence>
+                    {filteredCards.map((card, index) => (
+                      <motion.tr
+                        key={card.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.02, duration: 0.2 }}
+                        className="border-b border-border hover:bg-muted/40 transition-all duration-200 group cursor-pointer relative"
+                        onClick={() => setSelectedCard(card)}
+                      >
+                        <td className="px-2 py-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(card.id)}
+                            onChange={() => toggleSelect(card.id)}
+                            className="rounded border-border cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-2 py-4 text-muted-foreground align-middle transition-colors group-hover:text-foreground">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-4 align-middle">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground text-sm group-hover:text-primary transition-colors line-clamp-1">
+                                {card.title}
+                              </span>
+                              {card.dueInDays === 0 && (
+                                <span className="w-2 h-2 rounded-full bg-medium animate-pulse shrink-0" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {card.tags.slice(0, 3).map((tag) => (
+                                <Badge
+                                  key={tag}
+                                  variant="tag"
+                                  className="bg-muted text-muted-foreground border-transparent font-normal group-hover:bg-muted/80 transition-colors text-[10px] px-1.5 py-0"
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                              {card.tags.length > 3 && (
+                                <span className="text-[10px] text-muted-foreground">+{card.tags.length - 3}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 align-middle">
+                          <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getDifficultyColor(card.difficulty)}`}>
+                            {card.difficulty}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 align-middle">
+                          <div className="flex flex-col gap-2">
+                            <HealthRing interval={getIntervalDays(card)} />
+                            {card.history.total > 0 ? (
+                              <div className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                {card.history.total} review{card.history.total !== 1 ? 's' : ''} • Last: {card.lastReview}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-muted-foreground italic opacity-70 whitespace-nowrap">
+                                Not reviewed yet
+                              </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-                              {card.type === "leetcode" ? "DSA" : "CS Core"}
-                            </span>
-                            {card.tags.map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant="tag"
-                                className="bg-transparent border-tag/30 text-tag font-normal group-hover:bg-tag/5 transition-colors"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                          {card.metadata?.reviewNote && (
-                            <div className="text-xs text-muted-foreground mt-0.5 bg-muted/40 p-1.5 rounded-md border border-border/50 max-w-[300px] truncate" title={card.metadata.reviewNote as string}>
-                              💡 {card.metadata.reviewNote as string}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-5 align-top">
-                        <Badge
-                          variant={card.difficulty}
-                          className="capitalize bg-transparent border-current text-current group-hover:bg-current/5 transition-colors"
-                        >
-                          {card.difficulty}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-5 align-top">
-                        <div className="flex flex-col gap-1.5">
-                          {card.history.total > 0 ? (
-                            <>
-                              <div className="flex items-center gap-2 text-sm">
-                                <span className="text-muted-foreground">
-                                  Last: {card.lastReview}
-                                </span>
-                                <span
-                                  className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${card.lastRating === "EASY"
-                                    ? "text-easy bg-easy/10"
-                                    : card.lastRating === "HARD"
-                                      ? "text-hard bg-hard/10"
-                                      : card.lastRating === "AGAIN"
-                                        ? "text-red-500 bg-red-500/10"
-                                        : "text-blue-500 bg-blue-500/10"
+                        </td>
+                        <td className="px-4 py-4 align-middle">
+                          <div className="flex flex-col gap-1">
+                            {isCardPaused(card) ? (
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Pause className="w-4 h-4" />
+                                <span className="font-medium text-sm">Paused</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div
+                                  className={`flex items-center gap-1.5 ${card.dueInDays <= 0 ? "text-medium" : "text-easy"
                                     }`}
                                 >
-                                  {card.lastRating}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>
-                                  {card.history.good} good • {card.history.total}{" "}
-                                  total
-                                </span>
-                                <span className="font-semibold text-foreground">
-                                  {Math.round(
-                                    (card.history.good / card.history.total) * 100,
+                                  {card.dueInDays <= 0 ? (
+                                    <Clock className="w-4 h-4" />
+                                  ) : (
+                                    <CheckCircle2 className="w-4 h-4" />
                                   )}
-                                  %
+                                  <span className="font-medium text-sm">
+                                    {card.dueInDays <= 0
+                                      ? "Due now"
+                                      : `Due in ${card.dueInDays}d`}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {card.nextReview}
                                 </span>
-                              </div>
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">
-                              Not reviewed yet
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-5 align-top">
-                        <div className="flex flex-col gap-1">
-                          {isCardPaused(card) ? (
-                            <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <Pause className="w-4 h-4" />
-                              <span className="font-medium text-sm">Paused</span>
-                            </div>
-                          ) : (
-                            <>
-                              <div
-                                className={`flex items-center gap-1.5 ${card.dueInDays <= 0 ? "text-medium" : "text-easy"
-                                  }`}
-                              >
-                                {card.dueInDays <= 0 ? (
-                                  <Clock className="w-4 h-4" />
-                                ) : (
-                                  <CheckCircle2 className="w-4 h-4" />
-                                )}
-                                <span className="font-medium text-sm">
-                                  {card.dueInDays <= 0
-                                    ? "Due now"
-                                    : `Due in ${card.dueInDays} day${card.dueInDays !== 1 ? "s" : ""}`}
-                                </span>
-                              </div>
-                              <span className="text-sm text-muted-foreground">
-                                {card.nextReview}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </AnimatePresence>
-              </tbody>
-            </table>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

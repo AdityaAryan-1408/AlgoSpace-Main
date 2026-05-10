@@ -1107,38 +1107,53 @@ export async function getTopicMastery(userId: string) {
 
   const { data, error } = await supabase
     .from("cards")
-    .select("tags, easiness_factor, repetition_count, last_rating")
+    .select("tags, interval_days, difficulty, repetition_count")
     .eq("user_id", userId);
 
   if (error) throw new Error(error.message);
 
   const tagStats = new Map<
     string,
-    { totalEf: number; count: number; reviewed: number }
+    { earned: number; maxPoints: number; count: number }
   >();
+
+  const TARGET_INTERVAL_DAYS = 21;
+  const MIN_MASTERY_THRESHOLD = 5;
+
+  function getDifficultyWeight(diff: string) {
+    if (diff === "hard") return 3;
+    if (diff === "medium") return 2;
+    return 1;
+  }
 
   for (const row of data ?? []) {
     const tags = (row.tags as string[] | null) ?? [];
-    const ef = Number(row.easiness_factor) || 2.5;
-    const reviewed = (row.repetition_count as number) > 0 ? 1 : 0;
+    const intervalDays = (row.interval_days as number) || 0;
+    const diff = (row.difficulty as string) || "medium";
+    
+    const weight = getDifficultyWeight(diff);
+    // If it hasn't been reviewed, interval is 0, retention is 0
+    const retentionRatio = Math.min(1.0, Math.max(0, intervalDays / TARGET_INTERVAL_DAYS));
 
     for (const tag of tags) {
       if (/^(Time|Space):/i.test(tag)) continue;
-      const existing = tagStats.get(tag) ?? { totalEf: 0, count: 0, reviewed: 0 };
-      existing.totalEf += ef;
+      const existing = tagStats.get(tag) ?? { earned: 0, maxPoints: 0, count: 0 };
+      existing.earned += weight * retentionRatio;
+      existing.maxPoints += weight;
       existing.count += 1;
-      existing.reviewed += reviewed;
       tagStats.set(tag, existing);
     }
   }
 
-  // Normalize EF (1.3 – 2.5+) to 0–100 mastery score
   return Array.from(tagStats.entries())
-    .map(([topic, { totalEf, count, reviewed }]) => {
-      const avgEf = totalEf / count;
-      // EF ranges from 1.3 (hard) to ~4.0 (easy). Map to 0-100.
-      const mastery = Math.min(100, Math.max(0, Math.round(((avgEf - 1.3) / 1.7) * 100)));
-      return { topic, mastery, cardCount: count, reviewedCount: reviewed };
+    .map(([topic, stats]) => {
+      const denominator = Math.max(MIN_MASTERY_THRESHOLD, stats.maxPoints);
+      const mastery = Math.round((stats.earned / denominator) * 100);
+      return { 
+        topic, 
+        mastery: Math.min(100, mastery), 
+        cardCount: stats.count
+      };
     })
     .sort((a, b) => b.cardCount - a.cardCount);
 }
