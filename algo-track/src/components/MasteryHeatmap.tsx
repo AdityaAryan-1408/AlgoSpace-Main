@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/Card";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import type { Flashcard } from "@/data";
 
 interface MasteryHeatmapProps {
@@ -24,6 +24,8 @@ function getDifficultyWeight(diff: "easy" | "medium" | "hard") {
 }
 
 export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
+  const [activeTab, setActiveTab] = useState<"dsa" | "cs">("dsa");
+
   const { patterns, cs } = useMemo(() => {
     const patternCards = cards.filter((c) => c.type === "leetcode");
     const csCards = cards.filter((c) => c.type === "cs");
@@ -96,9 +98,10 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
 
   if (cards.length === 0) return null;
 
-  const targetAreas = patterns.filter((p) => p.mastery < 40);
-  const inProgress = patterns.filter((p) => p.mastery >= 40 && p.mastery < 80);
-  const mastered = patterns.filter((p) => p.mastery >= 80);
+  const activeData = activeTab === "dsa" ? patterns : cs;
+  const targetAreas = activeData.filter((p) => p.mastery < 40);
+  const inProgress = activeData.filter((p) => p.mastery >= 40 && p.mastery < 80);
+  const mastered = activeData.filter((p) => p.mastery >= 80);
 
   const ProgressPill = ({
     topic,
@@ -140,14 +143,12 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
       <div
         className={`relative overflow-hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium ${theme.bg} ${theme.border} ${theme.text}`}
       >
-        {/* Background Progress Bar */}
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${topic.mastery}%` }}
           transition={{ duration: 1, ease: "easeOut" }}
           className={`absolute left-0 top-0 bottom-0 ${theme.fill} z-0`}
         />
-        {/* Content */}
         <span className="relative z-10">{topic.name}</span>
         <span className="relative z-10 opacity-50">|</span>
         <span className="relative z-10 font-mono opacity-90">
@@ -170,7 +171,12 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
   }) => {
     if (topics.length === 0) return null;
     return (
-      <div className="flex flex-col gap-2">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="flex flex-col gap-2"
+      >
         <div className="flex items-center gap-2 text-sm">
           <span>{icon}</span>
           <span className="font-medium text-foreground">{title}</span>
@@ -183,7 +189,7 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
             <ProgressPill key={topic.name} topic={topic} colorTheme={colorTheme} />
           ))}
         </div>
-      </div>
+      </motion.div>
     );
   };
 
@@ -192,70 +198,83 @@ export function MasteryHeatmap({ cards }: MasteryHeatmapProps) {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="flex flex-col lg:flex-row gap-6 mb-8"
+      className="mb-8"
     >
-      {patterns.length > 0 && (
-        <Card className="p-6 shadow-sm flex-1">
-          <div className="flex flex-col gap-1 mb-4">
+      <Card className="p-6 shadow-sm w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex flex-col gap-1">
             <h3 className="font-semibold text-foreground text-lg">
-              DSA Patterns Focus
+              {activeTab === "dsa" ? "DSA Patterns Focus" : "CS Core Focus"}
             </h3>
             <p className="text-xs text-muted-foreground">
               Prioritized by repetition interval & difficulty.
             </p>
           </div>
 
-          <div className="flex flex-col gap-5">
-            <TopicSection
-              title="Target Areas"
-              icon="🎯"
-              topics={targetAreas}
-              colorTheme="red"
-            />
-            <TopicSection
-              title="In Progress"
-              icon="📈"
-              topics={inProgress}
-              colorTheme="amber"
-            />
-            <TopicSection
-              title="Mastered"
-              icon="🏆"
-              topics={mastered}
-              colorTheme="emerald"
-            />
+          <div className="flex items-center bg-muted/50 p-1 rounded-lg border self-start sm:self-auto shrink-0">
+            <button
+              onClick={() => setActiveTab("dsa")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                activeTab === "dsa"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              DSA Patterns
+            </button>
+            <button
+              onClick={() => setActiveTab("cs")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                activeTab === "cs"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              CS Core
+            </button>
           </div>
-        </Card>
-      )}
+        </div>
 
-      {cs.length > 0 && (
-        <Card className="p-6 shadow-sm lg:w-1/3 shrink-0">
-          <div className="flex flex-col gap-1 mb-4">
-            <h3 className="font-semibold text-foreground text-lg">
-              CS Core Focus
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Fundamentals mastery.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {cs.map((topic) => (
-              <ProgressPill
-                key={topic.name}
-                topic={topic}
-                colorTheme={
-                  topic.mastery >= 80
-                    ? "emerald"
-                    : topic.mastery >= 40
-                    ? "amber"
-                    : "blue"
-                }
-              />
-            ))}
-          </div>
-        </Card>
-      )}
+        <div className="flex flex-col gap-6 min-h-[150px]">
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={activeTab}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-col gap-5"
+            >
+              {activeData.length === 0 ? (
+                <div className="text-sm text-muted-foreground italic py-4">
+                  No topics available in this category yet.
+                </div>
+              ) : (
+                <>
+                  <TopicSection
+                    title="Target Areas"
+                    icon="🎯"
+                    topics={targetAreas}
+                    colorTheme="red"
+                  />
+                  <TopicSection
+                    title="In Progress"
+                    icon="📈"
+                    topics={inProgress}
+                    colorTheme="amber"
+                  />
+                  <TopicSection
+                    title="Mastered"
+                    icon="🏆"
+                    topics={mastered}
+                    colorTheme="emerald"
+                  />
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </Card>
     </motion.div>
   );
 }
