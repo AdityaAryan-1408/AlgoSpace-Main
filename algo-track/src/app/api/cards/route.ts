@@ -11,7 +11,7 @@ import {
   withUser,
 } from "@/lib/api";
 
-const allowedTypes = new Set(["leetcode", "cs"]);
+const allowedTypes = new Set(["leetcode", "cs", "sql"]);
 const allowedDifficulties = new Set(["easy", "medium", "hard"]);
 
 function toSolutions(value: unknown) {
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     if (!allowedTypes.has(body?.type)) {
-      throw new ApiError("type must be either 'leetcode' or 'cs'.");
+      throw new ApiError("type must be 'leetcode', 'cs', or 'sql'.");
     }
     if (!allowedDifficulties.has(body?.difficulty)) {
       throw new ApiError("difficulty must be one of: easy, medium, hard.");
