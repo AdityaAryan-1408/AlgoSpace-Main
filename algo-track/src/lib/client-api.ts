@@ -1,4 +1,4 @@
-import type { Flashcard, CardSolution, RelatedProblem } from "@/data";
+import type { Flashcard, CardSolution, RelatedProblem, CardType } from "@/data";
 import type {
     CoachContext,
     RecoveryModePlan,
@@ -34,7 +34,7 @@ export async function fetchDueCards(): Promise<Flashcard[]> {
 }
 
 export async function createCard(input: {
-    type: "leetcode" | "cs";
+    type: CardType;
     title: string;
     description: string;
     difficulty: "easy" | "medium" | "hard";

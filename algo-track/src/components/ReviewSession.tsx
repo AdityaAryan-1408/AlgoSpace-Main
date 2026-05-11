@@ -420,7 +420,7 @@ export function ReviewSession({
                                     {currentCard.difficulty}
                                 </Badge>
                                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                                    {currentCard.type === "leetcode" ? "DSA" : "CS Core"}
+                                    {currentCard.type === "leetcode" ? "DSA" : currentCard.type === "sql" ? "SQL" : "CS Core"}
                                 </span>
                                 {currentCard.timeComplexity && (
                                     <Badge
@@ -628,7 +628,7 @@ export function ReviewSession({
                                                 <Mic className="w-4 h-4" />
                                                 Feynman Mode
                                             </Button>
-                                            {currentCard.type === "leetcode" && (
+                                            {(currentCard.type === "leetcode" || currentCard.type === "sql") && (
                                                 <Button
                                                     onClick={() => setShowDryRun(true)}
                                                     variant="ghost"
@@ -646,7 +646,7 @@ export function ReviewSession({
                                                 <MessageSquare className="w-4 h-4" />
                                                 Vague Interviewer
                                             </Button>
-                                            {currentCard.type === "leetcode" && (currentCard.solution || (currentCard.solutions && currentCard.solutions.length > 0)) && (
+                                            {(currentCard.type === "leetcode" || currentCard.type === "sql") && (currentCard.solution || (currentCard.solutions && currentCard.solutions.length > 0)) && (
                                                 <Button
                                                     onClick={() => setShowSpotTheBug(true)}
                                                     variant="ghost"
@@ -769,7 +769,7 @@ export function ReviewSession({
                                     ) : (
                                         <div className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-xl border border-border mt-4">
                                             {/* Similar Questions (after successful review) */}
-                                            {currentCard.type === "leetcode" && (pendingRating === "GOOD" || pendingRating === "EASY") && allCards && (
+                                            {(currentCard.type === "leetcode" || currentCard.type === "sql") && (pendingRating === "GOOD" || pendingRating === "EASY") && allCards && (
                                                 <div className="w-full">
                                                     <SimilarQuestions
                                                         card={currentCard}

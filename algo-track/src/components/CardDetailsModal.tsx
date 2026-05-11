@@ -160,7 +160,7 @@ export function CardDetailsModal({
                   {card.difficulty}
                 </Badge>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                  {card.type === "leetcode" ? "DSA" : "CS Core"}
+                  {card.type === "leetcode" ? "DSA" : card.type === "sql" ? "SQL" : "CS Core"}
                 </span>
                 {card.timeComplexity && (
                   <Badge variant="tag" className="bg-transparent border-tag/30 text-tag">
@@ -460,7 +460,7 @@ export function CardDetailsModal({
           )}
 
           {/* Code Evolution */}
-          {card.type === "leetcode" && (
+          {(card.type === "leetcode" || card.type === "sql") && (
             <CodeEvolution cardId={card.id} cardTitle={card.title} />
           )}
 

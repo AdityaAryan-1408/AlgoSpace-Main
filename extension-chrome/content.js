@@ -68,7 +68,13 @@ function scrapeData() {
     const tags = scrapeTags();
 
     console.log("[AlgoTrack] Scraped:", { title, url, difficulty, tags });
-    return { title, url, difficulty, tags };
+
+    // Auto-detect SQL problems by checking for "Database" tag
+    const SQL_TAGS = ["Database", "database"];
+    const isSql = tags.some((t) => SQL_TAGS.includes(t));
+    const type = isSql ? "sql" : "leetcode";
+
+    return { title, url, difficulty, tags, type };
 }
 
 function scrapeTitle() {
@@ -139,6 +145,7 @@ function showPrompt(data) {
         <p class="algotrack-problem-name">${escapeHtml(data.title)}</p>
         <p class="algotrack-difficulty ${data.difficulty}">${capitalize(data.difficulty)}</p>
         ${data.tags.length > 0 ? `<p class="algotrack-tags">${data.tags.map((t) => `<span class="algotrack-tag">${escapeHtml(t)}</span>`).join("")}</p>` : ""}
+        <p class="algotrack-difficulty ${data.type === 'sql' ? 'medium' : ''}" style="font-size:10px;opacity:0.7;margin-top:2px;">${data.type === 'sql' ? '📊 SQL Query' : '💻 DSA Problem'}</p>
         <p class="algotrack-question">Log to AlgoTrack?</p>
       </div>
       <div class="algotrack-actions">
@@ -164,6 +171,7 @@ function showPrompt(data) {
             url: data.url,
             difficulty: data.difficulty,
             tags: data.tags.join(","),
+            type: data.type,
         });
 
         const targetUrl = `${ALGOTRACK_BASE_URL}/add?${params.toString()}`;

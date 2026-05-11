@@ -112,6 +112,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
   }, [cards, typeTab]);
 
   const dsaCount = useMemo(() => cards.filter(c => c.type === "leetcode").length, [cards]);
+  const sqlCount = useMemo(() => cards.filter(c => c.type === "sql").length, [cards]);
   const csCount = useMemo(() => cards.filter(c => c.type === "cs").length, [cards]);
 
   const handleFiltered = useCallback((filtered: Flashcard[]) => {
@@ -328,6 +329,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
             {([
               { key: "all" as const, label: "All Cards", icon: null, count: cards.length },
               { key: "leetcode" as const, label: "DSA", icon: <Code className="w-3.5 h-3.5" />, count: dsaCount },
+              { key: "sql" as const, label: "SQL", icon: <Code className="w-3.5 h-3.5" />, count: sqlCount },
               { key: "cs" as const, label: "CS Core", icon: <BookOpen className="w-3.5 h-3.5" />, count: csCount },
             ]).map(tab => (
               <button

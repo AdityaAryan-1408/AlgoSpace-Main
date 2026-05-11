@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { X, Code, BookOpen } from "lucide-react";
+import { X, Code, BookOpen, Database } from "lucide-react";
 import { motion } from "motion/react";
 import { AddCardForm } from "@/components/AddCardForm";
 import type { CardType } from "@/data";
@@ -46,7 +46,9 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
                                 ? "Add New Card"
                                 : cardType === "leetcode"
                                     ? "New DSA Problem"
-                                    : "New Core Concept"}
+                                    : cardType === "sql"
+                                        ? "New SQL Query"
+                                        : "New Core Concept"}
                         </h2>
                         <p className="text-sm text-muted-foreground mt-1">
                             {step === "choose"
@@ -67,7 +69,7 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-6">
                     {step === "choose" ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
@@ -82,6 +84,23 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
                                 </span>
                                 <span className="text-sm text-muted-foreground text-center">
                                     LeetCode, HackerRank, or any coding problem
+                                </span>
+                            </motion.button>
+
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => handleTypeSelect("sql")}
+                                className="p-6 rounded-xl border-2 border-border hover:border-orange-500 bg-card transition-all flex flex-col items-center gap-3 cursor-pointer group"
+                            >
+                                <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+                                    <Database className="w-6 h-6 text-orange-500" />
+                                </div>
+                                <span className="font-semibold text-foreground text-lg">
+                                    SQL Query
+                                </span>
+                                <span className="text-sm text-muted-foreground text-center">
+                                    SQL problems from LeetCode, HackerRank, etc.
                                 </span>
                             </motion.button>
 

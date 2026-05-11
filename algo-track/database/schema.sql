@@ -24,7 +24,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'card_type') THEN
-    CREATE TYPE card_type AS ENUM ('leetcode', 'cs');
+    CREATE TYPE card_type AS ENUM ('leetcode', 'cs', 'sql');
   END IF;
 END
 $$;

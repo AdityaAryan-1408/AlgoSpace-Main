@@ -89,7 +89,7 @@ interface Props {
 }
 
 export function CodePractice({ card, onRate, onCancel }: Props) {
-    const isDSA = card.type === "leetcode";
+    const isDSA = card.type === "leetcode" || card.type === "sql";
     const [code, setCode] = useState("");
     const [language, setLanguage] = useState("cpp");
     const [strictMode, setStrictMode] = useState(false);

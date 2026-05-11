@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import type { Flashcard } from "@/data";
-import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2 } from "lucide-react";
+import type { Flashcard, CardType } from "@/data";
+import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2, Code, Database, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { rescheduleReviews } from "@/lib/client-api";
 
@@ -10,9 +10,17 @@ interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
   onClose: () => void;
-  onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number) => void;
+  onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, typeFilter?: CardType) => void;
   onRescheduled?: () => void;
 }
+
+type TabKey = "all" | CardType;
+
+const TAB_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  leetcode: { label: "DSA", icon: <Code className="w-3.5 h-3.5" />, color: "text-blue-500" },
+  sql: { label: "SQL", icon: <Database className="w-3.5 h-3.5" />, color: "text-orange-500" },
+  cs: { label: "Concepts", icon: <BookOpen className="w-3.5 h-3.5" />, color: "text-emerald-500" },
+};
 
 export function ReviewModal({
   dueCards,
@@ -26,6 +34,29 @@ export function ReviewModal({
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [numberSelectMode, setNumberSelectMode] = useState<"random-quiz" | "reverse" | null>(null);
 
+  // Compute counts per type
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { leetcode: 0, sql: 0, cs: 0 };
+    for (const card of dueCards) {
+      if (counts[card.type] !== undefined) counts[card.type]++;
+    }
+    return counts;
+  }, [dueCards]);
+
+  // Determine which types have due cards to show tabs
+  const availableTypes = useMemo(() => {
+    return (["leetcode", "sql", "cs"] as CardType[]).filter(t => typeCounts[t] > 0);
+  }, [typeCounts]);
+
+  // Active tab — default to the type with the most due cards, or first available
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (availableTypes.length === 0) return "all";
+    // Default to the type with the most due cards
+    return availableTypes.reduce((best, t) =>
+      typeCounts[t] > typeCounts[best] ? t : best
+    , availableTypes[0]);
+  });
+
   const handleReschedule = async (days: number) => {
     setIsRescheduling(true);
     try {
@@ -37,6 +68,7 @@ export function ReviewModal({
     }
   };
 
+  // Filter and sort cards for the active tab
   const queuedCards = useMemo(() => {
     const ratingPriority: Record<Flashcard["lastRating"], number> = {
       AGAIN: 0,
@@ -50,7 +82,11 @@ export function ReviewModal({
       easy: 2,
     };
 
-    return [...dueCards].sort((a, b) => {
+    const filtered = activeTab === "all"
+      ? dueCards
+      : dueCards.filter(c => c.type === activeTab);
+
+    return [...filtered].sort((a, b) => {
       const ratingDiff =
         ratingPriority[a.lastRating] - ratingPriority[b.lastRating];
       if (ratingDiff !== 0) return ratingDiff;
@@ -61,9 +97,15 @@ export function ReviewModal({
 
       return a.title.localeCompare(b.title);
     });
-  }, [dueCards]);
+  }, [dueCards, activeTab]);
 
   const displayCards = queuedCards.slice(0, 5);
+
+  // When starting, pass the type filter if a specific tab is active
+  const handleStart = (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number) => {
+    const typeFilter = activeTab !== "all" ? (activeTab as CardType) : undefined;
+    onStart(mode, count, typeFilter);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -86,20 +128,67 @@ export function ReviewModal({
           </p>
         </div>
 
+        {/* Tabs — show only when there are due cards and multiple types, and not in number select mode */}
+        {!numberSelectMode && dueCards.length > 0 && availableTypes.length > 0 && (
+          <div className="px-6 md:px-8 pt-4">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border w-fit">
+              {availableTypes.length > 1 && (
+                <button
+                  onClick={() => setActiveTab("all")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    activeTab === "all"
+                      ? "bg-background text-foreground shadow-sm border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  All
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    activeTab === "all" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {dueCards.length}
+                  </span>
+                </button>
+              )}
+              {availableTypes.map(type => {
+                const config = TAB_CONFIG[type];
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setActiveTab(type)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                      activeTab === type
+                        ? "bg-background text-foreground shadow-sm border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {config.icon}
+                    {config.label}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === type ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    }`}>
+                      {typeCounts[type]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {numberSelectMode ? (
           <div className="flex-1 p-6 md:p-8 flex flex-col items-center justify-center gap-4">
             <div className="flex gap-4">
               <Button 
                 variant="outline" 
                 className="w-24 h-24 text-2xl rounded-2xl flex flex-col gap-2 hover:border-foreground hover:bg-muted/50"
-                onClick={() => { onStart(numberSelectMode, 5); setNumberSelectMode(null); }}
+                onClick={() => { handleStart(numberSelectMode, 5); setNumberSelectMode(null); }}
               >
                 <span>5</span>
               </Button>
               <Button 
                 variant="outline" 
                 className="w-24 h-24 text-2xl rounded-2xl flex flex-col gap-2 hover:border-foreground hover:bg-muted/50"
-                onClick={() => { onStart(numberSelectMode, 10); setNumberSelectMode(null); }}
+                onClick={() => { handleStart(numberSelectMode, 10); setNumberSelectMode(null); }}
               >
                 <span>10</span>
               </Button>
@@ -125,9 +214,18 @@ export function ReviewModal({
                     }`}
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <span className="font-medium text-foreground text-sm leading-tight">
-                      {card.title}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground text-sm leading-tight">
+                        {card.title}
+                      </span>
+                      {activeTab === "all" && (
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                          card.type === "leetcode" ? "text-blue-500" : card.type === "sql" ? "text-orange-500" : "text-emerald-500"
+                        }`}>
+                          {card.type === "leetcode" ? "DSA" : card.type === "sql" ? "SQL" : "CS"}
+                        </span>
+                      )}
+                    </div>
                     <Badge
                       variant={card.difficulty}
                       className="capitalize bg-transparent border-current text-current shrink-0"
@@ -244,7 +342,7 @@ export function ReviewModal({
                         Reverse
                       </button>
                       <button
-                        onClick={() => { onStart("sprint"); setShowOptions(false); }}
+                        onClick={() => { handleStart("sprint"); setShowOptions(false); }}
                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
                       >
                         <Timer className="w-4 h-4" />
@@ -264,16 +362,16 @@ export function ReviewModal({
               </div>
             )}
 
-            {!numberSelectMode && dueCards.length > 0 && (
+            {!numberSelectMode && queuedCards.length > 0 && (
               <Button
-                onClick={() => onStart("standard")}
+                onClick={() => handleStart("standard")}
                 className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-6"
               >
                 <Play className="w-4 h-4 fill-current" />
-                Start session
+                Start session{activeTab !== "all" ? ` (${queuedCards.length})` : ""}
               </Button>
             )}
-            
+
             {!numberSelectMode && dueCards.length === 0 && (
                <Button
                 variant="outline"

@@ -26,7 +26,7 @@ import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileD
 import { AnimatePresence, motion } from "motion/react";
 import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
-import type { Flashcard } from "@/data";
+import type { Flashcard, CardType } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
@@ -264,14 +264,16 @@ export default function HomePage() {
     }, CACHE_TTL_MS);
   };
 
-  const handleStartReview = async (mode: ReviewMode = "standard", count?: number) => {
+  const handleStartReview = async (mode: ReviewMode = "standard", count?: number, typeFilter?: CardType) => {
     setShowReviewModal(false);
     try {
       const modeCount = count || 5;
 
       if (mode === "random-quiz") {
-        if (cards.length === 0) return;
-        const shuffled = [...cards].sort(() => 0.5 - Math.random());
+        let pool = cards;
+        if (typeFilter) pool = pool.filter(c => c.type === typeFilter);
+        if (pool.length === 0) return;
+        const shuffled = [...pool].sort(() => 0.5 - Math.random());
         setReviewSessionCards(shuffled.slice(0, modeCount));
         setReviewSessionConfig({ mode: "random-quiz" });
         setView("review-session");
@@ -279,11 +281,14 @@ export default function HomePage() {
       }
 
       if (mode === "sprint") {
-        if (cards.length === 0) return;
+        let pool = cards;
+        if (typeFilter) pool = pool.filter(c => c.type === typeFilter);
+        if (pool.length === 0) return;
         let sprintCards = [];
-        const due = await fetchDueCards();
+        let due = await fetchDueCards();
+        if (typeFilter) due = due.filter(c => c.type === typeFilter);
         if (due.length === 0) {
-          const shuffled = [...cards].sort(() => 0.5 - Math.random());
+          const shuffled = [...pool].sort(() => 0.5 - Math.random());
           sprintCards = shuffled.slice(0, 5); // 5 random questions for a empty sprint
         } else {
           sprintCards = prioritizeDueCards(due);
@@ -295,11 +300,14 @@ export default function HomePage() {
       }
 
       if (mode === "reverse") {
-        if (cards.length === 0) return;
+        let pool = cards;
+        if (typeFilter) pool = pool.filter(c => c.type === typeFilter);
+        if (pool.length === 0) return;
         let reverseCards = [];
-        const due = await fetchDueCards();
+        let due = await fetchDueCards();
+        if (typeFilter) due = due.filter(c => c.type === typeFilter);
         if (due.length === 0) {
-          const shuffled = [...cards].sort(() => 0.5 - Math.random());
+          const shuffled = [...pool].sort(() => 0.5 - Math.random());
           reverseCards = shuffled.slice(0, modeCount);
         } else {
           reverseCards = prioritizeDueCards(due).slice(0, Math.min(modeCount, due.length));
@@ -310,7 +318,8 @@ export default function HomePage() {
         return;
       }
 
-      const due = await fetchDueCards();
+      let due = await fetchDueCards();
+      if (typeFilter) due = due.filter(c => c.type === typeFilter);
       if (due.length === 0) return;
 
       const prioritized = prioritizeDueCards(due);

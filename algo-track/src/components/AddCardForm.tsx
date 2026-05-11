@@ -39,6 +39,8 @@ export function AddCardForm({
     mode = "add",
     cardId,
 }: AddCardFormProps) {
+    // SQL cards share the same code-oriented form layout as DSA cards
+    const isCodeCard = cardType === "leetcode" || cardType === "sql";
     const [title, setTitle] = useState(defaults?.title ?? "");
     const [description, setDescription] = useState(defaults?.description ?? "");
     const [difficulty, setDifficulty] = useState<Difficulty>(
@@ -117,24 +119,24 @@ export function AddCardForm({
                 notes: notes.trim() || undefined,
                 richNotes: richNotes || undefined,
                 solution:
-                    cardType === "leetcode" && compiledSolutions[0]?.content
+                    isCodeCard && compiledSolutions[0]?.content
                         ? compiledSolutions[0].content
                         : undefined,
-                solutions: cardType === "leetcode" && compiledSolutions.length > 0 ? compiledSolutions : undefined,
+                solutions: isCodeCard && compiledSolutions.length > 0 ? compiledSolutions : undefined,
                 timeComplexity:
-                    cardType === "leetcode" && timeComplexity.trim()
+                    isCodeCard && timeComplexity.trim()
                         ? timeComplexity.trim()
                         : undefined,
                 spaceComplexity:
-                    cardType === "leetcode" && spaceComplexity.trim()
+                    isCodeCard && spaceComplexity.trim()
                         ? spaceComplexity.trim()
                         : undefined,
                 relatedProblems:
-                    cardType === "leetcode" && relatedProblems.length > 0
+                    isCodeCard && relatedProblems.length > 0
                         ? relatedProblems
                         : undefined,
                 url:
-                    cardType === "leetcode" && url.trim() ? url.trim() : undefined,
+                    isCodeCard && url.trim() ? url.trim() : undefined,
             };
 
             if (mode === "edit" && cardId) {
@@ -147,8 +149,8 @@ export function AddCardForm({
                 });
             }
 
-            // Fire-and-forget GitHub sync for DSA cards with solutions
-            if (cardType === "leetcode" && compiledSolutions.length > 0 && mode !== "edit") {
+            // Fire-and-forget GitHub sync for DSA/SQL cards with solutions
+            if (isCodeCard && compiledSolutions.length > 0 && mode !== "edit") {
                 setSyncStatus("syncing");
                 fetch("/api/github-sync", {
                     method: "POST",
@@ -199,13 +201,15 @@ export function AddCardForm({
                     placeholder={
                         cardType === "leetcode"
                             ? "e.g. Two Sum"
-                            : "e.g. ACID Properties"
+                            : cardType === "sql"
+                                ? "e.g. Combine Two Tables"
+                                : "e.g. ACID Properties"
                     }
                     className={inputCls}
                 />
             </div>
 
-            {cardType === "leetcode" && (
+            {isCodeCard && (
                 <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-foreground">
@@ -220,6 +224,7 @@ export function AddCardForm({
                             <option value="GeeksForGeeks">GeeksForGeeks</option>
                             <option value="Codeforces">Codeforces</option>
                             <option value="CodeChef">CodeChef</option>
+                            <option value="HackerRank">HackerRank</option>
                             <option value="Other">Other</option>
                         </select>
                     </div>
@@ -248,7 +253,9 @@ export function AddCardForm({
                     placeholder={
                         cardType === "leetcode"
                             ? "Problem statement..."
-                            : "Concept explanation..."
+                            : cardType === "sql"
+                                ? "SQL problem statement..."
+                                : "Concept explanation..."
                     }
                     rows={4}
                     className={`${inputCls} resize-y`}
@@ -300,7 +307,7 @@ export function AddCardForm({
                 />
             </div>
 
-            {cardType === "leetcode" && (
+            {isCodeCard && (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1.5">

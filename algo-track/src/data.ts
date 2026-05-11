@@ -1,7 +1,7 @@
 import type { CardSource, TopicDomain } from "@/types";
 
 export type Difficulty = "easy" | "medium" | "hard";
-export type CardType = "leetcode" | "cs";
+export type CardType = "leetcode" | "cs" | "sql";
 
 export interface CardSolution {
   name: string;

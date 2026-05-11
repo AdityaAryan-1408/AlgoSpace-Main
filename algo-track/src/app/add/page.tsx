@@ -21,10 +21,14 @@ function AddCardPageContent() {
     const difficulty = (searchParams.get("difficulty") || "medium").toLowerCase() as Difficulty;
     const tagsParam = searchParams.get("tags") || "";
     const description = searchParams.get("description") || "";
+    const typeParam = searchParams.get("type") || "leetcode";
+    const cardType: CardType = (["leetcode", "cs", "sql"] as const).includes(typeParam as CardType)
+        ? (typeParam as CardType)
+        : "leetcode";
     const isFromExtension = !!(title || url);
 
     const defaults: AddCardFormDefaults = {
-        type: "leetcode",
+        type: cardType,
         title,
         url,
         difficulty: ["easy", "medium", "hard"].includes(difficulty)
@@ -127,7 +131,7 @@ function AddCardPageContent() {
                 >
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">
-                            New DSA Problem
+                            {cardType === "sql" ? "New SQL Query" : cardType === "cs" ? "New Core Concept" : "New DSA Problem"}
                         </h1>
                         <p className="text-sm text-muted-foreground mt-1">
                             Fill in the details below
@@ -142,14 +146,16 @@ function AddCardPageContent() {
                         >
                             <Zap className="w-4 h-4 text-easy shrink-0" />
                             <span className="text-sm font-medium text-easy">
-                                Problem auto-detected from LeetCode — review the details and save.
+                                {cardType === "sql"
+                                    ? "SQL problem auto-detected from LeetCode — review the details and save."
+                                    : "Problem auto-detected from LeetCode — review the details and save."}
                             </span>
                         </motion.div>
                     )}
 
                     <div className="bg-card rounded-2xl border border-border p-6 shadow-sm">
                         <AddCardForm
-                            cardType="leetcode"
+                            cardType={cardType}
                             defaults={defaults}
                             onSubmitted={handleSubmitted}
                             submitLabel="Save Card"
