@@ -93,6 +93,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       body?.spaceComplexity !== undefined ||
       body?.relatedProblems !== undefined ||
       body?.notes !== undefined ||
+      body?.richNotes !== undefined ||
       body?.tags !== undefined ||
       body?.solvedAt !== undefined ||
       body?.topicDomain !== undefined ||
@@ -134,6 +135,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       spaceComplexity: body.spaceComplexity !== undefined ? body.spaceComplexity?.trim() || null : undefined,
       relatedProblems: body.relatedProblems !== undefined ? (body.relatedProblems === null ? null : toRelatedProblems(body.relatedProblems)) : undefined,
       notes: body.notes,
+      richNotes: body.richNotes,
       tags: body.tags !== undefined ? toStringArray(body.tags, "tags") : undefined,
       solvedAt: body.solvedAt,
       topicDomain: body.topicDomain,

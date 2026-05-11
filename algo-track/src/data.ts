@@ -20,6 +20,7 @@ export interface Flashcard {
   description: string;
   url?: string;
   notes: string;
+  richNotes?: string;  // JSON string of BlockNote document (includes embedded diagram data)
   solution?: string;
   solutions?: CardSolution[];
   timeComplexity?: string;

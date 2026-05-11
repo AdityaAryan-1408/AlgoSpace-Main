@@ -97,3 +97,51 @@
     background: var(--foreground);
   }
 }
+
+/* ── BlockNote / Rich Notes Editor ────────────────────────────── */
+.rich-notes-wrapper {
+  --bn-colors-editor-background: var(--card);
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-menu-background: var(--card);
+  --bn-colors-menu-text: var(--foreground);
+  --bn-colors-tooltip-background: var(--muted);
+  --bn-colors-tooltip-text: var(--foreground);
+  --bn-colors-hovered-background: var(--muted);
+  --bn-colors-selected-background: var(--muted);
+  --bn-colors-disabled-background: var(--muted);
+  --bn-colors-disabled-text: var(--muted-foreground);
+  --bn-colors-side-menu: var(--muted-foreground);
+  --bn-border-radius: 0.75rem;
+  --bn-font-family: inherit;
+  background: var(--card);
+}
+
+.rich-notes-wrapper .bn-editor {
+  min-height: 120px;
+  padding: 0.75rem;
+  user-select: text;
+}
+
+.rich-notes-readonly .bn-editor {
+  min-height: auto;
+  padding: 0.5rem 0;
+}
+
+/* Make inline code in BlockNote match our theme */
+.rich-notes-wrapper .bn-inline-content code {
+  background: var(--muted);
+  color: var(--foreground);
+  padding: 0.15em 0.4em;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+
+/* Slow pulse for the FAB when notes exist */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}

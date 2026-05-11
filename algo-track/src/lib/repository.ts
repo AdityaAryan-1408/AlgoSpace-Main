@@ -186,6 +186,7 @@ export async function updateCardById(
     topicDomain?: string | null;
     topicIds?: string[];
     metadata?: Record<string, unknown>;
+    richNotes?: string;
   },
 ) {
   const supabase = getSupabaseAdmin();
@@ -202,6 +203,11 @@ export async function updateCardById(
   if (updates.topicDomain !== undefined) payload.topic_domain = updates.topicDomain;
   if (updates.topicIds !== undefined) payload.topic_ids = updates.topicIds;
   if (updates.metadata !== undefined) payload.metadata = updates.metadata;
+  // Store richNotes inside the metadata JSON column to avoid a DB migration
+  if (updates.richNotes !== undefined) {
+    const existingMeta = (payload.metadata as Record<string, unknown>) || {};
+    payload.metadata = { ...existingMeta, richNotes: updates.richNotes };
+  }
 
   const hasRichUpdate =
     updates.solution !== undefined ||
@@ -280,6 +286,7 @@ export async function addCardForUser(
     topicDomain?: string;
     topicIds?: string[];
     metadata?: Record<string, unknown>;
+    richNotes?: string;
   },
 ) {
   const supabase = getSupabaseAdmin();
@@ -319,7 +326,9 @@ export async function addCardForUser(
       solved_at: input.solvedAt ?? null,
       topic_domain: input.topicDomain ?? null,
       topic_ids: input.topicIds ?? [],
-      metadata: input.metadata ?? {},
+      metadata: input.richNotes
+        ? { ...(input.metadata ?? {}), richNotes: input.richNotes }
+        : (input.metadata ?? {}),
     })
     .select("id")
     .single();

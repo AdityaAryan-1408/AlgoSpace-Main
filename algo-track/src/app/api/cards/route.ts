@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
       difficulty: body.difficulty,
       tags: toStringArray(body.tags, "tags"),
       notes: body.notes,
+      richNotes: body.richNotes,
       solution: body.solution,
       solutions: toSolutions(body.solutions),
       timeComplexity: body.timeComplexity,

@@ -53,6 +53,7 @@ export async function createCard(input: {
     topicDomain?: string;
     topicIds?: string[];
     metadata?: Record<string, unknown>;
+    richNotes?: string;
 }): Promise<Flashcard> {
     const data = await apiFetch<{ card: Flashcard }>("/cards", {
         method: "POST",
@@ -88,6 +89,7 @@ export async function updateCard(
         topicDomain?: string | null;
         topicIds?: string[];
         metadata?: Record<string, unknown>;
+        richNotes?: string;
     },
 ): Promise<Flashcard> {
     const data = await apiFetch<{ card: Flashcard }>(`/cards/${cardId}`, {

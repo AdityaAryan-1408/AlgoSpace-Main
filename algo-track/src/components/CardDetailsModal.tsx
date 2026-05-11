@@ -7,6 +7,7 @@ import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
+import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
 import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil } from "lucide-react";
 import { motion } from "motion/react";
@@ -34,6 +35,7 @@ export function CardDetailsModal({
   const [isEditing, setIsEditing] = useState(false);
   const [aiReview, setAiReview] = useState<StoredAiReview | null>(null);
   const [isPausing, setIsPausing] = useState(false);
+  const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeOptions, setShowResumeOptions] = useState(false);
 
@@ -41,6 +43,7 @@ export function CardDetailsModal({
     if (card) {
       setTags(card.tags);
       setNotes(card.notes);
+      setRichNotes(card.richNotes);
       setReviewNote((card.metadata?.reviewNote as string) || "");
       setAiReview(getStoredAiReview(card.id));
     }
@@ -73,6 +76,7 @@ export function CardDetailsModal({
     try {
       await updateCard(card.id, { 
         notes, 
+        richNotes,
         tags,
         metadata: { ...card.metadata, reviewNote }
       });
@@ -285,22 +289,15 @@ export function CardDetailsModal({
           <section className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
               <FileText className="w-4 h-4 text-muted-foreground" />
-              Custom Notes
+              Rich Notes
             </h3>
-            <textarea
-              className="w-full min-h-30 text-sm text-foreground/90 leading-relaxed p-4 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-y transition-shadow selectable"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add your personal notes, intuitions, or mnemonics here..."
+            <RichNotesEditor
+              initialContent={card.richNotes}
+              fallbackMarkdown={card.notes}
+              onChange={(content) => {
+                setRichNotes(content);
+              }}
             />
-            {notes.trim() && (
-              <div className="p-4 rounded-xl border border-border bg-muted/20">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Markdown Preview
-                </h4>
-                <MarkdownContent content={notes} />
-              </div>
-            )}
           </section>
 
           <section className="flex flex-col gap-3">

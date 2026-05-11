@@ -59,6 +59,7 @@ export function mapCardRowToFlashcard(row: CardRow): Flashcard {
     topicDomain: (row.topic_domain ?? undefined) as TopicDomain | undefined,
     topicIds: row.topic_ids ?? [],
     metadata: row.metadata ?? {},
+    richNotes: (row.metadata?.richNotes as string) ?? undefined,
     // SRS / review fields
     lastReview: formatHumanDate(row.last_reviewed_at),
     lastRating: row.last_rating ?? "GOOD",

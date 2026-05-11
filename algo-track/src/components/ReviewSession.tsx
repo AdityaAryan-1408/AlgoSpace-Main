@@ -9,13 +9,13 @@ import { CodePractice } from "@/components/CodePractice";
 import { FeynmanRecorder } from "@/components/FeynmanRecorder";
 import { ConstraintShifter, shouldShowConstraintShifter } from "@/components/ConstraintShifter";
 import { DryRunChallenge } from "@/components/DryRunChallenge";
-import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
+import { NotesDrawer } from "@/components/NotesDrawer";
 import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2 } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 
@@ -114,6 +114,7 @@ export function ReviewSession({
     const sessionStartTime = useRef(Date.now());
     const resultsRef = useRef<ReviewResult[]>([]);
     const completedRef = useRef(false);
+    const [notesDrawerOpen, setNotesDrawerOpen] = useState(false);
 
     useEffect(() => {
         if (cards[currentIndex]) {
@@ -169,6 +170,21 @@ export function ReviewSession({
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [isFullscreen]);
+
+    // Keyboard shortcut: N to toggle notes drawer
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement;
+            const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            if (e.key === 'n' && !isTyping && !e.metaKey && !e.ctrlKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                setNotesDrawerOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, []);
 
     const currentCard = cards[currentIndex];
     const progress = (currentIndex / cards.length) * 100;
@@ -629,13 +645,6 @@ export function ReviewSession({
                                             )}
                                         </div>
                                     )}
-
-                                    {/* Whiteboard */}
-                                    <WhiteboardCanvas
-                                        cardId={currentCard.id}
-                                        compact
-                                        className="w-full mt-1"
-                                    />
                                 </div>
                             </div>
                         ) : (
@@ -818,6 +827,34 @@ export function ReviewSession({
                 </div>
             )}
           </div>
-        </div>
+
+        {/* Notes FAB */}
+        {currentCard && (
+          <>
+            <button
+              onClick={() => setNotesDrawerOpen(!notesDrawerOpen)}
+              className={`fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-110 cursor-pointer ${
+                notesDrawerOpen
+                  ? 'bg-primary text-primary-foreground'
+                  : currentCard.richNotes || currentCard.notes.trim()
+                    ? 'bg-primary/90 text-primary-foreground animate-pulse-slow'
+                    : 'bg-muted/80 text-muted-foreground hover:bg-muted border border-border'
+              }`}
+              title="Toggle Notes (N)"
+            >
+              <FileText className="w-5 h-5" />
+            </button>
+
+            <NotesDrawer
+              isOpen={notesDrawerOpen}
+              onClose={() => setNotesDrawerOpen(false)}
+              cardId={currentCard.id}
+              cardTitle={currentCard.title}
+              richNotes={currentCard.richNotes}
+              fallbackMarkdown={currentCard.notes}
+            />
+          </>
+        )}
+      </div>
     );
 }

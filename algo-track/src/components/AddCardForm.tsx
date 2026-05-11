@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Plus, Loader2, Github, X } from "lucide-react";
 import { createCard, updateCard } from "@/lib/client-api";
 import type { Difficulty, CardType } from "@/data";
+import { RichNotesEditor } from "@/components/RichNotesEditor";
 
 export interface AddCardFormDefaults {
     type?: CardType;
@@ -46,6 +47,7 @@ export function AddCardForm({
     const [platform, setPlatform] = useState("LeetCode");
     const [url, setUrl] = useState(defaults?.url ?? "");
     const [notes, setNotes] = useState(defaults?.notes ?? "");
+    const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
     const [solutions, setSolutions] = useState<{ id: string; name: string; content: string }[]>(
         defaults?.solutions?.length 
             ? defaults.solutions.map((s, i) => ({ id: `sol-${Date.now()}-${i}`, name: s.name, content: s.content }))
@@ -113,6 +115,7 @@ export function AddCardForm({
                 difficulty,
                 tags: tags.length > 0 ? tags : undefined,
                 notes: notes.trim() || undefined,
+                richNotes: richNotes || undefined,
                 solution:
                     cardType === "leetcode" && compiledSolutions[0]?.content
                         ? compiledSolutions[0].content
@@ -289,12 +292,11 @@ export function AddCardForm({
 
             <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">Notes</label>
-                <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Markdown supported. Add notes, intuitions, examples, and fenced code blocks."
-                    rows={3}
-                    className={`${inputCls} resize-y`}
+                <RichNotesEditor
+                    onChange={(content) => {
+                        setRichNotes(content);
+                    }}
+                    placeholder="Type '/' for commands. Add notes, diagrams, code blocks..."
                 />
             </div>
 
