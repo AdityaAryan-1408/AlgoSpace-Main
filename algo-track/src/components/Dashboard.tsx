@@ -21,6 +21,7 @@ import { fetchAnalytics, deleteCard } from "@/lib/client-api";
 import type { AnalyticsData } from "@/lib/client-api";
 import { exportAsJSON, exportAsCSV } from "@/lib/export";
 import { CommandPalette } from "./CommandPalette";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 const getIntervalDays = (card: Flashcard) => {
   let intervalDays = 0;
@@ -134,9 +135,17 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
     }
   };
 
+  const { confirm: confirmModal } = useConfirmModal();
+
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Delete ${selectedIds.size} card(s)? This cannot be undone.`)) return;
+    const confirmed = await confirmModal({
+      title: "Delete Cards",
+      message: `Delete ${selectedIds.size} card(s)? This cannot be undone.`,
+      confirmLabel: "Delete All",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     setIsBulkDeleting(true);
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteCard(id)));

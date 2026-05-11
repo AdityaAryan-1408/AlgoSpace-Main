@@ -30,6 +30,7 @@ import type { Flashcard } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
@@ -136,6 +137,7 @@ export default function HomePage() {
   const extraFeaturesRef = useRef<HTMLDivElement>(null);
   const [globalPauseStatus, setGlobalPauseStatus] = useState<GlobalPauseStatus>({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
   const [showPauseModal, setShowPauseModal] = useState(false);
+  const { alert: alertModal } = useConfirmModal();
 
   // Fetch global pause status
   const refreshPauseStatus = useCallback(async () => {
@@ -639,7 +641,11 @@ export default function HomePage() {
                   onStartRecovery={() => {
                     // For now, navigate to guide with recovery focus
                     // Will be enhanced in later phases
-                    alert("Recovery mode will be available in a future update!");
+                    alertModal({
+                      title: "Coming Soon",
+                      message: "Recovery mode will be available in a future update!",
+                      variant: "info",
+                    });
                   }}
                 />
               </motion.div>

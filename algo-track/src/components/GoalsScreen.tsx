@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button";
 import type { Goal } from "@/types";
 import type { SmartNudge } from "@/lib/nudge-engine";
 import { CreateGoalModal } from "@/components/CreateGoalModal";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -393,8 +394,16 @@ export function GoalsScreen() {
     }
   };
 
+  const { confirm: confirmModal } = useConfirmModal();
+
   const handleDelete = async (goalId: string) => {
-    if (!confirm("Are you sure you want to delete this goal?")) return;
+    const confirmed = await confirmModal({
+      title: "Delete Goal",
+      message: "Are you sure you want to delete this goal?",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/goals/${goalId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete goal");

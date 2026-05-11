@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Bell, BellOff, Loader2 } from "lucide-react";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 export function PushNotificationToggle() {
+    const { alert: alertModal } = useConfirmModal();
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSupported, setIsSupported] = useState(false);
@@ -54,7 +56,11 @@ export function PushNotificationToggle() {
         // Request notification permission
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
-            alert("Notification permission denied. Please enable it in browser settings.");
+            alertModal({
+                title: "Permission Denied",
+                message: "Notification permission denied. Please enable it in browser settings.",
+                variant: "warning",
+            });
             return;
         }
 
@@ -70,7 +76,7 @@ export function PushNotificationToggle() {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey),
+            applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as string,
         });
 
         const subscriptionJson = subscription.toJSON();

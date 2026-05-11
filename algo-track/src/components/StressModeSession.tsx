@@ -9,12 +9,14 @@ import { startStressMode, completeStressMode } from "@/lib/client-api";
 import { CodePractice } from "@/components/CodePractice";
 import { fetchCardDetails } from "@/lib/client-api";
 import type { Flashcard } from "@/data";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 interface Props {
   onExit: () => void;
 }
 
 export function StressModeSession({ onExit }: Props) {
+  const { confirm: confirmModal, alert: alertModal } = useConfirmModal();
   const [phase, setPhase] = useState<"preflight" | "loading" | "active" | "complete" | "error">("preflight");
   
   // Data state
@@ -136,7 +138,11 @@ export function StressModeSession({ onExit }: Props) {
       }
       setUseWebcam(true);
     } catch (err) {
-      alert("Webcam permission denied or unavailable.");
+      alertModal({
+        title: "Webcam Unavailable",
+        message: "Webcam permission denied or unavailable.",
+        variant: "warning",
+      });
     }
   };
 
@@ -211,8 +217,14 @@ export function StressModeSession({ onExit }: Props) {
     }
   };
 
-  const handleEarlyExit = () => {
-    if (confirm("Are you sure you want to abandon this session? It will be marked as abandoned.")) {
+  const handleEarlyExit = async () => {
+    const confirmed = await confirmModal({
+      title: "Abandon Session",
+      message: "Are you sure you want to abandon this session? It will be marked as abandoned.",
+      confirmLabel: "Abandon",
+      variant: "danger",
+    });
+    if (confirmed) {
       if (phase === "active" && sessionId) {
         handleCompleteSession("abandoned");
       } else {

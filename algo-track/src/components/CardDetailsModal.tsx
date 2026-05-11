@@ -12,6 +12,7 @@ import { CodeEvolution } from "@/components/CodeEvolution";
 import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
+import { useConfirmModal } from "@/components/ConfirmModal";
 import { createPortal } from "react-dom";
 import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
 
@@ -87,11 +88,16 @@ export function CardDetailsModal({
     }
   };
 
+  const { confirm } = useConfirmModal();
+
   const handleDelete = async () => {
     if (!card) return;
-    const confirmed = window.confirm(
-      `Delete "${card.title}"? This cannot be undone.`,
-    );
+    const confirmed = await confirm({
+      title: "Delete Card",
+      message: `Delete "${card.title}"? This cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
     if (!confirmed) return;
 
     setIsDeleting(true);

@@ -9,15 +9,16 @@ import { CodePractice } from "@/components/CodePractice";
 import { FeynmanRecorder } from "@/components/FeynmanRecorder";
 import { ConstraintShifter, shouldShowConstraintShifter } from "@/components/ConstraintShifter";
 import { DryRunChallenge } from "@/components/DryRunChallenge";
-import { NotesDrawer } from "@/components/NotesDrawer";
+import { NotesPanel } from "@/components/NotesDrawer";
 import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, FileText } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 export interface ReviewResult {
     card: Flashcard;
@@ -124,6 +125,8 @@ export function ReviewSession({
 
     const [cheatWarning, setCheatWarning] = useState(false);
 
+    const { confirm: confirmModal, alert: alertModal } = useConfirmModal();
+
     const toggleFullscreen = async () => {
         if (!isFullscreen) {
             try {
@@ -133,7 +136,13 @@ export function ReviewSession({
                 console.error("Failed to enter fullscreen", err);
             }
         } else {
-            if (confirm("Are you sure you want to exit Focus Mode?")) {
+            const confirmed = await confirmModal({
+                title: "Exit Focus Mode",
+                message: "Are you sure you want to exit Focus Mode?",
+                confirmLabel: "Exit",
+                variant: "warning",
+            });
+            if (confirmed) {
                 if (document.fullscreenElement) {
                     await document.exitFullscreen();
                 }
@@ -157,7 +166,11 @@ export function ReviewSession({
 
         const handleVisibilityChange = () => {
             if (document.hidden && document.fullscreenElement) {
-                alert("Warning: You switched tabs or minimized the browser during Focus Mode! Stay focused on your review.");
+                alertModal({
+                    title: "Focus Mode Warning",
+                    message: "You switched tabs or minimized the browser during Focus Mode! Stay focused on your review.",
+                    variant: "warning",
+                });
                 setCheatWarning(true);
             }
         };
@@ -828,32 +841,17 @@ export function ReviewSession({
             )}
           </div>
 
-        {/* Notes FAB */}
+        {/* Notes Side Panel */}
         {currentCard && (
-          <>
-            <button
-              onClick={() => setNotesDrawerOpen(!notesDrawerOpen)}
-              className={`fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-110 cursor-pointer ${
-                notesDrawerOpen
-                  ? 'bg-primary text-primary-foreground'
-                  : currentCard.richNotes || currentCard.notes.trim()
-                    ? 'bg-primary/90 text-primary-foreground animate-pulse-slow'
-                    : 'bg-muted/80 text-muted-foreground hover:bg-muted border border-border'
-              }`}
-              title="Toggle Notes (N)"
-            >
-              <FileText className="w-5 h-5" />
-            </button>
-
-            <NotesDrawer
-              isOpen={notesDrawerOpen}
-              onClose={() => setNotesDrawerOpen(false)}
-              cardId={currentCard.id}
-              cardTitle={currentCard.title}
-              richNotes={currentCard.richNotes}
-              fallbackMarkdown={currentCard.notes}
-            />
-          </>
+          <NotesPanel
+            isOpen={notesDrawerOpen}
+            onToggle={() => setNotesDrawerOpen(prev => !prev)}
+            cardId={currentCard.id}
+            cardTitle={currentCard.title}
+            richNotes={currentCard.richNotes}
+            fallbackMarkdown={currentCard.notes}
+            hasNotes={!!(currentCard.richNotes || currentCard.notes.trim())}
+          />
         )}
       </div>
     );

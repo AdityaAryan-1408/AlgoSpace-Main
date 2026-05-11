@@ -12,6 +12,7 @@ import {
     redistributeReviews,
     type GlobalPauseStatus,
 } from "@/lib/client-api";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 interface GlobalPauseModalProps {
     pauseStatus: GlobalPauseStatus;
@@ -42,6 +43,7 @@ export function GlobalPauseModal({
     const [autoResume, setAutoResume] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showExtend, setShowExtend] = useState(false);
+    const { alert: alertModal } = useConfirmModal();
 
     const effectiveDays = useCustom
         ? parseInt(customDays, 10) || 0
@@ -88,7 +90,11 @@ export function GlobalPauseModal({
         setIsSubmitting(true);
         try {
             const result = await redistributeReviews();
-            alert(`Redistributed ${result.redistributed} cards across review days (7 per day).`);
+            alertModal({
+                title: "Reviews Redistributed",
+                message: `Redistributed ${result.redistributed} cards across review days (7 per day).`,
+                variant: "info",
+            });
             onChanged();
         } catch (err) {
             console.error("Failed to redistribute reviews:", err);

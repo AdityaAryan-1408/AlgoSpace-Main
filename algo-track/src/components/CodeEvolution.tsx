@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { GitCompare, ChevronDown, ChevronUp, Clock, ArrowRight, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 const EVOLUTION_KEY = "algotrack-code-evolution-";
 
@@ -63,8 +64,16 @@ export function CodeEvolution({ cardId, cardTitle }: CodeEvolutionProps) {
         }
     }, [cardId]);
 
-    const handleClear = () => {
-        if (!confirm("Clear all code evolution history for this card?")) return;
+    const { confirm: confirmModal } = useConfirmModal();
+
+    const handleClear = async () => {
+        const confirmed = await confirmModal({
+            title: "Clear History",
+            message: "Clear all code evolution history for this card?",
+            confirmLabel: "Clear",
+            variant: "warning",
+        });
+        if (!confirmed) return;
         clearCodeEvolution(cardId);
         setSnapshots([]);
     };

@@ -23,6 +23,7 @@ import {
   sendChatMessage,
   deleteChatThread,
 } from "@/lib/client-api";
+import { useConfirmModal } from "@/components/ConfirmModal";
 
 const MODES: { value: ChatMode; label: string; description: string }[] = [
   {
@@ -145,8 +146,16 @@ export function CoachChat() {
     }
   };
 
+  const { confirm: confirmModal } = useConfirmModal();
+
   const handleDeleteThread = async (threadId: string) => {
-    if (!confirm("Are you sure you want to delete this chat session?")) return;
+    const confirmed = await confirmModal({
+      title: "Delete Chat",
+      message: "Are you sure you want to delete this chat session?",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     try {
       await deleteChatThread(threadId);
       setThreads(prev => prev.filter(t => t.id !== threadId));
