@@ -29,7 +29,6 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-            onClick={onClose}
         >
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
