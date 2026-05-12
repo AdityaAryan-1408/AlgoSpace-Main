@@ -247,18 +247,17 @@ export function AddCardForm({
                 <label className="text-sm font-medium text-foreground">
                     Description *
                 </label>
-                <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                <RichNotesEditor
+                    initialContent={description}
+                    fallbackMarkdown={description}
+                    onChange={(content) => setDescription(content)}
                     placeholder={
                         cardType === "leetcode"
-                            ? "Problem statement..."
+                            ? "Paste the exact problem description here..."
                             : cardType === "sql"
-                                ? "SQL problem statement..."
+                                ? "Paste the SQL problem description here..."
                                 : "Concept explanation..."
                     }
-                    rows={4}
-                    className={`${inputCls} resize-y`}
                 />
             </div>
 

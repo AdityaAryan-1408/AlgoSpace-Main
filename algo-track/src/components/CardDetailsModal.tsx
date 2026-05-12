@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
+
 import type { Flashcard } from "@/data";
 import { updateCard, deleteCard, pauseCardReview, resumeCardReview } from "@/lib/client-api";
 import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
@@ -287,8 +288,12 @@ export function CardDetailsModal({
               <BookOpen className="w-4 h-4 text-muted-foreground" />
               Description
             </h3>
-            <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap bg-muted/30 p-4 rounded-xl border border-border/50 selectable">
-              <MarkdownContent content={card.description} />
+            <div className="bg-muted/30 p-2 rounded-xl border border-border/50 selectable">
+              <RichNotesEditor
+                readOnly
+                initialContent={card.description}
+                fallbackMarkdown={card.description}
+              />
             </div>
           </section>
 

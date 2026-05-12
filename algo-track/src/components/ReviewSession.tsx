@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { CodePractice } from "@/components/CodePractice";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { FeynmanRecorder } from "@/components/FeynmanRecorder";
 import { ConstraintShifter, shouldShowConstraintShifter } from "@/components/ConstraintShifter";
 import { DryRunChallenge } from "@/components/DryRunChallenge";
@@ -548,8 +550,12 @@ export function ReviewSession({
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap selectable">
-                                        <MarkdownContent content={currentCard.description} />
+                                    <div className="bg-muted/10 p-2 rounded-xl border border-border/50 selectable">
+                                        <RichNotesEditor
+                                            readOnly
+                                            initialContent={currentCard.description}
+                                            fallbackMarkdown={currentCard.description}
+                                        />
                                     </div>
                                 )}
 
