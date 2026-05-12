@@ -698,7 +698,20 @@ export function ReviewSession({
                                     </div>
                                 )}
 
-                                {currentCard.notes && (
+                                {currentCard.richNotes ? (
+                                    <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                                            Notes & Answer
+                                        </h4>
+                                        <div className="bg-muted/10 p-2 rounded-xl border border-border/50 selectable">
+                                            <RichNotesEditor
+                                                readOnly
+                                                initialContent={currentCard.richNotes}
+                                                fallbackMarkdown={currentCard.notes}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : currentCard.notes ? (
                                     <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
                                         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                                             Notes
@@ -707,7 +720,7 @@ export function ReviewSession({
                                             <MarkdownContent content={currentCard.notes} />
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
 
                                 {(currentCard.metadata?.reviewNote as string) && (
                                     <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
