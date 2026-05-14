@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Pin, Sparkles, Calendar, TrendingUp, Compass, ArrowRight, Globe, Brain, PlaySquare, RefreshCw, Timer, Zap, Network } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pin, Sparkles, Calendar, TrendingUp, Compass, ArrowRight, Globe, Brain, PlaySquare, RefreshCw, Timer, Zap, Network, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TopicRadarChart } from "@/components/charts/TopicRadarChart";
 
@@ -91,70 +91,190 @@ function DailySuggestionTile({ onNavigate }: { onNavigate: (v: string) => void }
 }
 
 function RealWorldTile() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
-  const options = ["Hash Map", "Trie", "Min-Heap"];
-  const correct = "Trie";
+
+  const fetchQuestion = async (forceRefresh = false) => {
+    setLoading(true);
+    setSelected(null);
+    const today = new Date().toISOString().split('T')[0];
+    const cacheKey = `algotrack_architecture_${today}`;
+
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setData(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch("/api/dashboard/architecture-drill");
+      if (res.ok) {
+        const json = await res.json();
+        localStorage.setItem(cacheKey, JSON.stringify(json));
+        setData(json);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuestion();
+  }, []);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center relative group">
+      <button 
+        onClick={() => fetchQuestion(true)}
+        className="absolute top-2 right-2 p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-all active:rotate-180 opacity-0 group-hover:opacity-100"
+        title="Generate New Question"
+      >
+        <RefreshCw className="w-4 h-4" />
+      </button>
+      
       <Globe className="w-8 h-8 text-blue-500 mb-4" />
-      <h4 className="text-lg font-bold mb-2">Real-World Architecture</h4>
-      <p className="text-sm text-muted-foreground mb-6">You need to build a fast 'autocomplete' feature for a search engine. What data structure do you use?</p>
-      <div className="flex gap-2">
-        {options.map(opt => (
-          <button 
-            key={opt}
-            onClick={() => setSelected(opt)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              selected === opt 
-                ? opt === correct ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500' : 'bg-red-500/20 text-red-500 border border-red-500'
-                : 'bg-muted hover:bg-muted/80 text-foreground border border-transparent'
-            }`}
+      <h4 className="text-lg font-bold mb-2">Architecture Drill</h4>
+      
+      {loading || !data ? (
+        <div className="flex flex-col items-center justify-center gap-2 mt-4 flex-1">
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+          <p className="text-xs text-muted-foreground">Generating scenario...</p>
+        </div>
+      ) : (
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={data.scenario}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center w-full"
           >
-            {opt}
-          </button>
-        ))}
-      </div>
-      {selected === correct && <div className="text-emerald-500 text-xs mt-4 animate-in fade-in">Correct! Tries provide O(L) prefix lookups.</div>}
+            <p className="text-sm text-muted-foreground mb-6 line-clamp-3 h-14 overflow-hidden">{data.scenario}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {data.options.map((opt: string) => (
+                <button 
+                  key={opt}
+                  onClick={() => setSelected(opt)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    selected === opt 
+                      ? opt === data.correctAnswer ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500' : 'bg-red-500/20 text-red-500 border border-red-500'
+                      : 'bg-muted hover:bg-muted/80 text-foreground border border-transparent'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            {selected && (
+              <div className={`text-xs mt-4 animate-in fade-in ${selected === data.correctAnswer ? 'text-emerald-500' : 'text-red-500'}`}>
+                {selected === data.correctAnswer ? "Correct!" : "Incorrect."} {data.explanation}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      )}
     </div>
   );
 }
 
 function GuessOutputTile() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [guess, setGuess] = useState("");
   const [status, setStatus] = useState<"idle" | "correct" | "incorrect">("idle");
-  const code = `function foo(n) {
-  if (n < 2) return n;
-  return foo(n-1) + foo(n-2);
-}
-console.log(foo(4));`;
+
+  const fetchQuestion = async (forceRefresh = false) => {
+    setLoading(true);
+    setGuess("");
+    setStatus("idle");
+    const today = new Date().toISOString().split('T')[0];
+    const cacheKey = `algotrack_mental_${today}`;
+
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setData(JSON.parse(cached));
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch("/api/dashboard/mental-tracing");
+      if (res.ok) {
+        const json = await res.json();
+        localStorage.setItem(cacheKey, JSON.stringify(json));
+        setData(json);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuestion();
+  }, []);
 
   const check = () => {
-    if (guess.trim() === "3") setStatus("correct");
+    if (!data) return;
+    if (guess.trim() === data.correctOutput) setStatus("correct");
     else setStatus("incorrect");
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center relative group">
+      <button 
+        onClick={() => fetchQuestion(true)}
+        className="absolute top-2 right-2 p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-all active:rotate-180 opacity-0 group-hover:opacity-100"
+        title="Generate New Code"
+      >
+        <RefreshCw className="w-4 h-4" />
+      </button>
+
       <Brain className="w-8 h-8 text-violet-500 mb-3" />
       <h4 className="text-lg font-bold mb-2">Mental Tracing</h4>
-      <div className="bg-muted/50 p-3 rounded-lg text-left w-full max-w-[250px] mb-4">
-        <pre className="text-xs text-foreground font-mono"><code>{code}</code></pre>
-      </div>
-      <div className="flex gap-2 w-full max-w-[250px]">
-        <input 
-          type="text" 
-          value={guess}
-          onChange={(e) => setGuess(e.target.value)}
-          placeholder="Output?"
-          className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-sm"
-        />
-        <button onClick={check} className="bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-violet-600 transition-colors">
-          Check
-        </button>
-      </div>
-      {status === "correct" && <div className="text-emerald-500 text-xs mt-2 animate-in fade-in">Correct! Excellent tracing.</div>}
-      {status === "incorrect" && <div className="text-red-500 text-xs mt-2 animate-in fade-in">Try again! Remember it's Fibonacci.</div>}
+      
+      {loading || !data ? (
+        <div className="flex flex-col items-center justify-center gap-2 mt-4 flex-1">
+          <Loader2 className="w-5 h-5 text-violet-500 animate-spin" />
+          <p className="text-xs text-muted-foreground">Generating code snippet...</p>
+        </div>
+      ) : (
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={data.code}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center w-full"
+          >
+            <div className="bg-muted/50 p-3 rounded-lg text-left w-full max-w-[250px] mb-4 overflow-x-auto max-h-[100px] overflow-y-auto">
+              <pre className="text-xs text-foreground font-mono"><code>{data.code}</code></pre>
+            </div>
+            <div className="flex gap-2 w-full max-w-[250px]">
+              <input 
+                type="text" 
+                value={guess}
+                onChange={(e) => { setGuess(e.target.value); setStatus("idle"); }}
+                onKeyDown={(e) => e.key === 'Enter' && check()}
+                placeholder="Output?"
+                className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500/50"
+              />
+              <button onClick={check} className="bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-violet-600 transition-colors">
+                Check
+              </button>
+            </div>
+            {status === "correct" && <div className="text-emerald-500 text-xs mt-2 animate-in fade-in">Correct! {data.explanation}</div>}
+            {status === "incorrect" && <div className="text-red-500 text-xs mt-2 animate-in fade-in">Incorrect. Try tracing again.</div>}
+          </motion.div>
+        </AnimatePresence>
+      )}
     </div>
   );
 }
