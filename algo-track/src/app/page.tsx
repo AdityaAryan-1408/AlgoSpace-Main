@@ -21,8 +21,11 @@ import { Speedrun } from "@/components/Speedrun";
 import { AntiPatterns } from "@/components/AntiPatterns";
 import { ObfuscationChallenge } from "@/components/ObfuscationChallenge";
 import { CrossLanguage } from "@/components/CrossLanguage";
+import { CalendarView } from "@/components/CalendarView";
+import { TrainingHub } from "@/components/TrainingHub";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
@@ -32,7 +35,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
 
-type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language";
+type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
 
 interface SessionStats {
@@ -44,6 +47,8 @@ interface SessionStats {
 interface ReviewSessionConfig {
   mode: ReviewMode;
   timeLimitSeconds?: number;
+  count?: number;
+  typeFilter?: "leetcode" | "cs";
 }
 
 // ── Cache helpers ────────────────────────────────────────────
@@ -124,7 +129,8 @@ export default function HomePage() {
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [theme, setTheme] = useState<string>("light");
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [reviewSessionCards, setReviewSessionCards] = useState<Flashcard[]>([]);
   const [reviewSessionConfig, setReviewSessionConfig] = useState<ReviewSessionConfig>({
@@ -230,31 +236,60 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Dark mode setup
+  // Theme setup
   useEffect(() => {
-    const saved = localStorage.getItem("algotrack-dark-mode");
-    if (
-      saved === "true" ||
-      (!saved &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches)
-    ) {
-      setIsDarkMode(true);
-      document.documentElement.classList.add("dark");
+    const saved = localStorage.getItem("algotrack-theme");
+    if (saved) {
+      setTheme(saved);
+      document.documentElement.className = saved === "light" ? "" : saved;
+    } else {
+      const savedDark = localStorage.getItem("algotrack-dark-mode");
+      if (savedDark === "true" || window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        setTheme("dark");
+        document.documentElement.className = "dark";
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    localStorage.setItem("algotrack-dark-mode", String(isDarkMode));
-  }, [isDarkMode]);
-
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+    document.documentElement.className = theme === "light" ? "" : theme;
+    localStorage.setItem("algotrack-theme", theme);
+  }, [theme]);
 
   // Manual refresh — syncs immediately and resets the auto-sync timer
+  // Global Event Listeners for Command Palette
+  useEffect(() => {
+    const handleQuickReview = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const card = cards.find(c => c.id === customEvent.detail);
+      if (card) {
+        setReviewSessionCards([card]);
+        setReviewSessionConfig({ mode: "standard" });
+        setView("review-session");
+      }
+    };
+    
+    const handleNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      setView(customEvent.detail as View);
+    };
+
+    const handleSelectCardEvent = (e: Event) => {
+      // Switch to dashboard so Dashboard component can handle opening the modal
+      setView("dashboard");
+    };
+
+    window.addEventListener("quick-review-card", handleQuickReview);
+    window.addEventListener("navigate", handleNavigate);
+    window.addEventListener("select-card", handleSelectCardEvent);
+    
+    return () => {
+      window.removeEventListener("quick-review-card", handleQuickReview);
+      window.removeEventListener("navigate", handleNavigate);
+      window.removeEventListener("select-card", handleSelectCardEvent);
+    };
+  }, [cards]);
+
   const handleManualRefresh = async () => {
     await syncFromApi(true);
     // Reset auto-sync timer
@@ -352,6 +387,10 @@ export default function HomePage() {
     setView("dashboard");
   };
 
+  const toggleTheme = () => {
+    setTheme(prev => prev === "light" ? "dark" : "light");
+  };
+
   useKeyboardShortcuts({
     onAddCard: () => setShowAddCardModal(true),
     onReview: () => setShowReviewModal(true),
@@ -396,7 +435,7 @@ export default function HomePage() {
             </Button>
             <div className="relative z-50" ref={extraFeaturesRef}>
               <Button
-                variant={["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode", "bigo-drill", "pattern-quiz", "cram-mode", "speedrun", "anti-patterns", "obfuscation", "cross-language"].includes(view) ? "secondary" : "ghost"}
+                variant={["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode", "bigo-drill", "pattern-quiz", "cram-mode", "speedrun", "anti-patterns", "obfuscation", "cross-language", "calendar", "training-hub"].includes(view) ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setIsExtraFeaturesOpen(!isExtraFeaturesOpen)}
                 className="gap-2 transition-all"
@@ -445,67 +484,20 @@ export default function HomePage() {
                     </button>
                     <button
                       onClick={() => { setView("skill-tree"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-purple-500 hover:bg-purple-500/10 ${view === "skill-tree" ? 'text-purple-500 bg-purple-500/5 font-medium' : ''}`}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-cyan-500 hover:bg-cyan-500/10 ${view === "skill-tree" ? 'text-cyan-500 bg-cyan-500/5 font-medium' : ''}`}
                     >
-                      <Network className="w-4 h-4" />
+                      <Network className="w-4 h-4 text-cyan-500" />
                       Skill Tree
                     </button>
+                    <div className="my-1 border-b border-border/50"></div>
                     <button
-                      onClick={() => { setView("stress-mode"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-red-500 hover:bg-red-500/10 ${view === "stress-mode" ? 'text-red-500 bg-red-500/5 font-medium' : ''}`}
+                      onClick={() => { setView("training-hub"); setIsExtraFeaturesOpen(false); }}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-cyan-500 hover:bg-cyan-500/10 ${view === "training-hub" ? 'text-cyan-500 bg-cyan-500/5 font-medium' : ''}`}
                     >
-                      <Zap className="w-4 h-4 text-red-500" />
-                      Stress Drill
+                      <LayoutGrid className="w-4 h-4 text-cyan-500" />
+                      Training Hub
                     </button>
-                    <button
-                      onClick={() => { setView("bigo-drill"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-amber-500 hover:bg-amber-500/10 ${view === "bigo-drill" ? 'text-amber-500 bg-amber-500/5 font-medium' : ''}`}
-                    >
-                      <Timer className="w-4 h-4 text-amber-500" />
-                      Big-O Drills
-                    </button>
-                    <button
-                      onClick={() => { setView("pattern-quiz"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-violet-500 hover:bg-violet-500/10 ${view === "pattern-quiz" ? 'text-violet-500 bg-violet-500/5 font-medium' : ''}`}
-                    >
-                      <Crosshair className="w-4 h-4 text-violet-500" />
-                      Pattern Quiz
-                    </button>
-                    <button
-                      onClick={() => { setView("cram-mode"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-rose-500 hover:bg-rose-500/10 ${view === "cram-mode" ? 'text-rose-500 bg-rose-500/5 font-medium' : ''}`}
-                    >
-                      <Building2 className="w-4 h-4 text-rose-500" />
-                      Cram Mode
-                    </button>
-                    <button
-                      onClick={() => { setView("speedrun"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-amber-500 hover:bg-amber-500/10 ${view === "speedrun" ? 'text-amber-500 bg-amber-500/5 font-medium' : ''}`}
-                    >
-                      <Keyboard className="w-4 h-4 text-amber-500" />
-                      Speedruns
-                    </button>
-                    <button
-                      onClick={() => { setView("anti-patterns"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-red-500 hover:bg-red-500/10 ${view === "anti-patterns" ? 'text-red-500 bg-red-500/5 font-medium' : ''}`}
-                    >
-                      <Bug className="w-4 h-4 text-red-500" />
-                      Anti-Patterns
-                    </button>
-                    <button
-                      onClick={() => { setView("obfuscation"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-violet-500 hover:bg-violet-500/10 ${view === "obfuscation" ? 'text-violet-500 bg-violet-500/5 font-medium' : ''}`}
-                    >
-                      <ShuffleIcon className="w-4 h-4 text-violet-500" />
-                      Obfuscation
-                    </button>
-                    <button
-                      onClick={() => { setView("cross-language"); setIsExtraFeaturesOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-sky-500 hover:bg-sky-500/10 ${view === "cross-language" ? 'text-sky-500 bg-sky-500/5 font-medium' : ''}`}
-                    >
-                      <Languages className="w-4 h-4 text-sky-500" />
-                      Cross-Language
-                    </button>
+
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -596,23 +588,47 @@ export default function HomePage() {
 
             <PushNotificationToggle />
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="rounded-full transition-transform hover:rotate-12"
-            >
-              {isDarkMode ? (
-                <Sun className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5" />
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                className="rounded-full transition-transform hover:rotate-12"
+              >
+                <Palette className="w-5 h-5" />
+              </Button>
+              {showThemeMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowThemeMenu(false)} 
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-36 bg-card border border-border rounded-xl shadow-lg overflow-hidden py-1 z-50 animate-in slide-in-from-top-2">
+                    {[
+                      { id: "light", label: "Light" },
+                      { id: "dark", label: "Dark" },
+                      { id: "theme-dracula", label: "Dracula" },
+                      { id: "theme-monokai", label: "Monokai" },
+                    ].map(t => (
+                      <button 
+                        key={t.id}
+                        onClick={() => { setTheme(t.id); setShowThemeMenu(false); }} 
+                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-muted/50 transition-colors ${theme === t.id ? 'font-bold text-cyan-500 bg-cyan-500/5' : 'text-foreground'}`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
-            </Button>
+            </div>
           </nav>
         </div>
       </header>
 
       {/* Main Content */}
+      <CommandPalette cards={cards} />
+      
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -629,11 +645,40 @@ export default function HomePage() {
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
-                <Dashboard
-                  cards={cards}
-                  dueCount={dueCards.length}
+                <Dashboard 
+                  cards={cards} 
+                  dueCount={dueCards.length} 
                   onRefresh={() => syncFromApi(false)}
+                  onNavigate={(v) => setView(v as View)}
+                  onStartReview={(mode, count, type) => {
+                    setReviewSessionConfig({ mode, count, typeFilter: type });
+                    setShowReviewModal(true);
+                  }}
                 />
+              </motion.div>
+            )}
+            {view === "training-hub" && (
+              <motion.div
+                key="training-hub"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col overflow-y-auto"
+              >
+                <TrainingHub onNavigate={(v) => setView(v as View)} />
+              </motion.div>
+            )}
+            {view === "calendar" && (
+              <motion.div
+                key="calendar"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col"
+              >
+                <CalendarView cards={cards} />
               </motion.div>
             )}
             {view === "guide" && (

@@ -90,6 +90,8 @@ export async function updateCard(
         topicIds?: string[];
         metadata?: Record<string, unknown>;
         richNotes?: string;
+        nextReview?: string;
+        dueInDays?: number;
     },
 ): Promise<Flashcard> {
     const data = await apiFetch<{ card: Flashcard }>(`/cards/${cardId}`, {

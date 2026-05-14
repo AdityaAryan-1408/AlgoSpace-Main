@@ -187,6 +187,8 @@ export async function updateCardById(
     topicIds?: string[];
     metadata?: Record<string, unknown>;
     richNotes?: string;
+    nextReview?: string;
+    dueInDays?: number;
   },
 ) {
   const supabase = getSupabaseAdmin();
@@ -203,6 +205,8 @@ export async function updateCardById(
   if (updates.topicDomain !== undefined) payload.topic_domain = updates.topicDomain;
   if (updates.topicIds !== undefined) payload.topic_ids = updates.topicIds;
   if (updates.metadata !== undefined) payload.metadata = updates.metadata;
+  if (updates.nextReview !== undefined) payload.next_review_at = updates.nextReview;
+  if (updates.dueInDays !== undefined) payload.interval_days = updates.dueInDays;
   // Store richNotes inside the metadata JSON column to avoid a DB migration
   if (updates.richNotes !== undefined) {
     const existingMeta = (payload.metadata as Record<string, unknown>) || {};

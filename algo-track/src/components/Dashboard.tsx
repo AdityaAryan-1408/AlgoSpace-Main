@@ -15,7 +15,12 @@ import { TopicRadarChart } from "./charts/TopicRadarChart";
 import { DailyGoal } from "./DailyGoal";
 import { ProblemCountWidget } from "./ProblemCountWidget";
 import { SearchFilter } from "./SearchFilter";
-import { ContestTracker } from "./ContestTracker";
+import { ReviewForecastWidget } from "./ReviewForecastWidget";
+import { StudyMetricsWidget } from "./StudyMetricsWidget";
+import { SmartNudgeBanner } from "./SmartNudgeBanner";
+import { QuickActionsRow } from "./QuickActionsRow";
+import { NeedsAttentionWidget } from "./NeedsAttentionWidget";
+import { FeatureCarouselWidget } from "./FeatureCarouselWidget";
 import { motion, AnimatePresence } from "motion/react";
 import { fetchAnalytics, deleteCard } from "@/lib/client-api";
 import type { AnalyticsData } from "@/lib/client-api";
@@ -87,9 +92,11 @@ interface DashboardProps {
   cards: Flashcard[];
   dueCount: number;
   onRefresh: () => void;
+  onStartReview: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, type?: "leetcode" | "cs") => void;
+  onNavigate?: (view: string) => void;
 }
 
-export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
+export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigate }: DashboardProps) {
   const [selectedCard, setSelectedCard] = useState<Flashcard | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -99,9 +106,24 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [pauseStatus, setPauseStatus] = useState<GlobalPauseStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [typeTab, setTypeTab] = useState<"all" | CardType>("all");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    const handleSelectCard = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const card = cards.find(c => c.id === customEvent.detail);
+      if (card) {
+        setSelectedCard(card);
+      }
+    };
+    window.addEventListener("select-card", handleSelectCard);
+    return () => window.removeEventListener("select-card", handleSelectCard);
+  }, [cards]);
 
   const pausedCount = cards.filter(c => isCardPaused(c)).length;
 
@@ -117,7 +139,11 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
 
   const handleFiltered = useCallback((filtered: Flashcard[]) => {
     setFilteredCards(filtered);
+    setCurrentPage(1);
   }, []);
+
+  const totalPages = Math.ceil(filteredCards.length / ITEMS_PER_PAGE);
+  const paginatedCards = filteredCards.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -187,6 +213,8 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8">
+      <SmartNudgeBanner analytics={analytics} />
+
       {/* Global Pause Banner */}
       {pauseStatus?.active && (
         <motion.div
@@ -233,6 +261,8 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
 
       <MasteryHeatmap cards={cards} />
 
+      <QuickActionsRow onAction={onStartReview} />
+
       {/* Analytics Section */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-4">
@@ -276,24 +306,24 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
                 <PerformanceChart data={analytics.performance} />
               </div>
 
-              {/* Topic Mastery */}
-              <div className="rounded-xl border border-border bg-background p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Topic Mastery
-                    <span className="text-xs text-muted-foreground font-normal ml-2">By tag</span>
-                  </h3>
-                  <Button variant="ghost" size="icon" className="w-6 h-6 rounded-full text-muted-foreground hover:text-foreground" onClick={() => setShowTopicModal(true)}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-                <TopicRadarChart data={analytics.topics.slice(0, 7)} />
+              {/* Feature Carousel (replaces Topic Mastery) */}
+              <div className="rounded-xl border border-border bg-background p-0 overflow-hidden">
+                <FeatureCarouselWidget 
+                  analytics={analytics} 
+                  dueCount={dueCount} 
+                  onNavigate={onNavigate || (() => {})}
+                  onOpenTopicModal={() => setShowTopicModal(true)}
+                />
               </div>
             </div>
 
 
-            {/* Contest History */}
-            <ContestTracker />
+            {/* Forecast, Needs Attention, and Study Metrics */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+              <ReviewForecastWidget cards={cards} />
+              <NeedsAttentionWidget cards={cards} onSelectCard={setSelectedCard} />
+              <StudyMetricsWidget analytics={analytics} />
+            </div>
           </div>
         ) : null}
       </div>
@@ -472,7 +502,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-8">
               <AnimatePresence>
-                {filteredCards.map((card, index) => (
+                {paginatedCards.map((card, index) => (
                   <motion.div
                     key={card.id}
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -542,7 +572,7 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
                 </thead>
                 <tbody>
                   <AnimatePresence>
-                    {filteredCards.map((card, index) => (
+                    {paginatedCards.map((card, index) => (
                       <motion.tr
                         key={card.id}
                         initial={{ opacity: 0, y: 10 }}
@@ -643,6 +673,36 @@ export function Dashboard({ cards, dueCount, onRefresh }: DashboardProps) {
                   </AnimatePresence>
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between py-4 border-t border-border mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing <span className="font-medium text-foreground">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="font-medium text-foreground">{Math.min(currentPage * ITEMS_PER_PAGE, filteredCards.length)}</span> of <span className="font-medium text-foreground">{filteredCards.length}</span> cards
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div className="text-sm font-medium px-2">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </div>

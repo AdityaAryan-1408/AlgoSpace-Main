@@ -98,7 +98,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       body?.solvedAt !== undefined ||
       body?.topicDomain !== undefined ||
       body?.topicIds !== undefined ||
-      body?.metadata !== undefined;
+      body?.metadata !== undefined ||
+      body?.nextReview !== undefined ||
+      body?.dueInDays !== undefined;
 
     if (!body || !hasUpdate) {
       throw new ApiError("At least one field is required to update.");
@@ -141,6 +143,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       topicDomain: body.topicDomain,
       topicIds: body.topicIds !== undefined ? (body.topicIds === null ? [] : toStringArray(body.topicIds, "topicIds")) : undefined,
       metadata: body.metadata,
+      nextReview: body.nextReview,
+      dueInDays: body.dueInDays,
     });
 
     if (!card) {

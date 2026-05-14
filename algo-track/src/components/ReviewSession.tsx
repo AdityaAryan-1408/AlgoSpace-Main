@@ -17,7 +17,7 @@ import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2 } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { useConfirmModal } from "@/components/ConfirmModal";
@@ -107,6 +107,7 @@ export function ReviewSession({
     const [userAnswer, setUserAnswer] = useState("");
     const [answerResult, setAnswerResult] = useState<"correct" | "incorrect" | null>(null);
     const [pendingRating, setPendingRating] = useState<Rating | null>(null);
+    const [dismissedDryRunPrompt, setDismissedDryRunPrompt] = useState(false);
     const [reviewNote, setReviewNote] = useState<string>("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [results, setResults] = useState<ReviewResult[]>([]);
@@ -278,6 +279,7 @@ export function ReviewSession({
             setUserAnswer("");
             setAnswerResult(null);
             setPendingRating(null);
+            setDismissedDryRunPrompt(false);
             cardStartTime.current = Date.now();
         } else {
             finishSession(newResults);
@@ -529,6 +531,25 @@ export function ReviewSession({
                                         card={currentCard}
                                         onDismiss={() => setShowConstraintShifter(false)}
                                     />
+                                )}
+
+                                {/* Dry Run Auto-Prompt */}
+                                {!dismissedDryRunPrompt && currentCard.type === "leetcode" && currentCard.history.total >= 3 && (
+                                    <div className="p-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center shrink-0">
+                                                <Bug className="w-4 h-4 text-cyan-500" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-foreground">Test your actual understanding</h4>
+                                                <p className="text-xs text-muted-foreground mt-0.5">You've reviewed this card a few times. Try the Interactive Dry-Run Tracer instead of just revealing the answer.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                                            <Button size="sm" onClick={() => setShowDryRun(true)} className="bg-cyan-500 hover:bg-cyan-600 text-white rounded-full">Start Dry-Run</Button>
+                                            <Button size="sm" variant="ghost" onClick={() => setDismissedDryRunPrompt(true)} className="text-muted-foreground hover:text-foreground rounded-full">Not now</Button>
+                                        </div>
+                                    </div>
                                 )}
 
                                 {isReverse ? (
