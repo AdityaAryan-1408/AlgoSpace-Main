@@ -14,14 +14,14 @@ export async function GET() {
 Your task is to generate a "mental tracing" exercise. This should be a tiny function (in JavaScript or Python) that tests raw logic (like a loop, simple recursion, or array manipulation).
 
 Requirements:
-1. "code": A short 3-6 line code snippet that includes a function definition AND a ` + "`console.log()`" + ` or ` + "`print()`" + ` call with a specific input. Keep syntax extremely standard.
+1. "code": A short 3-6 line code snippet that includes a function definition AND a ` + "`console.log()`" + ` or ` + "`print()`" + ` call with a specific input. Keep syntax extremely standard. IMPORTANT: The code string MUST be properly formatted with \n newline characters and \t or space indentation to span multiple lines. Do NOT generate the entire function on a single line!
 2. "correctOutput": The exact string output of that code. If it returns an integer, output it as a string (e.g. "5").
 3. "explanation": A very brief 1-sentence explanation of what the logic does.
 
 Make it slightly tricky but easy enough to trace in your head within 30 seconds.
 
 Output valid JSON ONLY.
-Format: { "code": "...", "correctOutput": "...", "explanation": "..." }`;
+Format: { "code": "function foo() {\\n  let x = 1;\\n  return x;\\n}\\nconsole.log(foo());", "correctOutput": "...", "explanation": "..." }`;
 
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
