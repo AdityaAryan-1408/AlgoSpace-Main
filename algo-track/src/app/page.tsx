@@ -607,8 +607,12 @@ export default function HomePage() {
                     {[
                       { id: "light", label: "Light" },
                       { id: "dark", label: "Dark" },
+                      { id: "theme-vscode", label: "VS Code" },
+                      { id: "theme-ocean", label: "Deep Ocean" },
+                      { id: "theme-github", label: "GitHub Dark" },
                       { id: "theme-dracula", label: "Dracula" },
                       { id: "theme-monokai", label: "Monokai" },
+                      { id: "theme-gruvbox", label: "Gruvbox" },
                     ].map(t => (
                       <button 
                         key={t.id}

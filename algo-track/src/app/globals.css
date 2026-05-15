@@ -111,6 +111,94 @@
     --tag: #66d9ef;
     --tag-bg: rgba(102, 217, 239, 0.1);
   }
+
+  .theme-vscode {
+    --background: #1e1e1e;
+    --foreground: #d4d4d4;
+    --card: #252526;
+    --card-foreground: #d4d4d4;
+    --border: #333333;
+    --muted: #2d2d30;
+    --muted-foreground: #858585;
+    --primary: #007acc;
+    --primary-foreground: #ffffff;
+    
+    --easy: #4ec9b0;
+    --easy-bg: rgba(78, 201, 176, 0.1);
+    --medium: #dcdcaa;
+    --medium-bg: rgba(220, 220, 170, 0.1);
+    --hard: #f44747;
+    --hard-bg: rgba(244, 71, 71, 0.1);
+    
+    --tag: #569cd6;
+    --tag-bg: rgba(86, 156, 214, 0.1);
+  }
+
+  .theme-ocean {
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --card: #1e293b;
+    --card-foreground: #f8fafc;
+    --border: #334155;
+    --muted: #334155;
+    --muted-foreground: #94a3b8;
+    --primary: #38bdf8;
+    --primary-foreground: #0f172a;
+    
+    --easy: #34d399;
+    --easy-bg: rgba(52, 211, 153, 0.1);
+    --medium: #fbbf24;
+    --medium-bg: rgba(251, 191, 36, 0.1);
+    --hard: #f87171;
+    --hard-bg: rgba(248, 113, 113, 0.1);
+    
+    --tag: #2dd4bf;
+    --tag-bg: rgba(45, 212, 191, 0.1);
+  }
+
+  .theme-gruvbox {
+    --background: #282828;
+    --foreground: #ebdbb2;
+    --card: #3c3836;
+    --card-foreground: #ebdbb2;
+    --border: #504945;
+    --muted: #504945;
+    --muted-foreground: #a89984;
+    --primary: #fabd2f;
+    --primary-foreground: #282828;
+    
+    --easy: #b8bb26;
+    --easy-bg: rgba(184, 187, 38, 0.1);
+    --medium: #fabd2f;
+    --medium-bg: rgba(250, 189, 47, 0.1);
+    --hard: #fb4934;
+    --hard-bg: rgba(251, 73, 52, 0.1);
+    
+    --tag: #83a598;
+    --tag-bg: rgba(131, 165, 152, 0.1);
+  }
+
+  .theme-github {
+    --background: #0d1117;
+    --foreground: #c9d1d9;
+    --card: #161b22;
+    --card-foreground: #c9d1d9;
+    --border: #30363d;
+    --muted: #21262d;
+    --muted-foreground: #8b949e;
+    --primary: #58a6ff;
+    --primary-foreground: #0d1117;
+    
+    --easy: #2ea043;
+    --easy-bg: rgba(46, 160, 67, 0.1);
+    --medium: #e3b341;
+    --medium-bg: rgba(227, 179, 65, 0.1);
+    --hard: #f85149;
+    --hard-bg: rgba(248, 81, 73, 0.1);
+    
+    --tag: #79c0ff;
+    --tag-bg: rgba(121, 192, 255, 0.1);
+  }
 }
 
 @layer base {
