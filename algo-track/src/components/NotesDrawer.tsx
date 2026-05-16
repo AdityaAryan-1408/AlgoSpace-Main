@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FileText, Check, Loader2, PenLine } from "lucide-react";
 import { RichNotesEditor } from "./RichNotesEditor";
 import { WhiteboardCanvas } from "./WhiteboardCanvas";
@@ -105,13 +106,18 @@ export function NotesPanel({
     }, 1500);
   }, []);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     return () => {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
     };
   }, []);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       {/* ── Side Tab Handle ── Always visible on the right edge */}
       <button
@@ -230,6 +236,7 @@ export function NotesPanel({
           </p>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
