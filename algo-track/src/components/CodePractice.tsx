@@ -27,15 +27,7 @@ const NITPICK_KEY = "algotrack-nitpick-mode";
 
 const AI_REVIEW_KEY = "algotrack-ai-review-";
 
-const LANGUAGES = [
-    { id: "cpp", label: "C++" },
-    { id: "python", label: "Python" },
-    { id: "java", label: "Java" },
-    { id: "javascript", label: "JavaScript" },
-    { id: "typescript", label: "TypeScript" },
-    { id: "go", label: "Go" },
-    { id: "rust", label: "Rust" },
-] as const;
+
 
 export interface EvalResult {
     feedback: string;
@@ -91,7 +83,7 @@ interface Props {
 export function CodePractice({ card, onRate, onCancel }: Props) {
     const isDSA = card.type === "leetcode" || card.type === "sql";
     const [code, setCode] = useState("");
-    const [language, setLanguage] = useState("cpp");
+
     const [strictMode, setStrictMode] = useState(false);
     const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
     const [isEvaluating, setIsEvaluating] = useState(false);
@@ -99,7 +91,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
     const [hints, setHints] = useState<HintResult[]>([]);
     const [hintLevel, setHintLevel] = useState(0);
     const [isHinting, setIsHinting] = useState(false);
-    const [showLangPicker, setShowLangPicker] = useState(false);
+
     const [selectedRating, setSelectedRating] = useState<EvalResult["suggestedRating"] | null>(null);
     const [suggestionResult, setSuggestionResult] = useState<SuggestionResult | null>(null);
     const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
@@ -271,33 +263,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
             {/* Toolbar */}
             <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                    {isDSA && (
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowLangPicker(!showLangPicker)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted/50 cursor-pointer transition-colors"
-                            >
-                                {LANGUAGES.find((l) => l.id === language)?.label || language}
-                                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                            {showLangPicker && (
-                                <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-20 py-1 min-w-30">
-                                    {LANGUAGES.map((lang) => (
-                                        <button
-                                            key={lang.id}
-                                            onClick={() => {
-                                                setLanguage(lang.id);
-                                                setShowLangPicker(false);
-                                            }}
-                                            className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted/50 cursor-pointer ${language === lang.id ? "text-blue-500 font-medium" : "text-foreground"}`}
-                                        >
-                                            {lang.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
+
 
                     {/* Nitpick Toggle */}
                     <button
@@ -375,7 +341,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                 <div className="rounded-xl border border-border overflow-hidden">
                     <Editor
                         height="320px"
-                        language={language}
+                        language={card.type === "sql" ? "mysql" : "cpp"}
                         value={code}
                         onChange={(val) => setCode(val || "")}
                         theme="vs-dark"
@@ -595,7 +561,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                                         userCode: code,
                                                         problemTitle: card.title,
                                                         problemDescription: card.description,
-                                                        language,
+
                                                     }),
                                                 });
                                                 if (!res.ok) throw new Error("Failed");
