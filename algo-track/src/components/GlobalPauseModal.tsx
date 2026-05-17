@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Loader2, Pause, Play, Clock, Plus, X } from "lucide-react";
+import { Loader2, Pause, Play, Clock, Plus, X, Shuffle } from "lucide-react";
 import { motion } from "motion/react";
 import { createPortal } from "react-dom";
 import {
@@ -10,6 +10,7 @@ import {
     resumeAllReviews,
     extendGlobalPause,
     redistributeReviews,
+    shuffleAllReviews,
     type GlobalPauseStatus,
 } from "@/lib/client-api";
 import { useConfirmModal } from "@/components/ConfirmModal";
@@ -98,6 +99,24 @@ export function GlobalPauseModal({
             onChanged();
         } catch (err) {
             console.error("Failed to redistribute reviews:", err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleShuffleAll = async () => {
+        setIsSubmitting(true);
+        try {
+            const result = await shuffleAllReviews();
+            const totalDays = Math.ceil(result.shuffled / 7);
+            alertModal({
+                title: "All Cards Shuffled",
+                message: `Randomly shuffled ${result.shuffled} cards and spread them at 7/day. You'll cycle through all of them in ~${totalDays} days.`,
+                variant: "info",
+            });
+            onChanged();
+        } catch (err) {
+            console.error("Failed to shuffle all cards:", err);
         } finally {
             setIsSubmitting(false);
         }
@@ -385,6 +404,25 @@ export function GlobalPauseModal({
                                     )}
                                     Redistribute Reviews (7/day)
                                 </Button>
+
+                                <div className="mt-3 pt-3 border-t border-border/50">
+                                    <p className="text-xs text-muted-foreground mb-2 text-center">
+                                        Want to review everything? Shuffle all cards randomly and spread at 7/day.
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleShuffleAll}
+                                        disabled={isSubmitting}
+                                        className="w-full rounded-full gap-2 text-sm border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400"
+                                    >
+                                        {isSubmitting ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Shuffle className="w-4 h-4" />
+                                        )}
+                                        Shuffle &amp; Spread All Cards (7/day)
+                                    </Button>
+                                </div>
                             </div>
                         </>
                     )}

@@ -422,3 +422,10 @@ export async function redistributeReviews(): Promise<{ redistributed: number }> 
         body: JSON.stringify({ action: "redistribute" }),
     });
 }
+
+export async function shuffleAllReviews(): Promise<{ shuffled: number }> {
+    return apiFetch<{ shuffled: number }>("/reviews/pause", {
+        method: "POST",
+        body: JSON.stringify({ action: "shuffle_all" }),
+    });
+}

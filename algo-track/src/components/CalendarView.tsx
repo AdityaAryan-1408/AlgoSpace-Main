@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Flashcard } from "@/data";
+import { CalendarDays } from "lucide-react";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -14,6 +15,7 @@ export function CalendarView({ cards }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [customDateCardId, setCustomDateCardId] = useState<string | null>(null);
 
   const getDaysInMonth = (year: number, month: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -150,6 +152,34 @@ export function CalendarView({ cards }: CalendarViewProps) {
     }
   };
 
+  const handleRescheduleToDate = async (card: Flashcard, dateStr: string) => {
+    if (isUpdating || !dateStr) return;
+    setIsUpdating(true);
+    setCustomDateCardId(null);
+
+    try {
+      const newDate = new Date(dateStr + "T00:00:00");
+      const diffTime = Math.abs(newDate.getTime() - today.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      await updateCard(card.id, {
+        nextReview: newDate.toISOString(),
+        dueInDays: newDate < today ? 0 : diffDays,
+      });
+    } catch (error) {
+      console.error("Failed to reschedule:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Tomorrow date string for date input min
+  const tomorrowStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  })();
+
   const selectedDateStr = selectedDate ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` : "";
   const selectedCards = selectedDate ? (cardsByDate.get(selectedDateStr) || []) : [];
 
@@ -235,30 +265,52 @@ export function CalendarView({ cards }: CalendarViewProps) {
                       </Badge>
                     </div>
                     
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-border border-dashed">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                        Reschedule
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-6 px-2 text-[10px]"
-                          disabled={isUpdating}
-                          onClick={() => handleReschedule(card, -1)}
-                        >
-                          -1d
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-6 px-2 text-[10px]"
-                          disabled={isUpdating}
-                          onClick={() => handleReschedule(card, 1)}
-                        >
-                          +1d <ArrowRight className="w-3 h-3 ml-1" />
-                        </Button>
+                    <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-border border-dashed">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                          Reschedule
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-6 px-2 text-[10px]"
+                            disabled={isUpdating}
+                            onClick={() => handleReschedule(card, -1)}
+                          >
+                            -1d
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-6 px-2 text-[10px]"
+                            disabled={isUpdating}
+                            onClick={() => handleReschedule(card, 1)}
+                          >
+                            +1d <ArrowRight className="w-3 h-3 ml-1" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`h-6 px-2 text-[10px] gap-1 ${customDateCardId === card.id ? "border-cyan-500 text-cyan-500" : ""}`}
+                            disabled={isUpdating}
+                            onClick={() => setCustomDateCardId(customDateCardId === card.id ? null : card.id)}
+                          >
+                            <CalendarDays className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </div>
+                      {customDateCardId === card.id && (
+                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                          <input
+                            type="date"
+                            min={tomorrowStr}
+                            autoFocus
+                            className="flex-1 px-2 py-1 rounded-lg border border-border bg-background text-foreground text-[11px] focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                            onChange={(e) => handleRescheduleToDate(card, e.target.value)}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))

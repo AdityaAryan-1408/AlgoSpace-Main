@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard, CardType } from "@/data";
-import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2, Code, Database, BookOpen } from "lucide-react";
+import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2, Code, Database, BookOpen, CalendarDays } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { rescheduleReviews } from "@/lib/client-api";
 
@@ -32,6 +32,8 @@ export function ReviewModal({
   const [showOptions, setShowOptions] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const customDateRef = useRef<HTMLInputElement>(null);
   const [numberSelectMode, setNumberSelectMode] = useState<"random-quiz" | "reverse" | null>(null);
 
   // Compute counts per type
@@ -57,6 +59,13 @@ export function ReviewModal({
     , availableTypes[0]);
   });
 
+  // Tomorrow's date for date picker min
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  }, []);
+
   const handleReschedule = async (days: number) => {
     setIsRescheduling(true);
     try {
@@ -66,6 +75,17 @@ export function ReviewModal({
       console.error("Failed to reschedule", e);
       setIsRescheduling(false);
     }
+  };
+
+  const handleCustomDateReschedule = (dateStr: string) => {
+    if (!dateStr) return;
+    const picked = new Date(dateStr + "T00:00:00");
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diffDays = Math.max(1, Math.round((picked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    setShowReschedule(false);
+    setShowCustomDatePicker(false);
+    handleReschedule(diffDays);
   };
 
   // Filter and sort cards for the active tab
@@ -289,23 +309,45 @@ export function ReviewModal({
                        className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-lg overflow-hidden flex flex-col py-1 z-50 origin-bottom-left"
                      >
                        <button
-                         onClick={() => { setShowReschedule(false); handleReschedule(1); }}
-                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
-                       >
-                         Tomorrow (1 day)
-                       </button>
-                       <button
-                         onClick={() => { setShowReschedule(false); handleReschedule(3); }}
-                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
-                       >
-                         In 3 days
-                       </button>
-                       <button
-                         onClick={() => { setShowReschedule(false); handleReschedule(7); }}
-                         className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
-                       >
-                         In a week
-                       </button>
+                          onClick={() => { setShowReschedule(false); setShowCustomDatePicker(false); handleReschedule(1); }}
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                        >
+                          Tomorrow (1 day)
+                        </button>
+                        <button
+                          onClick={() => { setShowReschedule(false); setShowCustomDatePicker(false); handleReschedule(3); }}
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                        >
+                          In 3 days
+                        </button>
+                        <button
+                          onClick={() => { setShowReschedule(false); setShowCustomDatePicker(false); handleReschedule(7); }}
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted"
+                        >
+                          In a week
+                        </button>
+                        <div className="border-t border-border my-0.5" />
+                        {showCustomDatePicker ? (
+                          <div className="px-3 py-2 flex flex-col gap-1.5">
+                            <input
+                              ref={customDateRef}
+                              type="date"
+                              min={tomorrowStr}
+                              autoFocus
+                              className="w-full px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                              onChange={(e) => handleCustomDateReschedule(e.target.value)}
+                            />
+                            <span className="text-[10px] text-muted-foreground text-center">Pick any future date</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setShowCustomDatePicker(true)}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted text-cyan-500"
+                          >
+                            <CalendarDays className="w-3.5 h-3.5" />
+                            Custom date…
+                          </button>
+                        )}
                      </motion.div>
                    )}
                  </AnimatePresence>

@@ -911,6 +911,66 @@ export async function redistributeCards(userId: string) {
   return { redistributed: cards.length };
 }
 
+/**
+ * Shuffle ALL unpaused cards randomly and distribute them 7/day.
+ * Unlike redistributeCards (which only touches overdue cards), this takes
+ * every active card regardless of its current next_review_at, shuffles
+ * them into a random order, and staggers them at 7 cards/day starting
+ * from tomorrow. This guarantees every card gets a review slot even if
+ * the user hasn't been able to keep up with the normal SRS schedule.
+ */
+export async function shuffleAllCards(userId: string) {
+  const supabase = getSupabaseAdmin();
+  const now = new Date();
+
+  // Fetch ALL cards for this user
+  const { data: allCards, error } = await supabase
+    .from("cards")
+    .select("id, metadata")
+    .eq("user_id", userId);
+
+  if (error) throw new Error(error.message);
+
+  // Filter out individually paused and globally paused cards
+  const cards = (allCards ?? []).filter((c) => {
+    const meta = (c.metadata as Record<string, unknown>) || {};
+    return meta.review_paused !== true && meta.globally_paused !== true;
+  });
+
+  if (cards.length === 0) {
+    return { shuffled: 0 };
+  }
+
+  // Fisher-Yates shuffle for true randomness
+  for (let i = cards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cards[i], cards[j]] = [cards[j], cards[i]];
+  }
+
+  // Stagger: 7 cards per day starting from day 1 (tomorrow)
+  const BATCH_SIZE = 7;
+  for (let i = 0; i < cards.length; i++) {
+    const dayOffset = Math.floor(i / BATCH_SIZE) + 1; // start from day 1
+    const nextReview = new Date(now);
+    nextReview.setDate(nextReview.getDate() + dayOffset);
+    // Set to start of that day (midnight UTC) for clean scheduling
+    nextReview.setUTCHours(0, 0, 0, 0);
+
+    const { error: updateError } = await supabase
+      .from("cards")
+      .update({
+        next_review_at: nextReview.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq("id", cards[i].id)
+      .eq("user_id", userId);
+
+    if (updateError) throw new Error(updateError.message);
+  }
+
+  return { shuffled: cards.length };
+}
+
 export async function extendGlobalPause(userId: string, additionalDays: number) {
   const supabase = getSupabaseAdmin();
 

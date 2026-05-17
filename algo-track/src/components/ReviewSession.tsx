@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { Flashcard } from "@/data";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +17,7 @@ import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { useConfirmModal } from "@/components/ConfirmModal";
@@ -114,11 +114,19 @@ export function ReviewSession({
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(
         mode === "sprint" ? Math.max(1, timeLimitSeconds ?? 300) : null,
     );
+    const [showCustomDate, setShowCustomDate] = useState(false);
     const cardStartTime = useRef(Date.now());
     const sessionStartTime = useRef(Date.now());
     const resultsRef = useRef<ReviewResult[]>([]);
     const completedRef = useRef(false);
     const [notesDrawerOpen, setNotesDrawerOpen] = useState(false);
+
+    // Tomorrow's date string for the custom date picker min value
+    const tomorrowStr = useMemo(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split("T")[0];
+    }, []);
 
     useEffect(() => {
         if (cards[currentIndex]) {
@@ -849,7 +857,36 @@ export function ReviewSession({
                                                 <Button size="sm" variant="outline" onClick={() => submitFinalReview(14)} disabled={isSubmitting}>
                                                     14 Days
                                                 </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setShowCustomDate(!showCustomDate)}
+                                                    disabled={isSubmitting}
+                                                    className={`gap-1.5 ${showCustomDate ? "border-cyan-500 text-cyan-500" : ""}`}
+                                                >
+                                                    <CalendarDays className="w-3.5 h-3.5" />
+                                                    Custom
+                                                </Button>
                                             </div>
+                                            {showCustomDate && (
+                                                <div className="flex items-center justify-center gap-2 mt-2 animate-in fade-in slide-in-from-top-1">
+                                                    <input
+                                                        type="date"
+                                                        min={tomorrowStr}
+                                                        className="px-3 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                                                        onChange={(e) => {
+                                                            if (!e.target.value) return;
+                                                            const picked = new Date(e.target.value + "T00:00:00");
+                                                            const now = new Date();
+                                                            now.setHours(0, 0, 0, 0);
+                                                            const diffDays = Math.max(1, Math.round((picked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+                                                            setShowCustomDate(false);
+                                                            submitFinalReview(diffDays);
+                                                        }}
+                                                    />
+                                                    <span className="text-xs text-muted-foreground">Pick any future date</span>
+                                                </div>
+                                            )}
                                             <Button variant="ghost" size="sm" onClick={() => setPendingRating(null)} disabled={isSubmitting} className="text-muted-foreground mt-2">
                                                 Wait, let me change rating
                                             </Button>
