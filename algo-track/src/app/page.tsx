@@ -299,7 +299,7 @@ export default function HomePage() {
     }, CACHE_TTL_MS);
   };
 
-  const handleStartReview = async (mode: ReviewMode = "standard", count?: number, typeFilter?: CardType) => {
+  const handleStartReview = async (mode: ReviewMode = "standard", count?: number, typeFilter?: CardType, orderedCards?: Flashcard[]) => {
     setShowReviewModal(false);
     try {
       const modeCount = count || 5;
@@ -349,6 +349,15 @@ export default function HomePage() {
         }
         setReviewSessionCards(reverseCards);
         setReviewSessionConfig({ mode: "reverse" });
+        setView("review-session");
+        return;
+      }
+
+      if (mode === "standard" && orderedCards && orderedCards.length > 0) {
+        setReviewSessionCards(orderedCards);
+        setReviewSessionConfig({
+          mode,
+        });
         setView("review-session");
         return;
       }

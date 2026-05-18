@@ -1,16 +1,33 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard, CardType } from "@/data";
-import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2, Code, Database, BookOpen, CalendarDays } from "lucide-react";
+import { Play, Shuffle, Timer, Repeat, MoreHorizontal, Calendar, Loader2, Code, Database, BookOpen, CalendarDays, GripVertical } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { rescheduleReviews } from "@/lib/client-api";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
   onClose: () => void;
-  onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, typeFilter?: CardType) => void;
+  onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, typeFilter?: CardType, orderedCards?: Flashcard[]) => void;
   onRescheduled?: () => void;
 }
 
@@ -21,6 +38,75 @@ const TAB_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: 
   sql: { label: "SQL", icon: <Database className="w-3.5 h-3.5" />, color: "text-orange-500" },
   cs: { label: "Concepts", icon: <BookOpen className="w-3.5 h-3.5" />, color: "text-emerald-500" },
 };
+
+
+function SortableCard({ card, isLast }: { card: Flashcard; isLast: boolean }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: card.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 0,
+    position: "relative" as const,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 flex items-start gap-3 bg-card hover:bg-muted/30 transition-colors ${
+        !isLast ? "border-b border-border" : ""
+      } ${isDragging ? "shadow-lg border-y border-primary/50 opacity-95 bg-muted/20" : ""}`}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="mt-0.5 p-1 -ml-1 text-muted-foreground/40 hover:text-foreground cursor-grab active:cursor-grabbing rounded transition-colors"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      
+      <div className="flex-1 flex flex-col gap-2 min-w-0">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="font-medium text-foreground text-sm leading-tight truncate">
+              {card.title}
+            </span>
+            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${
+              card.type === "leetcode" ? "text-blue-500" : card.type === "sql" ? "text-orange-500" : "text-emerald-500"
+            }`}>
+              {card.type === "leetcode" ? "DSA" : card.type === "sql" ? "SQL" : "CS"}
+            </span>
+          </div>
+          <Badge
+            variant={card.difficulty}
+            className="capitalize bg-transparent border-current text-current shrink-0"
+          >
+            {card.difficulty}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {card.tags.map((tag) => (
+            <Badge
+              key={tag}
+              variant="tag"
+              className="bg-transparent border-tag/30 text-tag font-normal text-[10px] px-2 py-0"
+            >
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ReviewModal({
   dueCards,
@@ -119,12 +205,36 @@ export function ReviewModal({
     });
   }, [dueCards, activeTab]);
 
-  const displayCards = queuedCards.slice(0, 5);
+  const [orderedCards, setOrderedCards] = useState<Flashcard[]>([]);
+
+  useEffect(() => {
+    setOrderedCards(queuedCards);
+  }, [queuedCards]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setOrderedCards((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
 
   // When starting, pass the type filter if a specific tab is active
   const handleStart = (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number) => {
     const typeFilter = activeTab !== "all" ? (activeTab as CardType) : undefined;
-    onStart(mode, count, typeFilter);
+    onStart(mode, count, typeFilter, orderedCards);
   };
 
   return (
@@ -220,61 +330,32 @@ export function ReviewModal({
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-foreground">Up Next</h3>
               <span className="text-xs text-muted-foreground">
-                Showing {displayCards.length} of {queuedCards.length}
+                {orderedCards.length} cards (Drag to reorder)
               </span>
             </div>
 
-            <div className="flex flex-col gap-0 border border-border rounded-xl overflow-hidden">
-              {displayCards.map((card, index) => (
-                <div
-                  key={card.id}
-                  className={`p-4 flex flex-col gap-2 bg-card hover:bg-muted/30 transition-colors ${index !== displayCards.length - 1
-                      ? "border-b border-border"
-                      : ""
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-foreground text-sm leading-tight">
-                        {card.title}
-                      </span>
-                      {activeTab === "all" && (
-                        <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                          card.type === "leetcode" ? "text-blue-500" : card.type === "sql" ? "text-orange-500" : "text-emerald-500"
-                        }`}>
-                          {card.type === "leetcode" ? "DSA" : card.type === "sql" ? "SQL" : "CS"}
-                        </span>
-                      )}
-                    </div>
-                    <Badge
-                      variant={card.difficulty}
-                      className="capitalize bg-transparent border-current text-current shrink-0"
-                    >
-                      {card.difficulty}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {card.tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="tag"
-                        className="bg-transparent border-tag/30 text-tag font-normal text-[10px] px-2 py-0"
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={orderedCards.map(c => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-0 border border-border rounded-xl overflow-hidden bg-card">
+                  {orderedCards.map((card, index) => (
+                    <SortableCard 
+                      key={card.id} 
+                      card={card} 
+                      isLast={index === orderedCards.length - 1} 
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
 
-            {queuedCards.length > 5 && (
-              <div className="text-center mt-4">
-                <span className="text-xs text-muted-foreground font-medium">
-                  +{queuedCards.length - 5} more cards
-                </span>
-              </div>
-            )}
+
           </div>
         )}
 

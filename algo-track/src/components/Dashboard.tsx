@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import type { Flashcard, CardType } from "@/data";
 import { CheckCircle2, AlertCircle, Clock, BarChart3, Loader2, Download, Trash2, ChevronRight, X, Pause, Play, Timer, Code, BookOpen, LayoutGrid, List } from "lucide-react";
 import { isCardPaused } from "@/lib/card-utils";
-import { fetchGlobalPauseStatus, resumeAllReviews } from "@/lib/client-api";
+import { fetchGlobalPauseStatus, resumeAllReviews, resumeCardReview } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
 import { MasteryHeatmap } from "./MasteryHeatmap";
 import { CardDetailsModal } from "./CardDetailsModal";
@@ -110,6 +110,9 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
   const [isResuming, setIsResuming] = useState(false);
   const [typeTab, setTypeTab] = useState<"all" | CardType>("all");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [showPausedModal, setShowPausedModal] = useState(false);
+  const [resumingCardIds, setResumingCardIds] = useState<Set<string>>(new Set());
+  const [isResumingAllPaused, setIsResumingAllPaused] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -311,6 +314,7 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
                 <FeatureCarouselWidget 
                   analytics={analytics} 
                   dueCount={dueCount} 
+                  cards={cards}
                   onNavigate={onNavigate || (() => {})}
                   onOpenTopicModal={() => setShowTopicModal(true)}
                 />
@@ -342,14 +346,18 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
         </motion.div>
       )}
 
-      {/* Paused cards banner */}
+      {/* Paused cards banner — clickable to manage */}
       {pausedCount > 0 && (
-        <div className="mb-4 p-3 rounded-xl bg-muted/40 border border-border flex items-center gap-2">
+        <button
+          onClick={() => setShowPausedModal(true)}
+          className="mb-4 p-3 rounded-xl bg-muted/40 border border-border flex items-center gap-2 w-full text-left hover:bg-muted/60 hover:border-primary/30 transition-all group cursor-pointer"
+        >
           <Pause className="w-4 h-4 text-muted-foreground shrink-0" />
-          <span className="text-sm text-muted-foreground">
-            <strong className="text-foreground">{pausedCount}</strong> card{pausedCount !== 1 ? "s" : ""} paused — click a paused card to resume reviews.
+          <span className="text-sm text-muted-foreground flex-1">
+            <strong className="text-foreground">{pausedCount}</strong> card{pausedCount !== 1 ? "s" : ""} paused — click to manage
           </span>
-        </div>
+          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+        </button>
       )}
 
       {/* Type Tabs (CS / DSA) */}
@@ -720,6 +728,111 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
           />
         )}
       </AnimatePresence>
+
+      {createPortal(
+        <AnimatePresence>
+          {showPausedModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm" onClick={() => setShowPausedModal(false)}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] border border-border"
+              >
+                <div className="p-4 border-b border-border flex items-center justify-between bg-muted/10">
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <Pause className="w-4 h-4 text-amber-500" />
+                    Paused Cards ({pausedCount})
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      disabled={isResumingAllPaused || pausedCount === 0}
+                      onClick={async () => {
+                        setIsResumingAllPaused(true);
+                        try {
+                          const pausedCards = cards.filter(c => isCardPaused(c));
+                          await Promise.all(pausedCards.map(c => resumeCardReview(c.id, 0)));
+                          onRefresh();
+                          setShowPausedModal(false);
+                        } catch (err) {
+                          console.error("Failed to resume all:", err);
+                        } finally {
+                          setIsResumingAllPaused(false);
+                        }
+                      }}
+                      className="rounded-full gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs"
+                    >
+                      {isResumingAllPaused ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5" />
+                      )}
+                      Resume All
+                    </Button>
+                    <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={() => setShowPausedModal(false)}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+                  {cards.filter(c => isCardPaused(c)).map(card => (
+                    <div key={card.id} className="flex items-center justify-between p-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-colors gap-3">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-foreground block truncate">{card.title}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${card.difficulty === 'easy' ? 'bg-[#00b8a3]/10 text-[#00b8a3] border-[#00b8a3]/20' : card.difficulty === 'medium' ? 'bg-[#ffc01e]/10 text-[#ffc01e] border-[#ffc01e]/20' : 'bg-[#ff375f]/10 text-[#ff375f] border-[#ff375f]/20'}`}>
+                            {card.difficulty}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {card.history.total} review{card.history.total !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={resumingCardIds.has(card.id)}
+                        onClick={async () => {
+                          setResumingCardIds(prev => new Set(prev).add(card.id));
+                          try {
+                            await resumeCardReview(card.id, 0);
+                            onRefresh();
+                          } catch (err) {
+                            console.error("Failed to resume card:", err);
+                          } finally {
+                            setResumingCardIds(prev => {
+                              const next = new Set(prev);
+                              next.delete(card.id);
+                              return next;
+                            });
+                          }
+                        }}
+                        className="rounded-full gap-1.5 text-xs shrink-0 hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/30"
+                      >
+                        {resumingCardIds.has(card.id) ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5" />
+                        )}
+                        Resume
+                      </Button>
+                    </div>
+                  ))}
+                  {pausedCount === 0 && (
+                    <div className="text-center text-sm text-muted-foreground py-8">
+                      No paused cards.
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {createPortal(
         <AnimatePresence>

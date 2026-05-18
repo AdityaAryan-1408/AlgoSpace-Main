@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Pin, Sparkles, Calendar, TrendingUp, Compass, ArrowRight, Globe, Brain, PlaySquare, RefreshCw, Timer, Zap, Network, Loader2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ChevronLeft, ChevronRight, Pin, Sparkles, TrendingUp, TrendingDown, Compass, ArrowRight, Globe, Brain, PlaySquare, RefreshCw, Timer, Zap, Network, Loader2, CheckCircle2, AlertTriangle, Target } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { TopicRadarChart } from "@/components/charts/TopicRadarChart";
+import type { Flashcard } from "@/data";
 
 interface FeatureCarouselWidgetProps {
-  analytics: any; // Topic Mastery data
-  dueCount: number; // For mini calendar
+  analytics: any;
+  dueCount: number;
+  cards: Flashcard[];
   onNavigate: (view: string) => void;
   onOpenTopicModal: () => void;
 }
@@ -299,7 +301,75 @@ function AlgoVisTile() {
   );
 }
 
-export function FeatureCarouselWidget({ analytics, dueCount, onNavigate, onOpenTopicModal }: FeatureCarouselWidgetProps) {
+function QuickStatsTile({ cards, analytics }: { cards: Flashcard[]; analytics: any }) {
+  const stats = useMemo(() => {
+    const active = cards.filter(c => !c.metadata?.review_paused && !c.metadata?.globally_paused);
+    const mastered = active.filter(c => c.dueInDays >= 14).length;
+    const struggling = active.filter(c => c.lastRating === 'AGAIN' || c.lastRating === 'HARD').length;
+
+    const recent = (analytics?.performance || []).slice(-7);
+    const accVals = recent.filter((d: any) => d.accuracy != null).map((d: any) => d.accuracy as number);
+    const avgAccuracy = accVals.length > 0
+      ? Math.round(accVals.reduce((a: number, b: number) => a + b, 0) / accVals.length)
+      : null;
+
+    const prev = (analytics?.performance || []).slice(-14, -7);
+    const prevAccVals = prev.filter((d: any) => d.accuracy != null).map((d: any) => d.accuracy as number);
+    const prevAvg = prevAccVals.length > 0
+      ? Math.round(prevAccVals.reduce((a: number, b: number) => a + b, 0) / prevAccVals.length)
+      : null;
+
+    let accuracyTrend: 'up' | 'down' | 'flat' = 'flat';
+    if (avgAccuracy != null && prevAvg != null) {
+      if (avgAccuracy > prevAvg + 2) accuracyTrend = 'up';
+      else if (avgAccuracy < prevAvg - 2) accuracyTrend = 'down';
+    }
+
+    return { mastered, struggling, avgAccuracy, accuracyTrend, total: cards.length };
+  }, [cards, analytics]);
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-5">
+      <div className="grid grid-cols-3 gap-3 w-full max-w-[340px]">
+        {/* Mastered */}
+        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+          </div>
+          <span className="text-2xl font-bold text-emerald-500">{stats.mastered}</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mastered</span>
+        </div>
+        {/* Struggling */}
+        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-amber-500/5 border border-amber-500/15">
+          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+          </div>
+          <span className="text-2xl font-bold text-amber-500">{stats.struggling}</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Struggling</span>
+        </div>
+        {/* Accuracy */}
+        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-blue-500/5 border border-blue-500/15">
+          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+            <Target className="w-5 h-5 text-blue-500" />
+          </div>
+          <span className="text-2xl font-bold text-blue-500">{stats.avgAccuracy != null ? `${stats.avgAccuracy}%` : '—'}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Accuracy</span>
+            {stats.accuracyTrend === 'up' && <TrendingUp className="w-3 h-3 text-emerald-500" />}
+            {stats.accuracyTrend === 'down' && <TrendingDown className="w-3 h-3 text-red-500" />}
+          </div>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground text-center">
+        {stats.total > 0
+          ? `${Math.round((stats.mastered / stats.total) * 100)}% of your ${stats.total} cards fully mastered`
+          : "Add cards to start building mastery"}
+      </p>
+    </div>
+  );
+}
+
+export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, onOpenTopicModal }: FeatureCarouselWidgetProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
 
@@ -324,26 +394,10 @@ export function FeatureCarouselWidget({ analytics, dueCount, onNavigate, onOpenT
 
   const TILES = [
     {
-      id: "calendar",
-      title: "Mini Calendar",
-      icon: <Calendar className="w-4 h-4 text-emerald-500" />,
-      content: (
-        <div 
-          onClick={() => onNavigate("calendar")}
-          className="flex-1 flex flex-col items-center justify-center cursor-pointer group p-4"
-        >
-          <div className="text-4xl font-black text-foreground group-hover:text-emerald-500 transition-colors">
-            {new Date().toLocaleString('default', { month: 'short' }).toUpperCase()}
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground font-medium flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            {dueCount} cards due today
-          </div>
-          <div className="mt-4 text-xs font-semibold text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-            Open Time Travel <ArrowRight className="w-3 h-3" />
-          </div>
-        </div>
-      )
+      id: "quick-stats",
+      title: "Quick Stats",
+      icon: <TrendingUp className="w-4 h-4 text-blue-500" />,
+      content: <QuickStatsTile cards={cards} analytics={analytics} />
     },
     {
       id: "topic-mastery",
