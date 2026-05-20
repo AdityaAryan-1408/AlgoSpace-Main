@@ -288,13 +288,11 @@ export function CardDetailsModal({
               <BookOpen className="w-4 h-4 text-muted-foreground" />
               Description
             </h3>
-            <div className="bg-muted/30 p-2 rounded-xl border border-border/50 selectable">
-              <RichNotesEditor
-                readOnly
-                initialContent={card.description}
-                fallbackMarkdown={card.description}
-              />
-            </div>
+            <RichNotesEditor
+              readOnly
+              initialContent={card.description}
+              fallbackMarkdown={card.description}
+            />
           </section>
 
           <section className="flex flex-col gap-3">

@@ -17,6 +17,9 @@ import {
     ToggleRight,
     Wand2,
     Sparkles,
+    GitBranch,
+    Cpu,
+    FileCode2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Flashcard } from "@/data";
@@ -44,6 +47,29 @@ export interface EvalResult {
         coveredPoints: string[];
         missedPoints: string[];
         misconceptions: string[];
+    };
+    criteria?: {
+        approach?: {
+            passed: boolean;
+            current: string;
+            suggested: string;
+            keyIdea: string;
+            consider: string;
+        };
+        efficiency?: {
+            passed: boolean;
+            userTime: string;
+            userSpace: string;
+            optimalTime: string;
+            optimalSpace: string;
+            comparison: string;
+        };
+        codeStyle?: {
+            passed: boolean;
+            score: number;
+            grade: string;
+            comparisonComment: string;
+        };
     };
 }
 
@@ -410,41 +436,164 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
 
                         {/* Feedback body */}
                         <div className="p-4 space-y-4">
+                            {/* LeetCode-style Criteria Badges & Greetings for DSA evaluations */}
+                            {isDSA && evalResult.criteria && (
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap items-center gap-3 px-1 py-0.5">
+                                        <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold select-none transition-all ${
+                                            (evalResult.criteria.approach?.passed ?? evalResult.isCorrect)
+                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                                : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                        }`}>
+                                            <Check className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                                            Approach
+                                        </div>
+                                        <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold select-none transition-all ${
+                                            (evalResult.criteria.efficiency?.passed ?? evalResult.isCorrect)
+                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                                : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                        }`}>
+                                            <Check className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                                            Efficiency
+                                        </div>
+                                        <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-semibold select-none transition-all ${
+                                            (evalResult.criteria.codeStyle?.passed ?? evalResult.isCorrect)
+                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                                : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                        }`}>
+                                            <Check className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                                            Code Style
+                                        </div>
+                                    </div>
+
+                                    <div className="text-sm font-semibold text-indigo-200/90 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 leading-relaxed shadow-sm">
+                                        {evalResult.isCorrect
+                                            ? `Congratulations! You passed this attempt, building on your prior experience with ${card.title}.`
+                                            : `Keep practicing! You are close to mastering ${card.title}. Let's refine the approach.`
+                                        }
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="text-sm text-foreground/90 leading-relaxed">
                                 <MarkdownContent content={evalResult.feedback} />
                             </div>
 
-                            {/* Complexity for DSA */}
-                            {evalResult.complexityAnalysis && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                                            Your Complexity
-                                        </p>
-                                        <p className="text-sm font-mono font-semibold text-foreground">
-                                            Time: {evalResult.complexityAnalysis.userTime}
-                                        </p>
-                                        <p className="text-sm font-mono font-semibold text-foreground">
-                                            Space: {evalResult.complexityAnalysis.userSpace}
-                                        </p>
-                                    </div>
-                                    <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                                            Optimal
-                                        </p>
-                                        <p className="text-sm font-mono font-semibold text-foreground">
-                                            Time: {evalResult.complexityAnalysis.optimalTime}
-                                        </p>
-                                        <p className="text-sm font-mono font-semibold text-foreground">
-                                            Space: {evalResult.complexityAnalysis.optimalSpace}
-                                        </p>
-                                    </div>
-                                    {evalResult.complexityAnalysis.comparison && (
-                                        <div className="col-span-2 text-xs text-muted-foreground">
-                                            {evalResult.complexityAnalysis.comparison}
+                            {/* LeetCode criteria cards */}
+                            {isDSA && evalResult.criteria ? (
+                                <div className="space-y-4">
+                                    {/* Approach Card */}
+                                    {evalResult.criteria.approach && (
+                                        <div className="p-4 rounded-xl border border-border bg-muted/10 space-y-3">
+                                            <div className="flex items-center gap-2 text-indigo-400">
+                                                <GitBranch className="w-4 h-4" />
+                                                <span className="text-xs font-bold uppercase tracking-wider">Approach Analysis</span>
+                                            </div>
+                                            <div className="space-y-1.5 text-sm text-foreground/90 leading-relaxed">
+                                                <p><span className="text-muted-foreground text-xs uppercase tracking-wider font-bold">Current:</span> <span className="font-semibold text-foreground">{evalResult.criteria.approach.current}</span></p>
+                                                <p><span className="text-muted-foreground text-xs uppercase tracking-wider font-bold">Suggested:</span> <span className="font-semibold text-emerald-400">{evalResult.criteria.approach.suggested}</span></p>
+                                                <p><span className="text-muted-foreground text-xs uppercase tracking-wider font-bold">Key Idea:</span> <span className="text-foreground/90">{evalResult.criteria.approach.keyIdea}</span></p>
+                                            </div>
+                                            {evalResult.criteria.approach.consider && (
+                                                <div className="mt-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10 text-xs text-indigo-300 leading-relaxed">
+                                                    <span className="font-bold block mb-1 text-[10px] uppercase tracking-wider text-indigo-400">Consider:</span>
+                                                    {evalResult.criteria.approach.consider}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Efficiency Card */}
+                                    {evalResult.criteria.efficiency && (
+                                        <div className="p-4 rounded-xl border border-border bg-muted/10 space-y-3">
+                                            <div className="flex items-center gap-2 text-cyan-400">
+                                                <Cpu className="w-4 h-4" />
+                                                <span className="text-xs font-bold uppercase tracking-wider">Complexity & Efficiency</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mt-1">
+                                                <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Your Complexity</p>
+                                                    <p className="text-sm font-mono font-semibold text-foreground">Time: {evalResult.criteria.efficiency.userTime}</p>
+                                                    <p className="text-sm font-mono font-semibold text-foreground">Space: {evalResult.criteria.efficiency.userSpace}</p>
+                                                </div>
+                                                <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Optimal Complexity</p>
+                                                    <p className="text-sm font-mono font-semibold text-foreground">Time: {evalResult.criteria.efficiency.optimalTime}</p>
+                                                    <p className="text-sm font-mono font-semibold text-foreground">Space: {evalResult.criteria.efficiency.optimalSpace}</p>
+                                                </div>
+                                            </div>
+                                            {evalResult.criteria.efficiency.comparison && (
+                                                <p className="text-xs text-muted-foreground leading-relaxed italic mt-1">
+                                                    {evalResult.criteria.efficiency.comparison}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Code Style & Rating Card */}
+                                    {evalResult.criteria.codeStyle && (
+                                        <div className="p-4 rounded-xl border border-border bg-muted/10 space-y-3">
+                                            <div className="flex items-center gap-2 text-emerald-400">
+                                                <FileCode2 className="w-4 h-4" />
+                                                <span className="text-xs font-bold uppercase tracking-wider">Stored Solution Comparison</span>
+                                            </div>
+
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-3.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                                                <div className="relative flex flex-col items-center justify-center w-16 h-16 rounded-full border-2 border-dashed border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.1)] shrink-0 mx-auto sm:mx-0">
+                                                    <span className="text-base font-black text-emerald-400 leading-none">{evalResult.criteria.codeStyle.score}</span>
+                                                    <span className="text-[9px] text-emerald-500/80 font-bold uppercase mt-1">Score</span>
+                                                </div>
+
+                                                <div className="flex-1 space-y-1 text-center sm:text-left">
+                                                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                                                        <span className="text-xs font-semibold text-muted-foreground">Stored Solution Grade:</span>
+                                                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-xs font-bold uppercase">
+                                                            {evalResult.criteria.codeStyle.grade}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                                                        {evalResult.criteria.codeStyle.comparisonComment}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
+                            ) : (
+                                <>
+                                    {/* Complexity for DSA (Fallback) */}
+                                    {evalResult.complexityAnalysis && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                                                    Your Complexity
+                                                </p>
+                                                <p className="text-sm font-mono font-semibold text-foreground">
+                                                    Time: {evalResult.complexityAnalysis.userTime}
+                                                </p>
+                                                <p className="text-sm font-mono font-semibold text-foreground">
+                                                    Space: {evalResult.complexityAnalysis.userSpace}
+                                                </p>
+                                            </div>
+                                            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                                                    Optimal
+                                                </p>
+                                                <p className="text-sm font-mono font-semibold text-foreground">
+                                                    Time: {evalResult.complexityAnalysis.optimalTime}
+                                                </p>
+                                                <p className="text-sm font-mono font-semibold text-foreground">
+                                                    Space: {evalResult.complexityAnalysis.optimalSpace}
+                                                </p>
+                                            </div>
+                                            {evalResult.complexityAnalysis.comparison && (
+                                                <div className="col-span-2 text-xs text-muted-foreground">
+                                                    {evalResult.complexityAnalysis.comparison}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
                             )}
 
                             {/* Concept coverage for CS Core */}

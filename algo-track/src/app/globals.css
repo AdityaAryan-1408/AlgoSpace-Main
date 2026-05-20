@@ -257,7 +257,7 @@
 
 .rich-notes-readonly .bn-editor {
   min-height: auto;
-  padding: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
 }
 
 /* Make inline code in BlockNote match our theme */
