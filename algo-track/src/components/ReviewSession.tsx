@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { Flashcard } from "@/data";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { MarkdownContent } from "@/components/MarkdownContent";
+import { MarkdownContent, CodeBlock } from "@/components/MarkdownContent";
 import { CodePractice } from "@/components/CodePractice";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
@@ -357,7 +357,7 @@ export function ReviewSession({
     if (!currentCard) return null;
 
     return (
-        <div className={`transition-all duration-300 ease-in-out w-full mx-auto p-4 md:p-8 flex flex-col gap-6 ${isFullscreen ? "fixed inset-0 z-50 bg-background/90 backdrop-blur-xl max-w-none overflow-y-auto" : "max-w-3xl"}`}>
+        <div className={`transition-all duration-300 ease-in-out w-full mx-auto p-4 md:p-8 pb-32 flex flex-col gap-6 ${isFullscreen ? "fixed inset-0 z-50 bg-background/90 backdrop-blur-xl max-w-none overflow-y-auto pb-40" : "max-w-3xl pb-32"}`}>
           <div className={`w-full mx-auto flex flex-col gap-6 ${isFullscreen ? "max-w-4xl my-auto" : ""}`}>
             {/* Progress bar */}
             <div className="flex items-center justify-between gap-4">
@@ -416,9 +416,20 @@ export function ReviewSession({
                 <motion.div
                     key={currentCard.id}
                     initial={{ opacity: 0, x: 30 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    animate={{ 
+                        opacity: 1, 
+                        x: 0,
+                        rotateY: showAnswer ? [0, 12, -8, 0] : 0,
+                        scale: showAnswer ? [1, 0.98, 1.01, 1] : 1,
+                    }}
+                    style={{ perspective: 1000 }}
                     exit={{ opacity: 0, x: -30 }}
-                    transition={{ duration: 0.25 }}
+                    transition={{ 
+                        x: { duration: 0.25 },
+                        opacity: { duration: 0.25 },
+                        rotateY: { duration: 0.5, ease: "easeInOut" },
+                        scale: { duration: 0.4, ease: "easeInOut" }
+                    }}
                     className={`border border-border rounded-2xl shadow-sm overflow-hidden ${isFullscreen ? "bg-card/60 backdrop-blur-2xl shadow-2xl border-white/5" : "bg-card"}`}
                 >
                     {/* Card Header */}
@@ -588,112 +599,7 @@ export function ReviewSession({
                                     </div>
                                 )}
 
-                                <div className="mt-2 flex flex-col items-center gap-3">
-                                    <div className="flex justify-center gap-3 flex-wrap">
-                                        {!showAnswerInput && (
-                                            <Button
-                                                onClick={() => setShowAnswer(true)}
-                                                className="gap-2 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-8 py-5 text-base"
-                                            >
-                                                <Eye className="w-5 h-5" />
-                                                {isReverse ? "Reveal Problem" : "Reveal Answer"}
-                                            </Button>
-                                        )}
-                                        {isReverse ? (
-                                            showAnswerInput ? (
-                                                <form 
-                                                    className="flex flex-col gap-2 items-center" 
-                                                    onSubmit={(e) => {
-                                                        e.preventDefault();
-                                                        if (userAnswer.toLowerCase().trim() === currentCard.title.toLowerCase().trim()) {
-                                                            setAnswerResult("correct");
-                                                            setShowAnswer(true);
-                                                        } else {
-                                                            setAnswerResult("incorrect");
-                                                        }
-                                                    }}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <input 
-                                                            value={userAnswer}
-                                                            onChange={e => { setUserAnswer(e.target.value); setAnswerResult(null); }}
-                                                            placeholder="Question name..." 
-                                                            className="border border-border bg-card rounded-full px-4 py-2.5 outline-none focus:border-blue-500 transition-colors w-64 shadow-sm"
-                                                            autoFocus
-                                                        />
-                                                        <Button type="submit" variant="default" className="rounded-full px-6 py-5">Check</Button>
-                                                        <Button type="button" variant="ghost" onClick={() => { setShowAnswerInput(false); setAnswerResult(null); }} className="rounded-full px-4 py-5 font-semibold">Cancel</Button>
-                                                    </div>
-                                                    {answerResult === "incorrect" && (
-                                                        <span className="text-red-500 text-sm font-medium animate-in fade-in slide-in-from-top-1">
-                                                            Incorrect, try again!
-                                                        </span>
-                                                    )}
-                                                </form>
-                                            ) : (
-                                                <Button
-                                                    onClick={() => { setShowAnswerInput(true); setUserAnswer(""); setAnswerResult(null); }}
-                                                    variant="ghost"
-                                                    className="gap-2 font-semibold text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-full px-6 py-5 text-base border border-blue-500/30"
-                                                >
-                                                    <PenLine className="w-5 h-5" />
-                                                    Enter your answer
-                                                </Button>
-                                            )
-                                        ) : (
-                                            <Button
-                                                onClick={() => setShowAiPractice(true)}
-                                                variant="ghost"
-                                                className="gap-2 font-semibold text-purple-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-full px-6 py-5 text-base border border-purple-500/30"
-                                            >
-                                                <Brain className="w-5 h-5" />
-                                                Practice with AI
-                                            </Button>
-                                        )}
-                                    </div>
 
-                                    {/* Feature buttons row */}
-                                    {!isReverse && !showAnswerInput && (
-                                        <div className="flex items-center gap-2 flex-wrap justify-center">
-                                            <Button
-                                                onClick={() => setShowFeynman(true)}
-                                                variant="ghost"
-                                                className="gap-1.5 text-sm font-medium text-orange-500 hover:text-orange-600 hover:bg-orange-500/10 rounded-full px-4 py-3 border border-orange-500/20"
-                                            >
-                                                <Mic className="w-4 h-4" />
-                                                Feynman Mode
-                                            </Button>
-                                            {(currentCard.type === "leetcode" || currentCard.type === "sql") && (
-                                                <Button
-                                                    onClick={() => setShowDryRun(true)}
-                                                    variant="ghost"
-                                                    className="gap-1.5 text-sm font-medium text-cyan-500 hover:text-cyan-600 hover:bg-cyan-500/10 rounded-full px-4 py-3 border border-cyan-500/20"
-                                                >
-                                                    <Bug className="w-4 h-4" />
-                                                    Dry-Run
-                                                </Button>
-                                            )}
-                                            <Button
-                                                onClick={() => setShowVagueInterviewer(true)}
-                                                variant="ghost"
-                                                className="gap-1.5 text-sm font-medium text-indigo-500 hover:text-indigo-600 hover:bg-indigo-500/10 rounded-full px-4 py-3 border border-indigo-500/20"
-                                            >
-                                                <MessageSquare className="w-4 h-4" />
-                                                Vague Interviewer
-                                            </Button>
-                                            {(currentCard.type === "leetcode" || currentCard.type === "sql") && (currentCard.solution || (currentCard.solutions && currentCard.solutions.length > 0)) && (
-                                                <Button
-                                                    onClick={() => setShowSpotTheBug(true)}
-                                                    variant="ghost"
-                                                    className="gap-1.5 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-full px-4 py-3 border border-red-500/20"
-                                                >
-                                                    <Search className="w-4 h-4" />
-                                                    Spot the Bug
-                                                </Button>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         ) : (
                             <motion.div
@@ -776,135 +682,27 @@ export function ReviewSession({
                                                 {hasCodeFences ? (
                                                     <MarkdownContent content={solution.content} />
                                                 ) : (
-                                                    <pre className="text-sm font-mono text-foreground/90 leading-relaxed whitespace-pre-wrap overflow-x-auto selectable">
-                                                        {solution.content}
-                                                    </pre>
+                                                    <CodeBlock
+                                                        language={solution.name.toLowerCase()}
+                                                        content={solution.content}
+                                                    />
                                                 )}
                                             </div>
                                         );
                                     })}
 
-                                {/* Rating Buttons */}
-                                <div className="mt-2">
-                                    {!pendingRating ? (
-                                        <>
-                                            <p className="text-xs text-muted-foreground text-center mb-3">
-                                                How did it go?
-                                            </p>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                {(
-                                                    Object.entries(ratingConfig) as [
-                                                        Rating,
-                                                        (typeof ratingConfig)[Rating],
-                                                    ][]
-                                                ).map(([key, config]) => (
-                                                    <motion.button
-                                                        key={key}
-                                                        whileHover={{ scale: 1.03 }}
-                                                        whileTap={{ scale: 0.97 }}
-                                                        onClick={() => handleRate(key)}
-                                                        disabled={isSubmitting}
-                                                        className={`flex flex-col items-center gap-1 py-3 px-4 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 ${config.color}`}
-                                                    >
-                                                        <span className="text-sm">{config.label}</span>
-                                                        <span className="text-[10px] opacity-80">
-                                                            {config.desc}
-                                                        </span>
-                                                    </motion.button>
-                                                ))}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-4 bg-muted/20 p-4 rounded-xl border border-border mt-4">
-                                            {/* Similar Questions (after successful review) */}
-                                            {(currentCard.type === "leetcode" || currentCard.type === "sql") && (pendingRating === "GOOD" || pendingRating === "EASY") && allCards && (
-                                                <div className="w-full">
-                                                    <SimilarQuestions
-                                                        card={currentCard}
-                                                        allCards={allCards}
-                                                        onAddToQueue={(cardId) => {
-                                                            // The queue management is handled by parent page
-                                                            console.log("Queue card:", cardId);
-                                                        }}
-                                                    />
-                                                </div>
-                                            )}
-
-                                            <p className="text-sm font-semibold text-foreground text-center mb-1">
-                                                When do you want to review this next?
-                                            </p>
-                                            <div className="w-full max-w-sm">
-                                                <textarea 
-                                                    value={reviewNote}
-                                                    onChange={(e) => setReviewNote(e.target.value)}
-                                                    placeholder="Add a quick note for your next review (optional)..."
-                                                    className="w-full text-sm p-3 rounded-xl border border-border bg-background focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none h-16 text-foreground"
-                                                />
-                                            </div>
-                                            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                                                <Button size="sm" variant="default" onClick={() => submitFinalReview()} disabled={isSubmitting}>
-                                                    Auto (Depends on rating)
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(1)} disabled={isSubmitting}>
-                                                    Tomorrow
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(3)} disabled={isSubmitting}>
-                                                    3 Days
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(7)} disabled={isSubmitting}>
-                                                    7 Days
-                                                </Button>
-                                                <Button size="sm" variant="outline" onClick={() => submitFinalReview(14)} disabled={isSubmitting}>
-                                                    14 Days
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => setShowCustomDate(!showCustomDate)}
-                                                    disabled={isSubmitting}
-                                                    className={`gap-1.5 ${showCustomDate ? "border-cyan-500 text-cyan-500" : ""}`}
-                                                >
-                                                    <CalendarDays className="w-3.5 h-3.5" />
-                                                    Custom
-                                                </Button>
-                                            </div>
-                                            {showCustomDate && (
-                                                <div className="flex items-center justify-center gap-2 mt-2 animate-in fade-in slide-in-from-top-1">
-                                                    <input
-                                                        type="date"
-                                                        min={tomorrowStr}
-                                                        className="px-3 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
-                                                        onChange={(e) => {
-                                                            if (!e.target.value) return;
-                                                            const picked = new Date(e.target.value + "T00:00:00");
-                                                            const now = new Date();
-                                                            now.setHours(0, 0, 0, 0);
-                                                            const diffDays = Math.max(1, Math.round((picked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-                                                            setShowCustomDate(false);
-                                                            submitFinalReview(diffDays);
-                                                        }}
-                                                    />
-                                                    <span className="text-xs text-muted-foreground">Pick any future date</span>
-                                                </div>
-                                            )}
-                                            <Button variant="ghost" size="sm" onClick={() => setPendingRating(null)} disabled={isSubmitting} className="text-muted-foreground mt-2">
-                                                Wait, let me change rating
-                                            </Button>
-                                            {canPauseCard(currentCard) && !isCardPaused(currentCard) && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={handlePauseReview}
-                                                    disabled={isSubmitting}
-                                                    className="text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 gap-1.5 mt-1"
-                                                >
-                                                    <Pause className="w-3.5 h-3.5" />
-                                                    Pause reviews for this card
-                                                </Button>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
+                                {/* Similar Questions (shown static in body when card rated, keeping user context) */}
+                                {pendingRating && (currentCard.type === "leetcode" || currentCard.type === "sql") && (pendingRating === "GOOD" || pendingRating === "EASY") && allCards && (
+                                    <div className="mt-4 p-4 border border-border rounded-xl bg-muted/10">
+                                        <SimilarQuestions
+                                            card={currentCard}
+                                            allCards={allCards}
+                                            onAddToQueue={(cardId) => {
+                                                console.log("Queue card:", cardId);
+                                            }}
+                                        />
+                                    </div>
+                                )}
                             </motion.div>
                         )}
                     </div>
@@ -917,6 +715,249 @@ export function ReviewSession({
                 </div>
             )}
           </div>
+
+          {/* Floating Glassmorphic Feedback Dock */}
+          <AnimatePresence>
+            {(!showAiPractice && !showFeynman && !showDryRun && !showVagueInterviewer && !showSpotTheBug) && (
+              <motion.div
+                initial={{ opacity: 0, y: 80, x: "-50%" }}
+                animate={{ opacity: 1, y: 0, x: "-50%" }}
+                exit={{ opacity: 0, y: 80, x: "-50%" }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-xl bg-card/85 dark:bg-card/75 backdrop-blur-xl border border-border/80 shadow-[0_15px_35px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 z-40 transition-all"
+              >
+                {!showAnswer ? (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {isReverse ? "Reverse Mode" : "Card Active"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-center sm:justify-end">
+                      {isReverse ? (
+                        showAnswerInput ? (
+                          <form 
+                            className="flex items-center gap-1.5 w-full sm:w-auto" 
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (userAnswer.toLowerCase().trim() === currentCard.title.toLowerCase().trim()) {
+                                setAnswerResult("correct");
+                                setShowAnswer(true);
+                              } else {
+                                setAnswerResult("incorrect");
+                              }
+                            }}
+                          >
+                            <input 
+                              value={userAnswer}
+                              onChange={e => { setUserAnswer(e.target.value); setAnswerResult(null); }}
+                              placeholder="Question title..." 
+                              className="border border-border bg-background rounded-full px-3 py-1.5 text-xs outline-none focus:border-blue-500 transition-colors w-32 shadow-sm"
+                              autoFocus
+                            />
+                            <Button type="submit" size="sm" className="rounded-full px-3">Check</Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => { setShowAnswerInput(false); setAnswerResult(null); }} className="rounded-full px-2">Cancel</Button>
+                          </form>
+                        ) : (
+                          <>
+                            <Button
+                              onClick={() => setShowAnswer(true)}
+                              size="sm"
+                              className="gap-1.5 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-4 py-2 text-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Reveal Problem
+                            </Button>
+                            <Button
+                              onClick={() => { setShowAnswerInput(true); setUserAnswer(""); setAnswerResult(null); }}
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 font-semibold text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-full px-4 py-2 text-xs border border-blue-500/30"
+                            >
+                              <PenLine className="w-3.5 h-3.5" />
+                              Enter Answer
+                            </Button>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <Button
+                            onClick={() => setShowAnswer(true)}
+                            size="sm"
+                            className="gap-1.5 font-semibold bg-foreground text-background hover:bg-foreground/90 rounded-full px-4 py-2 text-xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            Reveal Answer
+                          </Button>
+                          <Button
+                            onClick={() => setShowAiPractice(true)}
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 font-semibold text-purple-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-full px-4 py-2 text-xs border border-purple-500/30"
+                          >
+                            <Brain className="w-3.5 h-3.5" />
+                            AI Practice
+                          </Button>
+                        </>
+                      )}
+                      
+                      {!isReverse && !showAnswerInput && (
+                        <div className="flex items-center gap-0.5 border-l border-border/60 pl-1.5 ml-1">
+                          <Button
+                            onClick={() => setShowFeynman(true)}
+                            variant="ghost"
+                            size="icon"
+                            className="w-7 h-7 rounded-full text-orange-500 hover:bg-orange-500/15"
+                            title="Feynman Mode"
+                          >
+                            <Mic className="w-3.5 h-3.5" />
+                          </Button>
+                          {(currentCard.type === "leetcode" || currentCard.type === "sql") && (
+                            <Button
+                              onClick={() => setShowDryRun(true)}
+                              variant="ghost"
+                              size="icon"
+                              className="w-7 h-7 rounded-full text-cyan-500 hover:bg-cyan-500/15"
+                              title="Dry-Run tracer"
+                            >
+                              <Bug className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => setShowVagueInterviewer(true)}
+                            variant="ghost"
+                            size="icon"
+                            className="w-7 h-7 rounded-full text-indigo-500 hover:bg-indigo-500/15"
+                            title="Vague Interviewer"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </Button>
+                          {(currentCard.type === "leetcode" || currentCard.type === "sql") && (currentCard.solution || (currentCard.solutions && currentCard.solutions.length > 0)) && (
+                            <Button
+                              onClick={() => setShowSpotTheBug(true)}
+                              variant="ghost"
+                              size="icon"
+                              className="w-7 h-7 rounded-full text-red-500 hover:bg-red-500/15"
+                              title="Spot the Bug"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : !pendingRating ? (
+                  <div className="flex flex-col gap-2 w-full animate-in fade-in zoom-in-95 duration-200">
+                    <p className="text-[11px] text-muted-foreground text-center font-medium uppercase tracking-wider">
+                      Rate your understanding
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(
+                        Object.entries(ratingConfig) as [
+                          Rating,
+                          (typeof ratingConfig)[Rating],
+                        ][]
+                      ).map(([key, config]) => (
+                        <motion.button
+                          key={key}
+                          whileHover={{ scale: 1.04, y: -1 }}
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => handleRate(key)}
+                          disabled={isSubmitting}
+                          className={`flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 ${config.color} border border-black/10 dark:border-white/5 shadow-sm`}
+                        >
+                          <span className="text-xs">{config.label}</span>
+                          <span className="text-[8px] opacity-80 hidden sm:inline-block font-normal">
+                            {config.desc}
+                          </span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2.5 w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-center">
+                      Reschedule details (Optional note)
+                    </p>
+                    
+                    <div className="w-full">
+                      <textarea 
+                        value={reviewNote}
+                        onChange={(e) => setReviewNote(e.target.value)}
+                        placeholder="Add a quick note for your next review (optional)..."
+                        className="w-full text-xs p-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none h-11 text-foreground"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 w-full">
+                      <Button size="sm" variant="default" onClick={() => submitFinalReview()} disabled={isSubmitting} className="rounded-full text-[10px] px-2.5 py-0.5 h-7">
+                        Auto
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => submitFinalReview(1)} disabled={isSubmitting} className="rounded-full text-[10px] px-2.5 py-0.5 h-7">
+                        Tomorrow
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => submitFinalReview(3)} disabled={isSubmitting} className="rounded-full text-[10px] px-2.5 py-0.5 h-7">
+                        3 Days
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => submitFinalReview(7)} disabled={isSubmitting} className="rounded-full text-[10px] px-2.5 py-0.5 h-7">
+                        7 Days
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => submitFinalReview(14)} disabled={isSubmitting} className="rounded-full text-[10px] px-2.5 py-0.5 h-7">
+                        14 Days
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowCustomDate(!showCustomDate)}
+                        disabled={isSubmitting}
+                        className={`rounded-full text-[10px] px-2.5 py-0.5 h-7 gap-1 ${showCustomDate ? "border-cyan-500 text-cyan-500" : ""}`}
+                      >
+                        <CalendarDays className="w-3 h-3" />
+                        Custom
+                      </Button>
+                      {canPauseCard(currentCard) && !isCardPaused(currentCard) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handlePauseReview}
+                          disabled={isSubmitting}
+                          className="text-[10px] text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 gap-1 rounded-full px-2.5 py-0.5 h-7"
+                        >
+                          <Pause className="w-3 h-3" />
+                          Pause
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => setPendingRating(null)} disabled={isSubmitting} className="text-muted-foreground text-[10px] rounded-full px-2.5 py-0.5 h-7">
+                        Back
+                      </Button>
+                    </div>
+
+                    {showCustomDate && (
+                      <div className="flex items-center justify-center gap-2 mt-1 animate-in fade-in slide-in-from-top-1">
+                        <input
+                          type="date"
+                          min={tomorrowStr}
+                          className="px-2 py-1 rounded-lg border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            const picked = new Date(e.target.value + "T00:00:00");
+                            const now = new Date();
+                            now.setHours(0, 0, 0, 0);
+                            const diffDays = Math.max(1, Math.round((picked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+                            setShowCustomDate(false);
+                            submitFinalReview(diffDays);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
         {/* Notes Side Panel */}
         {currentCard && (

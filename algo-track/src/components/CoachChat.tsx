@@ -315,14 +315,33 @@ export function CoachChat() {
                           key={msg.id || idx}
                           className={`flex gap-4 ${isUser ? "flex-row-reverse" : ""}`}
                         >
-                          <div
-                            className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border
-                              ${isUser 
-                                ? "bg-blue-500/10 border-blue-500/20 text-blue-500" 
-                                : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
-                              }`}
-                          >
-                            {isUser ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                          <div className="flex-shrink-0 w-8 h-8 select-none">
+                            {isUser ? (
+                              <svg className="w-8 h-8" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                  <linearGradient id="userGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stopColor="#06b6d4" />
+                                    <stop offset="100%" stopColor="#3b82f6" />
+                                  </linearGradient>
+                                </defs>
+                                <circle cx="50" cy="50" r="46" fill="url(#userGrad)" fillOpacity="0.1" stroke="url(#userGrad)" strokeWidth="3" />
+                                <path d="M50 25 C63.8 25 75 36.2 75 50 C75 58.5 70.7 66 64.2 70.4 L50 60 L35.8 70.4 C29.3 66 25 58.5 25 50 C25 36.2 36.2 25 50 25 Z" fill="url(#userGrad)" fillOpacity="0.25" stroke="url(#userGrad)" strokeWidth="2" />
+                                <circle cx="50" cy="42" r="8" fill="url(#userGrad)" />
+                              </svg>
+                            ) : (
+                              <svg className="w-8 h-8" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                  <linearGradient id="botGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stopColor="#8b5cf6" />
+                                    <stop offset="100%" stopColor="#ec4899" />
+                                  </linearGradient>
+                                </defs>
+                                <circle cx="50" cy="50" r="46" fill="url(#botGrad)" fillOpacity="0.1" stroke="url(#botGrad)" strokeWidth="3" />
+                                <path d="M50 20 L76 35 L76 65 L50 80 L24 65 L24 35 Z" stroke="url(#botGrad)" strokeWidth="2.5" fill="none" />
+                                <path d="M50 32 L65 41 L65 59 L50 68 L35 59 L35 41 Z" stroke="url(#botGrad)" strokeWidth="1.5" fill="url(#botGrad)" fillOpacity="0.25" />
+                                <circle cx="50" cy="50" r="4" fill="#ffffff" />
+                              </svg>
+                            )}
                           </div>
                           <div
                             className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed whitespace-pre-wrap
@@ -339,8 +358,19 @@ export function CoachChat() {
                   )}
                   {isSending && (
                     <div className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center">
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                      <div className="flex-shrink-0 w-8 h-8 select-none">
+                        <svg className="w-8 h-8" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                            <linearGradient id="botGradLoading" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#8b5cf6" />
+                              <stop offset="100%" stopColor="#ec4899" />
+                            </linearGradient>
+                          </defs>
+                          <circle cx="50" cy="50" r="46" fill="url(#botGradLoading)" fillOpacity="0.1" stroke="url(#botGradLoading)" strokeWidth="3" />
+                          <path d="M50 20 L76 35 L76 65 L50 80 L24 65 L24 35 Z" stroke="url(#botGradLoading)" strokeWidth="2.5" fill="none" />
+                          <path d="M50 32 L65 41 L65 59 L50 68 L35 59 L35 41 Z" stroke="url(#botGradLoading)" strokeWidth="1.5" fill="url(#botGradLoading)" fillOpacity="0.25" />
+                          <circle cx="50" cy="50" r="4" fill="#ffffff" />
+                        </svg>
                       </div>
                       <div className="max-w-[80%] rounded-2xl p-4 rounded-tl-sm bg-muted/40 border border-border flex items-center max-h-[52px]">
                         <span className="flex gap-1.5 opacity-50">

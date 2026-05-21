@@ -121,12 +121,17 @@ function prioritizeDueCards(cards: Flashcard[]) {
 
 // ── Main component ───────────────────────────────────────────
 export default function HomePage() {
+  const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<View>("dashboard");
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [dueCards, setDueCards] = useState<Flashcard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [theme, setTheme] = useState<string>("light");
@@ -431,28 +436,46 @@ export default function HomePage() {
           </div>
 
           <nav className="flex items-center gap-1 sm:gap-2">
-            <Button
-              variant={view === "dashboard" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => {
-                setView("dashboard");
-              }}
-              className="gap-2 transition-all"
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span className="hidden sm:inline-block">Dashboard</span>
-            </Button>
-            <div className="relative z-50" ref={extraFeaturesRef}>
+            <div className="relative">
               <Button
-                variant={["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode", "bigo-drill", "pattern-quiz", "cram-mode", "speedrun", "anti-patterns", "obfuscation", "cross-language", "calendar", "training-hub"].includes(view) ? "secondary" : "ghost"}
+                variant="ghost"
                 size="sm"
-                onClick={() => setIsExtraFeaturesOpen(!isExtraFeaturesOpen)}
-                className="gap-2 transition-all"
+                onClick={() => {
+                  setView("dashboard");
+                }}
+                className={`gap-2 transition-all relative z-10 ${view === "dashboard" ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
               >
-                <Compass className="w-4 h-4" />
-                <span className="hidden sm:inline-block">Extra Features</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExtraFeaturesOpen ? 'rotate-180' : ''}`} />
+                <LayoutDashboard className="w-4 h-4" />
+                <span className="hidden sm:inline-block">Dashboard</span>
               </Button>
+              {view === "dashboard" && (
+                <motion.div
+                  layoutId="active-nav-pill"
+                  className="absolute inset-0 bg-muted/80 rounded-lg -z-10 shadow-sm border border-border/40"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+            </div>
+            <div className="relative z-50" ref={extraFeaturesRef}>
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsExtraFeaturesOpen(!isExtraFeaturesOpen)}
+                  className={`gap-2 transition-all relative z-10 ${["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode", "bigo-drill", "pattern-quiz", "cram-mode", "speedrun", "anti-patterns", "obfuscation", "cross-language", "calendar", "training-hub"].includes(view) ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Compass className="w-4 h-4" />
+                  <span className="hidden sm:inline-block">Extra Features</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExtraFeaturesOpen ? 'rotate-180' : ''}`} />
+                </Button>
+                {["guide", "goals", "achievements", "coach", "skill-tree", "stress-mode", "bigo-drill", "pattern-quiz", "cram-mode", "speedrun", "anti-patterns", "obfuscation", "cross-language", "calendar", "training-hub"].includes(view) && (
+                  <motion.div
+                    layoutId="active-nav-pill"
+                    className="absolute inset-0 bg-muted/80 rounded-lg -z-10 shadow-sm border border-border/40"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+              </div>
               
               <AnimatePresence>
                 {isExtraFeaturesOpen && (
@@ -585,10 +608,10 @@ export default function HomePage() {
               onClick={handleManualRefresh}
               disabled={isSyncing}
               className="gap-1.5 text-muted-foreground hover:text-foreground"
-              title={lastSyncTime ? `Last synced: ${formatLastSync(lastSyncTime)}` : "Sync now"}
+              title={mounted && lastSyncTime ? `Last synced: ${formatLastSync(lastSyncTime)}` : "Sync now"}
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
-              {lastSyncTime && (
+              {mounted && lastSyncTime && (
                 <span className="hidden sm:inline-block text-xs">
                   {formatLastSync(lastSyncTime)}
                 </span>

@@ -1,4 +1,8 @@
+'use client';
+
+import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Check, Copy } from "lucide-react";
 
 interface MarkdownContentProps {
   content: string;
@@ -167,6 +171,61 @@ function renderMarkdownBlocks(value: string) {
   });
 }
 
+interface CodeBlockProps {
+  language: string;
+  content: string;
+}
+
+export function CodeBlock({ language, content }: CodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="rounded-xl border border-border/80 bg-[#0b0f19] dark:bg-[#070a14] overflow-hidden my-4 shadow-md shadow-black/10 dark:shadow-black/25">
+      {/* OS Editor Bar */}
+      <div className="px-4 py-2 text-[10px] font-semibold text-muted-foreground border-b border-border/60 bg-muted/10 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          {/* Windows-style control dots */}
+          <div className="flex items-center gap-1.5 shrink-0 select-none">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
+          </div>
+          {/* Active Tab */}
+          <div className="flex items-center gap-1 bg-[#0b0f19] dark:bg-[#070a14] border-t border-x border-border/60 px-3 py-1 -mb-3 rounded-t-lg text-foreground font-mono text-[10px] select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            {language || "source"}
+          </div>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-all cursor-pointer flex items-center justify-center"
+          title="Copy Code"
+        >
+          {copied ? (
+            <Check className="w-3.5 h-3.5 text-emerald-500 animate-in zoom-in-50" />
+          ) : (
+            <Copy className="w-3.5 h-3.5" />
+          )}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto bg-transparent">
+        <code
+          className="font-mono text-[13px] leading-relaxed selectable text-foreground/90"
+          dangerouslySetInnerHTML={{
+            __html: escapeHtml(content),
+          }}
+        />
+      </pre>
+    </div>
+  );
+}
+
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
   const segments = splitContentSegments(content);
 
@@ -178,22 +237,11 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
             {renderMarkdownBlocks(segment.content)}
           </div>
         ) : (
-          <div
+          <CodeBlock
             key={`code-${index}`}
-            className="rounded-xl border border-border bg-muted/60 overflow-hidden"
-          >
-            <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide text-muted-foreground border-b border-border bg-background/80">
-              {segment.language}
-            </div>
-            <pre className="p-4 overflow-x-auto">
-              <code
-                className="font-mono text-[13px] leading-relaxed"
-                dangerouslySetInnerHTML={{
-                  __html: highlightCode(segment.content, segment.language),
-                }}
-              />
-            </pre>
-          </div>
+            language={segment.language}
+            content={segment.content}
+          />
         ),
       )}
     </div>

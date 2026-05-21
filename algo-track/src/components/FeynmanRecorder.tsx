@@ -235,15 +235,40 @@ export function FeynmanRecorder({ card, onRate, onCancel }: FeynmanRecorderProps
             {!result && (
                 <div className="flex flex-col items-center gap-4 py-6">
                     {state === "recording" && (
-                        <motion.div
-                            animate={{ scale: [1, 1.15, 1] }}
-                            transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                            className="w-20 h-20 rounded-full bg-red-500/10 border-2 border-red-500/40 flex items-center justify-center"
-                        >
-                            <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
-                                <Mic className="w-7 h-7 text-red-500" />
+                        <div className="flex flex-col items-center gap-4">
+                            <motion.div
+                                animate={{ scale: [1, 1.08, 1] }}
+                                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                                className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/40 flex items-center justify-center shadow-lg shadow-red-500/10"
+                            >
+                                <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
+                                    <Mic className="w-7 h-7 text-red-500 animate-pulse" />
+                                </div>
+                            </motion.div>
+                            
+                            {/* Glowing CSS Waveform Visualizer */}
+                            <div className="flex items-center gap-1.5 h-10 px-4 mt-2">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((bar) => {
+                                    const delay = (bar % 3) * 0.15;
+                                    const duration = 0.5 + (bar % 4) * 0.15;
+                                    return (
+                                        <motion.div
+                                            key={bar}
+                                            animate={{ 
+                                                height: [8, 32, 12, 40, 8][bar % 5 === 0 ? 0 : bar % 5],
+                                            }}
+                                            transition={{ 
+                                                repeat: Infinity, 
+                                                duration: duration,
+                                                ease: "easeInOut",
+                                                delay: delay
+                                            }}
+                                            className="w-1 bg-gradient-to-t from-red-500 to-orange-400 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]"
+                                        />
+                                    );
+                                })}
                             </div>
-                        </motion.div>
+                        </div>
                     )}
 
                     {state === "recording" && (
