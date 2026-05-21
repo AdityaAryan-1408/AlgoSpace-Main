@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/Button";
-import { X, Code, BookOpen, Database } from "lucide-react";
-import { motion } from "motion/react";
+import { X, Code, BookOpen, Database, GripVertical } from "lucide-react";
+import { motion, useDragControls } from "motion/react";
 import { AddCardForm } from "@/components/AddCardForm";
 import type { CardType } from "@/data";
 
@@ -13,6 +13,8 @@ interface AddCardModalProps {
 }
 
 export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
+    const dragControls = useDragControls();
+    const backdropRef = useRef<HTMLDivElement>(null);
     const [step, setStep] = useState<"choose" | "form">("choose");
     const [cardType, setCardType] = useState<CardType>("leetcode");
 
@@ -28,9 +30,16 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
 
     return (
         <div
+            ref={backdropRef}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
         >
             <motion.div
+                drag
+                dragControls={dragControls}
+                dragListener={false}
+                dragConstraints={backdropRef}
+                dragElastic={0}
+                dragMomentum={false}
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -55,14 +64,25 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
                                 : "Fill in the details below"}
                         </p>
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={onClose}
-                        className="rounded-full shrink-0"
-                    >
-                        <X className="w-5 h-5" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-full shrink-0 hover:bg-muted cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
+                            title="Drag to move"
+                            onPointerDown={(e) => dragControls.start(e)}
+                        >
+                            <GripVertical className="w-5 h-5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={onClose}
+                            className="rounded-full shrink-0"
+                        >
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Body */}

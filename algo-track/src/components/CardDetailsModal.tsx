@@ -10,9 +10,9 @@ import type { StoredAiReview } from "@/components/CodePractice";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil } from "lucide-react";
-import { motion } from "motion/react";
-import { useState, useEffect } from "react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical } from "lucide-react";
+import { motion, useDragControls } from "motion/react";
+import { useState, useEffect, useRef } from "react";
 import { useConfirmModal } from "@/components/ConfirmModal";
 import { createPortal } from "react-dom";
 import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
@@ -28,6 +28,8 @@ export function CardDetailsModal({
   onClose,
   onSaved,
 }: CardDetailsModalProps) {
+  const dragControls = useDragControls();
+  const backdropRef = useRef<HTMLDivElement>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [notes, setNotes] = useState("");
@@ -138,10 +140,17 @@ export function CardDetailsModal({
 
   return createPortal(
     <div
+      ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
+        drag
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={backdropRef}
+        dragElastic={0}
+        dragMomentum={false}
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -200,6 +209,15 @@ export function CardDetailsModal({
                 className="sm:hidden rounded-full hover:bg-muted"
               >
                 {isEditing ? <X className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full shrink-0 hover:bg-muted cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
+                title="Drag to move"
+                onPointerDown={(e) => dragControls.start(e)}
+              >
+                <GripVertical className="w-5 h-5" />
               </Button>
               <Button
                 variant="ghost"
