@@ -599,7 +599,16 @@ export function ReviewSession({
                                     </div>
                                 )}
 
-
+                                {(currentCard.metadata?.reviewNote as string) && (
+                                    <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 shadow-[0_2px_10px_rgba(59,130,246,0.05)] mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <h4 className="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                            <PenLine className="w-3.5 h-3.5 text-blue-500 animate-pulse" /> Previous Review Note
+                                        </h4>
+                                        <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap selectable pl-1 border-l-2 border-blue-500/30">
+                                            {currentCard.metadata?.reviewNote as string}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <motion.div
@@ -657,17 +666,6 @@ export function ReviewSession({
                                     </div>
                                 ) : null}
 
-                                {(currentCard.metadata?.reviewNote as string) && (
-                                    <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-                                        <h4 className="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                            <PenLine className="w-3.5 h-3.5" /> Previous Review Note
-                                        </h4>
-                                        <div className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap selectable">
-                                            {currentCard.metadata?.reviewNote as string}
-                                        </div>
-                                    </div>
-                                )}
-
                                 {solutionBlocks.length > 0 &&
                                     solutionBlocks.map((solution, index) => {
                                         const hasCodeFences = /```[\w+-]*\n/.test(solution.content);
@@ -690,6 +688,18 @@ export function ReviewSession({
                                             </div>
                                         );
                                     })}
+
+                                <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 shadow-[0_2px_10px_rgba(59,130,246,0.05)] flex flex-col gap-2 mt-4">
+                                    <h4 className="text-xs font-semibold text-blue-500 uppercase tracking-wider flex items-center gap-1.5 text-blue-500">
+                                        <PenLine className="w-3.5 h-3.5 text-blue-500" /> Review Note
+                                    </h4>
+                                    <textarea
+                                        value={reviewNote}
+                                        onChange={(e) => setReviewNote(e.target.value)}
+                                        placeholder="Add a quick note or key takeaway for your next review (optional)..."
+                                        className="w-full text-sm p-3 rounded-xl border border-blue-500/10 dark:border-blue-500/10 bg-background/50 focus:bg-background focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none h-20 text-foreground transition-all duration-200"
+                                    />
+                                </div>
 
                                 {/* Similar Questions (shown static in body when card rated, keeping user context) */}
                                 {pendingRating && (currentCard.type === "leetcode" || currentCard.type === "sql") && (pendingRating === "GOOD" || pendingRating === "EASY") && allCards && (
@@ -874,17 +884,8 @@ export function ReviewSession({
                 ) : (
                   <div className="flex flex-col items-center gap-2.5 w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-center">
-                      Reschedule details (Optional note)
+                      Choose Interval
                     </p>
-                    
-                    <div className="w-full">
-                      <textarea 
-                        value={reviewNote}
-                        onChange={(e) => setReviewNote(e.target.value)}
-                        placeholder="Add a quick note for your next review (optional)..."
-                        className="w-full text-xs p-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none h-11 text-foreground"
-                      />
-                    </div>
                     
                     <div className="flex flex-wrap items-center justify-center gap-1.5 w-full">
                       <Button size="sm" variant="default" onClick={() => submitFinalReview()} disabled={isSubmitting} className="rounded-full text-[10px] px-2.5 py-0.5 h-7">
