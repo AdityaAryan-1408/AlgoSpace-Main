@@ -52,39 +52,9 @@ interface ReviewSessionConfig {
 }
 
 // ── Cache helpers ────────────────────────────────────────────
-const CACHE_KEY = "algotrack-cards-cache";
+import { readCacheDB, writeCacheDB, isCacheStale } from "@/lib/db-cache";
+
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-interface CachedData {
-  cards: Flashcard[];
-  dueCards: Flashcard[];
-  timestamp: number;
-}
-
-function readCache(): CachedData | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CachedData;
-    if (!parsed.cards || !parsed.dueCards || !parsed.timestamp) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(cards: Flashcard[], dueCards: Flashcard[]) {
-  const data: CachedData = { cards, dueCards, timestamp: Date.now() };
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-  } catch {
-    // Storage full — silently fail
-  }
-}
-
-function isCacheStale(cached: CachedData): boolean {
-  return Date.now() - cached.timestamp > CACHE_TTL_MS;
-}
 
 function formatLastSync(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -170,7 +140,7 @@ export default function HomePage() {
       ]);
       setCards(all);
       setDueCards(due);
-      writeCache(all, due);
+      writeCacheDB(all, due);
       setLastSyncTime(Date.now());
       refreshPauseStatus();
     } catch (err) {
@@ -192,26 +162,27 @@ export default function HomePage() {
 
   // Initialize: load from cache instantly, then sync if stale
   useEffect(() => {
-    const cached = readCache();
-
     // Always fetch pause status on mount (not dependent on cache)
     refreshPauseStatus();
 
-    if (cached) {
-      // Show cached data immediately — no loading spinner
-      setCards(cached.cards);
-      setDueCards(cached.dueCards);
-      setLastSyncTime(cached.timestamp);
-      setIsLoading(false);
+    // Read cache from IndexedDB (async)
+    readCacheDB().then((cached) => {
+      if (cached) {
+        // Show cached data immediately — no loading spinner
+        setCards(cached.cards);
+        setDueCards(cached.dueCards);
+        setLastSyncTime(cached.timestamp);
+        setIsLoading(false);
 
-      // Background refresh if cache is stale
-      if (isCacheStale(cached)) {
-        syncFromApi(false);
+        // Background refresh if cache is stale
+        if (isCacheStale(cached, CACHE_TTL_MS)) {
+          syncFromApi(false);
+        }
+      } else {
+        // No cache — must fetch (show spinner)
+        syncFromApi(true).finally(() => setIsLoading(false));
       }
-    } else {
-      // No cache — must fetch (show spinner)
-      syncFromApi(true).finally(() => setIsLoading(false));
-    }
+    });
 
     // Auto-sync every hour (while tab is active)
     syncTimerRef.current = setInterval(() => {
@@ -221,10 +192,11 @@ export default function HomePage() {
     // Sync when user returns to the tab after being away
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        const cached = readCache();
-        if (!cached || isCacheStale(cached)) {
-          syncFromApi(false);
-        }
+        readCacheDB().then((cached) => {
+          if (!cached || isCacheStale(cached, CACHE_TTL_MS)) {
+            syncFromApi(false);
+          }
+        });
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
