@@ -708,12 +708,6 @@ export function ReviewSession({
                     </div>
                 </motion.div>
             </AnimatePresence>
-
-            {isSubmitting && (
-                <div className="flex justify-center">
-                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                </div>
-            )}
           </div>
 
           {/* Floating Glassmorphic Feedback Dock */}
@@ -724,7 +718,7 @@ export function ReviewSession({
                 animate={{ opacity: 1, y: 0, x: "-50%" }}
                 exit={{ opacity: 0, y: 80, x: "-50%" }}
                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-xl bg-card/85 dark:bg-card/75 backdrop-blur-xl border border-border/80 shadow-[0_15px_35px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 z-40 transition-all"
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-xl bg-card/85 dark:bg-card/75 backdrop-blur-xl border border-border/80 shadow-[0_15px_35px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 z-40 transition-all relative overflow-hidden"
               >
                 {!showAnswer ? (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
@@ -953,6 +947,13 @@ export function ReviewSession({
                         />
                       </div>
                     )}
+                  </div>
+                )}
+
+                {isSubmitting && (
+                  <div className="absolute inset-0 bg-background/60 backdrop-blur-md flex flex-col items-center justify-center gap-2 z-50 animate-in fade-in duration-200">
+                    <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+                    <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Saving Review...</span>
                   </div>
                 )}
               </motion.div>
