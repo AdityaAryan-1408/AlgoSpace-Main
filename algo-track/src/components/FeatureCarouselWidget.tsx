@@ -10,6 +10,7 @@ interface FeatureCarouselWidgetProps {
   cards: Flashcard[];
   onNavigate: (view: string) => void;
   onOpenTopicModal: () => void;
+  onShowCardsList?: (title: string, cardsList: Flashcard[]) => void;
 }
 
 // --- Interactive Mini-App Tiles ---
@@ -301,11 +302,17 @@ function AlgoVisTile() {
   );
 }
 
-function QuickStatsTile({ cards, analytics }: { cards: Flashcard[]; analytics: any }) {
-  const stats = useMemo(() => {
+function QuickStatsTile({ cards, analytics, onShowCardsList }: { cards: Flashcard[]; analytics: any; onShowCardsList?: (title: string, cardsList: Flashcard[]) => void }) {
+  const { masteredCards, strugglingCards } = useMemo(() => {
     const active = cards.filter(c => !c.metadata?.review_paused && !c.metadata?.globally_paused);
-    const mastered = active.filter(c => c.dueInDays >= 14).length;
-    const struggling = active.filter(c => c.lastRating === 'AGAIN' || c.lastRating === 'HARD').length;
+    const mCards = active.filter(c => c.dueInDays >= 14);
+    const sCards = active.filter(c => c.lastRating === 'AGAIN' || c.lastRating === 'HARD');
+    return { masteredCards: mCards, strugglingCards: sCards };
+  }, [cards]);
+
+  const stats = useMemo(() => {
+    const mastered = masteredCards.length;
+    const struggling = strugglingCards.length;
 
     const recent = (analytics?.performance || []).slice(-7);
     const accVals = recent.filter((d: any) => d.accuracy != null).map((d: any) => d.accuracy as number);
@@ -326,29 +333,37 @@ function QuickStatsTile({ cards, analytics }: { cards: Flashcard[]; analytics: a
     }
 
     return { mastered, struggling, avgAccuracy, accuracyTrend, total: cards.length };
-  }, [cards, analytics]);
+  }, [cards.length, masteredCards.length, strugglingCards.length, analytics]);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-5">
       <div className="grid grid-cols-3 gap-3 w-full max-w-[340px]">
         {/* Mastered */}
-        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
+        <button
+          onClick={() => onShowCardsList?.("Mastered Cards", masteredCards)}
+          disabled={masteredCards.length === 0}
+          className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15 cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:scale-105 active:scale-95 transition-all duration-200 text-center disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-emerald-500/5 disabled:hover:border-emerald-500/15"
+        >
           <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5 text-emerald-500" />
           </div>
           <span className="text-2xl font-bold text-emerald-500">{stats.mastered}</span>
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Mastered</span>
-        </div>
+        </button>
         {/* Struggling */}
-        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-amber-500/5 border border-amber-500/15">
+        <button
+          onClick={() => onShowCardsList?.("Struggling Cards", strugglingCards)}
+          disabled={strugglingCards.length === 0}
+          className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-amber-500/5 border border-amber-500/15 cursor-pointer hover:bg-amber-500/10 hover:border-amber-500/30 hover:scale-105 active:scale-95 transition-all duration-200 text-center disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-amber-500/5 disabled:hover:border-amber-500/15"
+        >
           <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
           </div>
           <span className="text-2xl font-bold text-amber-500">{stats.struggling}</span>
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Struggling</span>
-        </div>
+        </button>
         {/* Accuracy */}
-        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-blue-500/5 border border-blue-500/15">
+        <div className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-blue-500/5 border border-blue-500/15 text-center">
           <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
             <Target className="w-5 h-5 text-blue-500" />
           </div>
@@ -369,35 +384,16 @@ function QuickStatsTile({ cards, analytics }: { cards: Flashcard[]; analytics: a
   );
 }
 
-export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, onOpenTopicModal }: FeatureCarouselWidgetProps) {
+export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, onOpenTopicModal, onShowCardsList }: FeatureCarouselWidgetProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    const savedPin = localStorage.getItem("algotrack-carousel-pin");
-    if (savedPin !== null) {
-      const idx = parseInt(savedPin, 10);
-      setPinnedIndex(idx);
-      setCurrentIndex(idx);
-    }
-  }, []);
-
-  const handlePin = (index: number) => {
-    if (pinnedIndex === index) {
-      setPinnedIndex(null);
-      localStorage.removeItem("algotrack-carousel-pin");
-    } else {
-      setPinnedIndex(index);
-      localStorage.setItem("algotrack-carousel-pin", index.toString());
-    }
-  };
-
-  const TILES = [
+  const TILES = useMemo(() => [
     {
       id: "quick-stats",
       title: "Quick Stats",
       icon: <TrendingUp className="w-4 h-4 text-blue-500" />,
-      content: <QuickStatsTile cards={cards} analytics={analytics} />
+      content: <QuickStatsTile cards={cards} analytics={analytics} onShowCardsList={onShowCardsList} />
     },
     {
       id: "topic-mastery",
@@ -411,7 +407,7 @@ export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, 
       action: (
         <button 
           onClick={onOpenTopicModal}
-          className="w-6 h-6 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center transition-colors ml-2"
+          className="w-6 h-6 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center transition-colors ml-2 cursor-pointer"
           title="View all topics"
         >
           <ChevronRight className="w-4 h-4" />
@@ -435,14 +431,29 @@ export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, 
       title: "Mental Tracing",
       icon: <Brain className="w-4 h-4 text-violet-500" />,
       content: <GuessOutputTile />
-    },
-    {
-      id: "algo-vis",
-      title: "Algorithm Vis",
-      icon: <PlaySquare className="w-4 h-4 text-pink-500" />,
-      content: <AlgoVisTile />
     }
-  ];
+  ], [cards, analytics, onShowCardsList, onOpenTopicModal, onNavigate]);
+
+  useEffect(() => {
+    const savedPin = localStorage.getItem("algotrack-carousel-pin");
+    if (savedPin !== null) {
+      const idx = parseInt(savedPin, 10);
+      if (idx >= 0 && idx < TILES.length) {
+        setPinnedIndex(idx);
+        setCurrentIndex(idx);
+      }
+    }
+  }, [TILES.length]);
+
+  const handlePin = (index: number) => {
+    if (pinnedIndex === index) {
+      setPinnedIndex(null);
+      localStorage.removeItem("algotrack-carousel-pin");
+    } else {
+      setPinnedIndex(index);
+      localStorage.setItem("algotrack-carousel-pin", index.toString());
+    }
+  };
 
   const nextTile = () => {
     setCurrentIndex((prev) => (prev + 1) % TILES.length);
@@ -458,29 +469,29 @@ export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, 
     <div className="rounded-xl border border-border bg-background flex flex-col overflow-hidden relative min-h-[350px]">
       <div className="flex items-center justify-between p-4 border-b border-border/50 bg-muted/20 z-10">
         <div className="flex items-center gap-2">
-          {currentTile.icon}
+          {currentTile?.icon}
           <h3 className="text-sm font-semibold text-foreground">
-            {currentTile.title}
+            {currentTile?.title}
           </h3>
-          {currentTile.action && currentTile.action}
+          {currentTile?.action && currentTile.action}
         </div>
         
         <div className="flex items-center gap-2">
           <button 
             onClick={() => handlePin(currentIndex)}
-            className={`p-1.5 rounded-md transition-colors ${pinnedIndex === currentIndex ? 'bg-cyan-500/20 text-cyan-500' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${pinnedIndex === currentIndex ? 'bg-cyan-500/20 text-cyan-500' : 'text-muted-foreground hover:bg-muted'}`}
             title={pinnedIndex === currentIndex ? "Unpin widget" : "Pin this widget"}
           >
             <Pin className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-            <button onClick={prevTile} className="p-1 rounded-md hover:bg-background text-muted-foreground transition-colors">
+            <button onClick={prevTile} className="p-1 rounded-md hover:bg-background text-muted-foreground transition-colors cursor-pointer">
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="text-xs font-medium w-8 text-center text-muted-foreground">
               {currentIndex + 1}/{TILES.length}
             </span>
-            <button onClick={nextTile} className="p-1 rounded-md hover:bg-background text-muted-foreground transition-colors">
+            <button onClick={nextTile} className="p-1 rounded-md hover:bg-background text-muted-foreground transition-colors cursor-pointer">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -497,7 +508,7 @@ export function FeatureCarouselWidget({ analytics, dueCount, cards, onNavigate, 
             transition={{ duration: 0.2 }}
             className="absolute inset-0 flex flex-col"
           >
-            {currentTile.content}
+            {currentTile?.content}
           </motion.div>
         </AnimatePresence>
       </div>

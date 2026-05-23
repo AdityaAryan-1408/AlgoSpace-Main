@@ -100,6 +100,23 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
   const [selectedCard, setSelectedCard] = useState<Flashcard | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [cardsModal, setCardsModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    cardsList: Flashcard[];
+  }>({
+    isOpen: false,
+    title: "",
+    cardsList: [],
+  });
+
+  const handleShowCardsList = useCallback((title: string, filteredCards: Flashcard[]) => {
+    setCardsModal({
+      isOpen: true,
+      title,
+      cardsList: filteredCards,
+    });
+  }, []);
   const [filteredCards, setFilteredCards] = useState<Flashcard[]>(cards);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -317,6 +334,7 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
                   cards={cards}
                   onNavigate={onNavigate || (() => {})}
                   onOpenTopicModal={() => setShowTopicModal(true)}
+                  onShowCardsList={handleShowCardsList}
                 />
               </div>
             </div>
@@ -324,7 +342,7 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
 
             {/* Forecast, Needs Attention, and Study Metrics */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-              <ReviewForecastWidget cards={cards} />
+              <ReviewForecastWidget cards={cards} onNavigate={onNavigate} />
               <NeedsAttentionWidget cards={cards} onSelectCard={setSelectedCard} />
               <StudyMetricsWidget analytics={analytics} />
             </div>
@@ -867,6 +885,68 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
                   {analytics.topics.length === 0 && (
                     <div className="text-center text-sm text-muted-foreground py-8">
                       No topics found.
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {createPortal(
+        <AnimatePresence>
+          {cardsModal.isOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm" onClick={() => setCardsModal(prev => ({ ...prev, isOpen: false }))}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] border border-border"
+              >
+                <div className="p-4 border-b border-border flex items-center justify-between bg-muted/10">
+                  <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    {cardsModal.title === "Mastered Cards" ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-amber-500" />
+                    )}
+                    {cardsModal.title} ({cardsModal.cardsList.length})
+                  </h3>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={() => setCardsModal(prev => ({ ...prev, isOpen: false }))}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+                  {cardsModal.cardsList.map(card => (
+                    <div 
+                      key={card.id} 
+                      onClick={() => {
+                        setSelectedCard(card);
+                        setCardsModal(prev => ({ ...prev, isOpen: false }));
+                      }}
+                      className="flex items-center justify-between p-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-colors gap-3 cursor-pointer group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-foreground block truncate group-hover:text-primary transition-colors">{card.title}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${getDifficultyColor(card.difficulty)}`}>
+                            {card.difficulty}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {card.history.total} review{card.history.total !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    </div>
+                  ))}
+                  {cardsModal.cardsList.length === 0 && (
+                    <div className="text-center text-sm text-muted-foreground py-8">
+                      No cards found in this category.
                     </div>
                   )}
                 </div>

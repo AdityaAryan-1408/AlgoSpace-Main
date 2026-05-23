@@ -1,12 +1,13 @@
 import { useMemo } from "react";
-import { Calendar } from "lucide-react";
+import { Calendar, CalendarDays } from "lucide-react";
 import type { Flashcard } from "@/data";
 
 interface Props {
   cards: Flashcard[];
+  onNavigate?: (view: string) => void;
 }
 
-export function ReviewForecastWidget({ cards }: Props) {
+export function ReviewForecastWidget({ cards, onNavigate }: Props) {
   const forecast = useMemo(() => {
     const counts = [0, 0, 0, 0, 0, 0, 0];
     const today = new Date();
@@ -32,14 +33,25 @@ export function ReviewForecastWidget({ cards }: Props) {
 
   return (
     <div className="rounded-xl border border-border bg-background p-4 flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-          <Calendar className="w-4 h-4 text-blue-500" />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+            <Calendar className="w-4 h-4 text-blue-500" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">7-Day Forecast</h3>
+            <p className="text-xs text-muted-foreground">Upcoming review workload</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">7-Day Forecast</h3>
-          <p className="text-xs text-muted-foreground">Upcoming review workload</p>
-        </div>
+        {onNavigate && (
+          <button
+            onClick={() => onNavigate("calendar")}
+            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer group/calbtn"
+            title="Open Time Travel Calendar"
+          >
+            <CalendarDays className="w-4 h-4 text-blue-500 group-hover/calbtn:scale-110 transition-transform" />
+          </button>
+        )}
       </div>
 
       <div className="flex items-end justify-between flex-1 gap-2 pt-4">
