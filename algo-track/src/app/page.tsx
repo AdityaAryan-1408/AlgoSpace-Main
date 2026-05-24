@@ -686,7 +686,7 @@ export default function HomePage() {
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
-                <CalendarView cards={cards} />
+                <CalendarView cards={cards} onRefresh={() => syncFromApi(false)} />
               </motion.div>
             )}
             {view === "guide" && (

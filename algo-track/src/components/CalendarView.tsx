@@ -9,9 +9,10 @@ import { motion, AnimatePresence } from "motion/react";
 
 interface CalendarViewProps {
   cards: Flashcard[];
+  onRefresh?: () => Promise<void> | void;
 }
 
-export function CalendarView({ cards }: CalendarViewProps) {
+export function CalendarView({ cards, onRefresh }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -142,9 +143,9 @@ export function CalendarView({ cards }: CalendarViewProps) {
         dueInDays: newDate < today ? 0 : diffDays
       });
       
-      // In a real app we'd trigger a top-level refresh, but for this demo 
-      // the parent should re-fetch. Since we don't have onRefresh passed down,
-      // the UI will update on next natural sync.
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
       console.error("Failed to reschedule:", error);
     } finally {
@@ -166,6 +167,10 @@ export function CalendarView({ cards }: CalendarViewProps) {
         nextReview: newDate.toISOString(),
         dueInDays: newDate < today ? 0 : diffDays,
       });
+
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
       console.error("Failed to reschedule:", error);
     } finally {
