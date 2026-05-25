@@ -1,4 +1,4 @@
-import { Zap, Timer, LayoutGrid, Bug, ShuffleIcon, Languages, FileJson, GraduationCap, Compass, Network } from "lucide-react";
+import { Zap, Timer, LayoutGrid, Bug, ShuffleIcon, Languages, FileJson, GraduationCap, Compass, Network, MessageSquare } from "lucide-react";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/Button";
 
@@ -30,6 +30,7 @@ const CATEGORIES = [
   {
     title: "Challenges",
     features: [
+      { id: "vague-interviewer", title: "Vague Interviewer", description: "Decode real-world business scenarios into computer science algorithms.", icon: <MessageSquare className="w-6 h-6 text-indigo-500" />, color: "bg-indigo-500/10 border-indigo-500/20 hover:border-indigo-500/50" },
       { id: "bigo-drill", title: "Big-O Drills", description: "Rapid-fire time and space complexity quiz.", icon: <Timer className="w-6 h-6 text-amber-500" />, color: "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/50" },
       { id: "pattern-quiz", title: "Pattern Quiz", description: "Identify the correct algorithm pattern from descriptions.", icon: <FileJson className="w-6 h-6 text-violet-500" />, color: "bg-violet-500/10 border-violet-500/20 hover:border-violet-500/50" },
       { id: "obfuscation", title: "Obfuscation", description: "Fix poorly named variables and refactor bad code.", icon: <ShuffleIcon className="w-6 h-6 text-violet-500" />, color: "bg-violet-500/10 border-violet-500/20 hover:border-violet-500/50" },

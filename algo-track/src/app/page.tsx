@@ -23,6 +23,7 @@ import { ObfuscationChallenge } from "@/components/ObfuscationChallenge";
 import { CrossLanguage } from "@/components/CrossLanguage";
 import { CalendarView } from "@/components/CalendarView";
 import { TrainingHub } from "@/components/TrainingHub";
+import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
 import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid } from "lucide-react";
@@ -35,7 +36,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
 
-type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub";
+type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub" | "vague-interviewer";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
 
 interface SessionStats {
@@ -904,6 +905,18 @@ export default function HomePage() {
                     syncFromApi(false);
                   }}
                 />
+              </motion.div>
+            )}
+            {view === "vague-interviewer" && (
+              <motion.div
+                key="vague-interviewer"
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="flex-1 flex flex-col overflow-y-auto"
+              >
+                <VagueInterviewer cards={cards} onExit={() => setView("training-hub")} />
               </motion.div>
             )}
           </AnimatePresence>

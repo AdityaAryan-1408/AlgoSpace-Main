@@ -12,7 +12,6 @@ import { FeynmanRecorder } from "@/components/FeynmanRecorder";
 import { ConstraintShifter, shouldShowConstraintShifter } from "@/components/ConstraintShifter";
 import { DryRunChallenge } from "@/components/DryRunChallenge";
 import { NotesPanel } from "@/components/NotesDrawer";
-import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
@@ -100,7 +99,6 @@ export function ReviewSession({
     const [showAiPractice, setShowAiPractice] = useState(false);
     const [showFeynman, setShowFeynman] = useState(false);
     const [showDryRun, setShowDryRun] = useState(false);
-    const [showVagueInterviewer, setShowVagueInterviewer] = useState(false);
     const [showSpotTheBug, setShowSpotTheBug] = useState(false);
     const [showConstraintShifter, setShowConstraintShifter] = useState(true);
     const [showAnswerInput, setShowAnswerInput] = useState(false);
@@ -280,7 +278,6 @@ export function ReviewSession({
             setShowAiPractice(false);
             setShowFeynman(false);
             setShowDryRun(false);
-            setShowVagueInterviewer(false);
             setShowSpotTheBug(false);
             setShowConstraintShifter(true);
             setShowAnswerInput(false);
@@ -299,7 +296,6 @@ export function ReviewSession({
         setShowAiPractice(false);
         setShowFeynman(false);
         setShowDryRun(false);
-        setShowVagueInterviewer(false);
         setShowSpotTheBug(false);
         setShowAnswer(true);
     };
@@ -530,12 +526,6 @@ export function ReviewSession({
                                 onRate={handleRate}
                                 onCancel={() => setShowDryRun(false)}
                             />
-                        ) : showVagueInterviewer ? (
-                            <VagueInterviewer
-                                card={currentCard}
-                                onRate={handleRate}
-                                onCancel={() => setShowVagueInterviewer(false)}
-                            />
                         ) : showSpotTheBug ? (
                             <SpotTheBug
                                 card={currentCard}
@@ -722,7 +712,7 @@ export function ReviewSession({
 
           {/* Floating Glassmorphic Feedback Dock */}
           <AnimatePresence>
-            {(!showAiPractice && !showFeynman && !showDryRun && !showVagueInterviewer && !showSpotTheBug) && (
+            {(!showAiPractice && !showFeynman && !showDryRun && !showSpotTheBug) && (
               <motion.div
                 initial={{ opacity: 0, y: 80, x: "-50%" }}
                 animate={{ opacity: 1, y: 0, x: "-50%" }}
@@ -829,15 +819,6 @@ export function ReviewSession({
                               <Bug className="w-3.5 h-3.5" />
                             </Button>
                           )}
-                          <Button
-                            onClick={() => setShowVagueInterviewer(true)}
-                            variant="ghost"
-                            size="icon"
-                            className="w-7 h-7 rounded-full text-indigo-500 hover:bg-indigo-500/15"
-                            title="Vague Interviewer"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                          </Button>
                           {(currentCard.type === "leetcode" || currentCard.type === "sql") && (currentCard.solution || (currentCard.solutions && currentCard.solutions.length > 0)) && (
                             <Button
                               onClick={() => setShowSpotTheBug(true)}

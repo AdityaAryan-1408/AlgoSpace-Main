@@ -20,13 +20,18 @@ import {
     GitBranch,
     Cpu,
     FileCode2,
+    Lock,
+    Unlock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Flashcard } from "@/data";
 import { fetchSuggestion, type SuggestionResult } from "@/lib/client-api";
 import { saveCodeSnapshot } from "@/components/CodeEvolution";
+import { RubberDuckGate } from "@/components/RubberDuckGate";
+import { ComplexitySandbox } from "@/components/ComplexitySandbox";
 
 const NITPICK_KEY = "algotrack-nitpick-mode";
+
 
 const AI_REVIEW_KEY = "algotrack-ai-review-";
 
@@ -109,6 +114,15 @@ interface Props {
 export function CodePractice({ card, onRate, onCancel }: Props) {
     const isDSA = card.type === "leetcode" || card.type === "sql";
     const [code, setCode] = useState("");
+    const [isDuckUnlocked, setIsDuckUnlocked] = useState(false);
+    const [selectedCurve, setSelectedCurve] = useState<"user" | "optimal" | null>(null);
+
+    useEffect(() => {
+        setIsDuckUnlocked(false);
+        setSelectedCurve(null);
+    }, [card.id]);
+
+    const isGateLocked = card.difficulty === "hard" && isDSA && !isDuckUnlocked;
 
     const [strictMode, setStrictMode] = useState(false);
     const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
@@ -313,7 +327,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                         variant="ghost"
                         size="sm"
                         onClick={handleHint}
-                        disabled={isHinting || hintLevel >= 3}
+                        disabled={isHinting || hintLevel >= 3 || isGateLocked}
                         className="gap-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
                     >
                         {isHinting ? (
@@ -325,7 +339,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                     </Button>
                     <Button
                         onClick={handleEvaluate}
-                        disabled={isEvaluating || !code.trim()}
+                        disabled={isEvaluating || !code.trim() || isGateLocked}
                         className="gap-1.5 bg-foreground text-background hover:bg-foreground/90 rounded-full px-5 font-semibold"
                     >
                         {isEvaluating ? (
@@ -364,26 +378,90 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
 
             {/* Editor */}
             {isDSA ? (
-                <div className="rounded-xl border border-border overflow-hidden">
-                    <Editor
-                        height="320px"
-                        language={card.type === "sql" ? "mysql" : "cpp"}
-                        value={code}
-                        onChange={(val) => setCode(val || "")}
-                        theme="vs-dark"
-                        options={{
-                            fontSize: 14,
-                            minimap: { enabled: false },
-                            lineNumbers: "on",
-                            scrollBeyondLastLine: false,
-                            automaticLayout: true,
-                            tabSize: 4,
-                            wordWrap: "on",
-                            padding: { top: 12 },
-                            placeholder: "Write your solution here...",
-                        }}
-                    />
-                </div>
+                card.difficulty === "hard" ? (
+                    !isDuckUnlocked ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {/* Left column: Rubber Duck Gate */}
+                            <div className="h-[520px]">
+                                <RubberDuckGate card={card} onUnlock={() => setIsDuckUnlocked(true)} />
+                            </div>
+                            {/* Right column: Blurred Mock Editor */}
+                            <div className="relative rounded-xl border border-border bg-card/25 overflow-hidden h-[520px] flex flex-col shadow-lg">
+                                {/* Editor mock header */}
+                                <div className="flex items-center gap-1.5 px-4 py-2.5 bg-muted/40 border-b border-border/50 select-none text-[11px] text-muted-foreground font-semibold">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/30"></span>
+                                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/30"></span>
+                                    <span className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/30"></span>
+                                    <span className="ml-2 font-mono">solution.cpp - locked</span>
+                                </div>
+                                {/* Blurred simulated editor content */}
+                                <div className="flex-1 p-4 font-mono text-xs text-zinc-600/30 space-y-2 select-none filter blur-[4px]">
+                                    <div>#include &lt;iostream&gt;</div>
+                                    <div>#include &lt;vector&gt;</div>
+                                    <div className="pl-4">class Solution {"{"}</div>
+                                    <div className="pl-8">public:</div>
+                                    <div className="pl-12">vector&lt;int&gt; solve(int n, vector&lt;int&gt;&amp; nums) {"{"}</div>
+                                    <div className="pl-16">// Algorithmic details are hidden until approved...</div>
+                                    <div className="pl-16">// Explain logic to your Rubber Duck.</div>
+                                    <div className="pl-12">{"}"}</div>
+                                    <div className="pl-8">{"}"};</div>
+                                </div>
+                                {/* Glowing Lock Overlay */}
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-black/60 backdrop-blur-[2px] z-10">
+                                    <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                                        <Lock className="w-5 h-5 text-amber-500 animate-pulse" />
+                                    </div>
+                                    <h5 className="text-xs font-black text-amber-500 uppercase tracking-wider">Editor Locked</h5>
+                                    <p className="text-[10px] text-zinc-400 mt-2 max-w-[200px] leading-relaxed">
+                                        Explain your logic and time complexities to the Rubber Duck on the left to unlock typing!
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border border-border overflow-hidden">
+                            <Editor
+                                height="320px"
+                                language={card.type === "sql" ? "mysql" : "cpp"}
+                                value={code}
+                                onChange={(val) => setCode(val || "")}
+                                theme="vs-dark"
+                                options={{
+                                    fontSize: 14,
+                                    minimap: { enabled: false },
+                                    lineNumbers: "on",
+                                    scrollBeyondLastLine: false,
+                                    automaticLayout: true,
+                                    tabSize: 4,
+                                    wordWrap: "on",
+                                    padding: { top: 12 },
+                                    placeholder: "Write your solution here...",
+                                }}
+                            />
+                        </div>
+                    )
+                ) : (
+                    <div className="rounded-xl border border-border overflow-hidden">
+                        <Editor
+                            height="320px"
+                            language={card.type === "sql" ? "mysql" : "cpp"}
+                            value={code}
+                            onChange={(val) => setCode(val || "")}
+                            theme="vs-dark"
+                            options={{
+                                fontSize: 14,
+                                minimap: { enabled: false },
+                                lineNumbers: "on",
+                                scrollBeyondLastLine: false,
+                                automaticLayout: true,
+                                tabSize: 4,
+                                wordWrap: "on",
+                                padding: { top: 12 },
+                                placeholder: "Write your solution here...",
+                            }}
+                        />
+                    </div>
+                )
             ) : (
                 <textarea
                     value={code}
@@ -511,22 +589,333 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                                 <span className="text-xs font-bold uppercase tracking-wider">Complexity & Efficiency</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-3 mt-1">
-                                                <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Your Complexity</p>
-                                                    <p className="text-sm font-mono font-semibold text-foreground">Time: {evalResult.criteria.efficiency.userTime}</p>
-                                                    <p className="text-sm font-mono font-semibold text-foreground">Space: {evalResult.criteria.efficiency.userSpace}</p>
-                                                </div>
-                                                <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Optimal Complexity</p>
-                                                    <p className="text-sm font-mono font-semibold text-foreground">Time: {evalResult.criteria.efficiency.optimalTime}</p>
-                                                    <p className="text-sm font-mono font-semibold text-foreground">Space: {evalResult.criteria.efficiency.optimalSpace}</p>
-                                                </div>
+                                                {/* Your Complexity Box */}
+                                                {(() => {
+                                                    const userTime = evalResult.criteria.efficiency.userTime;
+                                                    const userCurve = (() => {
+                                                        const cleaned = userTime.toLowerCase().replace(/\s+/g, '');
+                                                        if (cleaned.includes("o(1)")) return "O(1)";
+                                                        if (cleaned.includes("o(logn)") || cleaned.includes("o(log(n))")) return "O(logN)";
+                                                        if (cleaned.includes("o(n^2)") || cleaned.includes("o(n2)")) return "O(N^2)";
+                                                        if (cleaned.includes("o(nlogn)") || cleaned.includes("o(nlog(n))")) return "O(NlogN)";
+                                                        if (cleaned.includes("o(n)")) return "O(N)";
+                                                        return "O(N)";
+                                                    })();
+                                                    const userColorInfo = (() => {
+                                                        switch(userCurve) {
+                                                            case "O(1)": return { text: "text-emerald-400", stroke: "#10b981", name: "Constant Time - O(1)", desc: "Best case efficiency. Execution time stays flat and independent of input size N." };
+                                                            case "O(logN)": return { text: "text-teal-400", stroke: "#06b6d4", name: "Logarithmic Time - O(log N)", desc: "Excellent efficiency. Scaled dynamically by halving size on each operation." };
+                                                            case "O(N)": return { text: "text-amber-400", stroke: "#f59e0b", name: "Linear Time - O(N)", desc: "Fair efficiency. Operations scale directly 1:1 with input size N (45-degree slope)." };
+                                                            case "O(NlogN)": return { text: "text-indigo-400", stroke: "#6366f1", name: "Linearithmic Time - O(N log N)", desc: "Moderate efficiency. Standard performance for sorting algorithms." };
+                                                            case "O(N^2)": return { text: "text-red-400", stroke: "#ef4444", name: "Quadratic Time - O(N²)", desc: "Suboptimal efficiency. Time scales quadratically, making it poor for large input size N." };
+                                                            default: return { text: "text-cyan-400", stroke: "#22d3ee", name: "Linear Time - O(N)", desc: "Operations scale proportionally with size." };
+                                                        }
+                                                    })();
+                                                    
+                                                    let cx = 95, cy = 35;
+                                                    if (userCurve === "O(logN)") { cx = 95; cy = 24; }
+                                                    else if (userCurve === "O(N)") { cx = 95; cy = 15; }
+                                                    else if (userCurve === "O(NlogN)") { cx = 95; cy = 6; }
+                                                    else if (userCurve === "O(N^2)") { cx = 38; cy = 5; }
+
+                                                    return (
+                                                        <div 
+                                                            onClick={() => setSelectedCurve(selectedCurve === "user" ? null : "user")}
+                                                            className={`p-3 rounded-lg transition-all flex items-center justify-between group relative cursor-pointer border ${
+                                                                selectedCurve === "user" 
+                                                                    ? "bg-cyan-500/10 border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.15)]" 
+                                                                    : "bg-muted/30 border-border/50 hover:bg-muted/50 hover:border-cyan-500/30"
+                                                            }`}
+                                                        >
+                                                            <div>
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Your Complexity</p>
+                                                                <p className="text-sm font-mono font-semibold text-foreground">Time: {evalResult.criteria.efficiency.userTime}</p>
+                                                                <p className="text-sm font-mono font-semibold text-foreground">Space: {evalResult.criteria.efficiency.userSpace}</p>
+                                                            </div>
+                                                            
+                                                            {/* Compact SVG Mathematical Growth Curve Chart */}
+                                                            <div className="relative shrink-0 ml-2">
+                                                                <svg className="w-16 h-10 text-muted-foreground/15" viewBox="0 0 100 40" fill="none">
+                                                                    {/* Axis Lines */}
+                                                                    <line x1="5" y1="35" x2="95" y2="35" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                                                                    <line x1="5" y1="5" x2="5" y2="35" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                                                                    
+                                                                    {/* Standard Math Big-O Growth Curves */}
+                                                                    <path d="M 5 35 L 95 35" stroke={userCurve === "O(1)" ? userColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={userCurve === "O(1)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 Q 30 25, 95 24" stroke={userCurve === "O(logN)" ? userColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={userCurve === "O(logN)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 L 95 15" stroke={userCurve === "O(N)" ? userColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={userCurve === "O(N)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 Q 45 28, 95 6" stroke={userCurve === "O(NlogN)" ? userColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={userCurve === "O(NlogN)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 Q 18 32, 38 5" stroke={userCurve === "O(N^2)" ? userColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={userCurve === "O(N^2)" ? "2.5" : "1"} />
+                                                                    
+                                                                    {/* Highlight active pointer circle */}
+                                                                    <circle cx={cx} cy={cy} r="2.5" fill={userColorInfo.stroke} className="shadow-lg group-hover:scale-125 transition-transform" />
+                                                                    <circle cx={cx} cy={cy} r="5" fill={userColorInfo.stroke} className="animate-ping opacity-45" />
+                                                                </svg>
+                                                            </div>
+
+                                                            {/* Tooltip Overlay */}
+                                                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col z-20 w-64 p-3 rounded-xl bg-zinc-950/97 border border-border/85 shadow-2xl text-[10px] leading-relaxed animate-in fade-in zoom-in-95 duration-150 text-left">
+                                                                <span className="font-bold text-cyan-400 mb-1">Complexity Growth Chart</span>
+                                                                <div className="flex items-center justify-between mb-1.5 border-b border-border/20 pb-1">
+                                                                    <span className="font-semibold text-foreground">{userColorInfo.name}</span>
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                                                        userCurve === "O(1)" || userCurve === "O(logN)" ? "bg-emerald-500/10 text-emerald-400" :
+                                                                        userCurve === "O(N)" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"
+                                                                    }`}>
+                                                                        {userCurve === "O(1)" ? "Optimal" :
+                                                                         userCurve === "O(logN)" ? "Excellent" :
+                                                                         userCurve === "O(N)" ? "Fair" :
+                                                                         userCurve === "O(NlogN)" ? "Acceptable" : "Suboptimal"}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[9px] text-zinc-400 mb-2 leading-relaxed">
+                                                                    {userColorInfo.desc}
+                                                                </p>
+                                                                <div className="flex flex-col gap-1 border-t border-border/10 pt-1.5 text-[8px] text-zinc-500 font-mono">
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> O(1) - Constant</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-teal-500" /> O(log N) - Logarithmic</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> O(N) - Linear (45° line)</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> O(N log N) - Linearithmic</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> O(N²) - Quadratic (steep curve)</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                {/* Optimal Complexity Box */}
+                                                {(() => {
+                                                    const optimalTime = evalResult.criteria.efficiency.optimalTime;
+                                                    const optimalCurve = (() => {
+                                                        const cleaned = optimalTime.toLowerCase().replace(/\s+/g, '');
+                                                        if (cleaned.includes("o(1)")) return "O(1)";
+                                                        if (cleaned.includes("o(logn)") || cleaned.includes("o(log(n))")) return "O(logN)";
+                                                        if (cleaned.includes("o(n^2)") || cleaned.includes("o(n2)")) return "O(N^2)";
+                                                        if (cleaned.includes("o(nlogn)") || cleaned.includes("o(nlog(n))")) return "O(NlogN)";
+                                                        if (cleaned.includes("o(n)")) return "O(N)";
+                                                        return "O(N)";
+                                                    })();
+                                                    const optimalColorInfo = (() => {
+                                                        switch(optimalCurve) {
+                                                            case "O(1)": return { text: "text-emerald-400", stroke: "#10b981", name: "Constant Time - O(1)", desc: "Best case efficiency. Execution time stays flat and independent of input size N." };
+                                                            case "O(logN)": return { text: "text-teal-400", stroke: "#06b6d4", name: "Logarithmic Time - O(log N)", desc: "Excellent efficiency. Scaled dynamically by halving size on each operation." };
+                                                            case "O(N)": return { text: "text-amber-400", stroke: "#f59e0b", name: "Linear Time - O(N)", desc: "Fair efficiency. Operations scale directly 1:1 with input size N (45-degree slope)." };
+                                                            case "O(NlogN)": return { text: "text-indigo-400", stroke: "#6366f1", name: "Linearithmic Time - O(N log N)", desc: "Moderate efficiency. Standard performance for sorting algorithms." };
+                                                            case "O(N^2)": return { text: "text-red-400", stroke: "#ef4444", name: "Quadratic Time - O(N²)", desc: "Suboptimal efficiency. Time scales quadratically, making it poor for large input size N." };
+                                                            default: return { text: "text-cyan-400", stroke: "#22d3ee", name: "Linear Time - O(N)", desc: "Operations scale proportionally with size." };
+                                                        }
+                                                    })();
+                                                    
+                                                    let cx = 95, cy = 35;
+                                                    if (optimalCurve === "O(logN)") { cx = 95; cy = 24; }
+                                                    else if (optimalCurve === "O(N)") { cx = 95; cy = 15; }
+                                                    else if (optimalCurve === "O(NlogN)") { cx = 95; cy = 6; }
+                                                    else if (optimalCurve === "O(N^2)") { cx = 38; cy = 5; }
+
+                                                    return (
+                                                        <div 
+                                                            onClick={() => setSelectedCurve(selectedCurve === "optimal" ? null : "optimal")}
+                                                            className={`p-3 rounded-lg transition-all flex items-center justify-between group relative cursor-pointer border ${
+                                                                selectedCurve === "optimal" 
+                                                                    ? "bg-cyan-500/10 border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.15)]" 
+                                                                    : "bg-muted/30 border-border/50 hover:bg-muted/50 hover:border-cyan-500/30"
+                                                            }`}
+                                                        >
+                                                            <div>
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Optimal Complexity</p>
+                                                                <p className="text-sm font-mono font-semibold text-foreground">Time: {evalResult.criteria.efficiency.optimalTime}</p>
+                                                                <p className="text-sm font-mono font-semibold text-foreground">Space: {evalResult.criteria.efficiency.optimalSpace}</p>
+                                                            </div>
+                                                            
+                                                            {/* Compact SVG Mathematical Growth Curve Chart */}
+                                                            <div className="relative shrink-0 ml-2">
+                                                                <svg className="w-16 h-10 text-muted-foreground/15" viewBox="0 0 100 40" fill="none">
+                                                                    {/* Axis Lines */}
+                                                                    <line x1="5" y1="35" x2="95" y2="35" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                                                                    <line x1="5" y1="5" x2="5" y2="35" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                                                                    
+                                                                    {/* Standard Math Big-O Growth Curves */}
+                                                                    <path d="M 5 35 L 95 35" stroke={optimalCurve === "O(1)" ? optimalColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={optimalCurve === "O(1)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 Q 30 25, 95 24" stroke={optimalCurve === "O(logN)" ? optimalColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={optimalCurve === "O(logN)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 L 95 15" stroke={optimalCurve === "O(N)" ? optimalColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={optimalCurve === "O(N)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 Q 45 28, 95 6" stroke={optimalCurve === "O(NlogN)" ? optimalColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={optimalCurve === "O(NlogN)" ? "2.5" : "1"} />
+                                                                    <path d="M 5 35 Q 18 32, 38 5" stroke={optimalCurve === "O(N^2)" ? optimalColorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={optimalCurve === "O(N^2)" ? "2.5" : "1"} />
+                                                                    
+                                                                    {/* Highlight active pointer circle */}
+                                                                    <circle cx={cx} cy={cy} r="2.5" fill={optimalColorInfo.stroke} className="shadow-lg group-hover:scale-125 transition-transform" />
+                                                                    <circle cx={cx} cy={cy} r="5" fill={optimalColorInfo.stroke} className="animate-ping opacity-45" />
+                                                                </svg>
+                                                            </div>
+
+                                                            {/* Tooltip Overlay */}
+                                                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col z-20 w-64 p-3 rounded-xl bg-zinc-950/97 border border-border/85 shadow-2xl text-[10px] leading-relaxed animate-in fade-in zoom-in-95 duration-150 text-left">
+                                                                <span className="font-bold text-cyan-400 mb-1">Complexity Growth Chart</span>
+                                                                <div className="flex items-center justify-between mb-1.5 border-b border-border/20 pb-1">
+                                                                    <span className="font-semibold text-foreground">{optimalColorInfo.name}</span>
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-400`}>
+                                                                        Optimal
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[9px] text-zinc-400 mb-2 leading-relaxed">
+                                                                    {optimalColorInfo.desc}
+                                                                </p>
+                                                                <div className="flex flex-col gap-1 border-t border-border/10 pt-1.5 text-[8px] text-zinc-500 font-mono">
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> O(1) - Constant</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-teal-500" /> O(log N) - Logarithmic</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> O(N) - Linear (45° line)</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500" /> O(N log N) - Linearithmic</div>
+                                                                    <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> O(N²) - Quadratic (steep curve)</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                             {evalResult.criteria.efficiency.comparison && (
                                                 <p className="text-xs text-muted-foreground leading-relaxed italic mt-1">
                                                     {evalResult.criteria.efficiency.comparison}
                                                 </p>
                                             )}
+
+                                            {/* Beautiful Inline Complexity Explorer (Dropdown style expansion) */}
+                                            <AnimatePresence>
+                                                {selectedCurve && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: "auto" }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        transition={{ duration: 0.25 }}
+                                                        className="overflow-hidden"
+                                                    >
+                                                        <div className="mt-3 pt-3 border-t border-border/30 space-y-4 text-left">
+                                                            <div className="flex items-center justify-between border-b border-border/20 pb-2">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                                                                    <h4 className="text-xs font-black uppercase tracking-wider text-cyan-400">
+                                                                        Complexity Explorer
+                                                                    </h4>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => setSelectedCurve(null)}
+                                                                    className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                                                                >
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+
+                                                            {(() => {
+                                                                const isUser = selectedCurve === "user";
+                                                                const timeVal = isUser ? evalResult.criteria.efficiency.userTime : evalResult.criteria.efficiency.optimalTime;
+                                                                const spaceVal = isUser ? evalResult.criteria.efficiency.userSpace : evalResult.criteria.efficiency.optimalSpace;
+                                                                const curve = (() => {
+                                                                    const cleaned = timeVal.toLowerCase().replace(/\s+/g, '');
+                                                                    if (cleaned.includes("o(1)")) return "O(1)";
+                                                                    if (cleaned.includes("o(logn)") || cleaned.includes("o(log(n))")) return "O(logN)";
+                                                                    if (cleaned.includes("o(n^2)") || cleaned.includes("o(n2)")) return "O(N^2)";
+                                                                    if (cleaned.includes("o(nlogn)") || cleaned.includes("o(nlog(n))")) return "O(NlogN)";
+                                                                    if (cleaned.includes("o(n)")) return "O(N)";
+                                                                    return "O(N)";
+                                                                })();
+                                                                const colorInfo = (() => {
+                                                                    switch(curve) {
+                                                                        case "O(1)": return { text: "text-emerald-400", stroke: "#10b981", name: "Constant Time - O(1)", desc: "Execution operations stay flat. The code does not scale with size (e.g. hash lookup)." };
+                                                                        case "O(logN)": return { text: "text-teal-400", stroke: "#06b6d4", name: "Logarithmic Time - O(log N)", desc: "Excellent growth rate. Input volume is divided rapidly on each step (e.g. binary search trees)." };
+                                                                        case "O(N)": return { text: "text-amber-400", stroke: "#f59e0b", name: "Linear Time - O(N)", desc: "Standard linear growth. Work scales 1:1 proportionally with input N (45-degree slope, e.g. single array loop)." };
+                                                                        case "O(NlogN)": return { text: "text-indigo-400", stroke: "#6366f1", name: "Linearithmic Time - O(N log N)", desc: "Good sorting threshold. Ideal limit for general comparison sorting algorithms (e.g. Merge Sort)." };
+                                                                        case "O(N^2)": return { text: "text-red-400", stroke: "#ef4444", name: "Quadratic Time - O(N²)", desc: "Suboptimal growth rate. Work increases quadratically with N (e.g. double nested loops)." };
+                                                                        default: return { text: "text-cyan-400", stroke: "#22d3ee", name: "Linear Time - O(N)", desc: "Operations scale proportionally with size." };
+                                                                    }
+                                                                })();
+                                                                
+                                                                let cx = 95, cy = 35;
+                                                                if (curve === "O(logN)") { cx = 95; cy = 24; }
+                                                                else if (curve === "O(N)") { cx = 95; cy = 15; }
+                                                                else if (curve === "O(NlogN)") { cx = 95; cy = 6; }
+                                                                else if (curve === "O(N^2)") { cx = 38; cy = 5; }
+
+                                                                return (
+                                                                    <div className="space-y-4">
+                                                                        <div className="p-3.5 rounded-xl border border-border/50 bg-muted/20">
+                                                                            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                                                                                {isUser ? "YOUR SOLUTION PERFORMANCE" : "OPTIMAL REFERENCE DESIGN"}
+                                                                            </div>
+                                                                            <div className="space-y-1">
+                                                                                <p className="text-sm font-mono font-black text-foreground">Time Complexity: <span className={colorInfo.text}>{timeVal}</span></p>
+                                                                                <p className="text-sm font-mono font-black text-foreground">Space Complexity: <span className="text-cyan-400">{spaceVal}</span></p>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Large Scale CS Growth Curve Chart */}
+                                                                        <div className="p-4 rounded-xl border border-border/40 bg-zinc-900/60 relative flex flex-col items-center">
+                                                                            <div className="text-[9px] font-black tracking-wider text-muted-foreground uppercase self-start mb-3">
+                                                                                Big-O Scalability Curves
+                                                                            </div>
+                                                                            <svg className="w-full h-36 text-muted-foreground/10" viewBox="0 0 100 40" fill="none">
+                                                                                {/* Background Grid Gridlines */}
+                                                                                <line x1="5" y1="35" x2="95" y2="35" stroke="rgba(255,255,255,0.08)" strokeWidth="0.75" />
+                                                                                <line x1="5" y1="5" x2="95" y2="5" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" strokeDasharray="1 1" />
+                                                                                <line x1="5" y1="20" x2="95" y2="20" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" strokeDasharray="1 1" />
+                                                                                <line x1="5" y1="5" x2="5" y2="35" stroke="rgba(255,255,255,0.08)" strokeWidth="0.75" />
+                                                                                
+                                                                                {/* Curves */}
+                                                                                <path d="M 5 35 L 95 35" stroke={curve === "O(1)" ? colorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={curve === "O(1)" ? "2.5" : "0.75"} />
+                                                                                <path d="M 5 35 Q 30 25, 95 24" stroke={curve === "O(logN)" ? colorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={curve === "O(logN)" ? "2.5" : "0.75"} />
+                                                                                <path d="M 5 35 L 95 15" stroke={curve === "O(N)" ? colorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={curve === "O(N)" ? "2.5" : "0.75"} />
+                                                                                <path d="M 5 35 Q 45 28, 95 6" stroke={curve === "O(NlogN)" ? colorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={curve === "O(NlogN)" ? "2.5" : "0.75"} />
+                                                                                <path d="M 5 35 Q 18 32, 38 5" stroke={curve === "O(N^2)" ? colorInfo.stroke : "rgba(255,255,255,0.04)"} strokeWidth={curve === "O(N^2)" ? "2.5" : "0.75"} />
+                                                                                
+                                                                                {/* Glowing terminator mark */}
+                                                                                <circle cx={cx} cy={cy} r="2.5" fill={colorInfo.stroke} />
+                                                                                <circle cx={cx} cy={cy} r="5" fill={colorInfo.stroke} className="animate-ping opacity-45" />
+                                                                                
+                                                                                {/* Chart Labels */}
+                                                                                <text x="42" y="7" fill="rgba(239, 68, 68, 0.4)" fontSize="3.5" className="font-mono">O(N²)</text>
+                                                                                <text x="75" y="10" fill="rgba(99, 102, 241, 0.4)" fontSize="3.5" className="font-mono">O(N log N)</text>
+                                                                                <text x="96" y="14" fill="rgba(245, 158, 17, 0.4)" fontSize="3.5" className="font-mono">O(N)</text>
+                                                                                <text x="96" y="23" fill="rgba(6, 182, 212, 0.4)" fontSize="3.5" className="font-mono">O(log N)</text>
+                                                                                <text x="96" y="34" fill="rgba(16, 185, 129, 0.4)" fontSize="3.5" className="font-mono">O(1)</text>
+                                                                            </svg>
+                                                                        </div>
+
+                                                                        {/* Explanations of complexity */}
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                                                            <div className="space-y-2">
+                                                                                <h5 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                                                                                    Time Complexity (TC)
+                                                                                </h5>
+                                                                                <p className="text-[10px] text-zinc-400 leading-relaxed">
+                                                                                    TC measures the execution operations relative to the input size <span className="font-mono font-bold text-foreground">N</span>. It models performance scaling, not raw CPU seconds.
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="space-y-2">
+                                                                                <h5 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                                                                                    Space Complexity (SC)
+                                                                                </h5>
+                                                                                <p className="text-[10px] text-zinc-400 leading-relaxed">
+                                                                                    SC measures the peak auxiliary memory (variables, call stacks, dynamic structures) allocated by your code relative to <span className="font-mono font-bold text-foreground">N</span>.
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="pt-3 border-t border-border/20 text-[10px] text-zinc-400">
+                                                                            <span className="font-bold text-foreground block mb-0.5">{colorInfo.name}</span>
+                                                                            <p className="leading-relaxed">{colorInfo.desc}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+
+
+                                            {/* Live Complexity Sandbox Integration */}
+                                            <div className="mt-3 pt-3 border-t border-border/40">
+                                                <ComplexitySandbox 
+                                                    complexity={evalResult.criteria.efficiency.userTime} 
+                                                    optimalComplexity={evalResult.criteria.efficiency.optimalTime} 
+                                                />
+                                            </div>
                                         </div>
                                     )}
 
