@@ -303,6 +303,13 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
         EASY: "bg-emerald-500 text-white",
     };
 
+    const ratingLabels = {
+        AGAIN: { label: "Forgot", emoji: "❌", desc: "No recall" },
+        HARD: { label: "Rusty", emoji: "⚠️", desc: "Hesitant" },
+        GOOD: { label: "Fluent", emoji: "✨", desc: "Fluent" },
+        EASY: { label: "Instinctive", emoji: "🧠", desc: "Auto-pilot" }
+    } as const;
+
     return (
         <div className="flex flex-col gap-4">
             {/* Toolbar */}
@@ -513,7 +520,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                             <span
                                 className={`ml-auto px-2.5 py-0.5 rounded-full text-xs font-bold ${ratingColors[evalResult.suggestedRating]}`}
                             >
-                                {evalResult.suggestedRating}
+                                {ratingLabels[evalResult.suggestedRating].emoji} {ratingLabels[evalResult.suggestedRating].label}
                             </span>
                         </div>
 
@@ -1216,7 +1223,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                 >
                                     <div className="flex flex-col gap-1 w-full text-center">
                                         <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider">
-                                            AI suggests rating this as <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${ratingColors[evalResult.suggestedRating]}`}>{evalResult.suggestedRating}</span>
+                                            AI suggests rating this as <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${ratingColors[evalResult.suggestedRating]}`}>{ratingLabels[evalResult.suggestedRating].emoji} {ratingLabels[evalResult.suggestedRating].label}</span>
                                         </span>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2">
@@ -1233,14 +1240,18 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                                     whileHover={{ scale: 1.04, y: -1 }}
                                                     whileTap={{ scale: 0.96 }}
                                                     onClick={() => setSelectedRating(r)}
-                                                    className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl font-bold transition-all text-xs border cursor-pointer ${
+                                                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl font-bold transition-all text-xs border cursor-pointer gap-0.5 ${
                                                         isActive 
                                                             ? `${activeBorder} border-2 shadow-md` 
                                                             : "border-border/50 bg-muted/20 opacity-70 hover:opacity-100"
                                                     }`}
                                                 >
-                                                    <span>
-                                                        {r} {r === evalResult.suggestedRating && "✨"}
+                                                    <span className="text-sm">{ratingLabels[r].emoji}</span>
+                                                    <span className="text-[11px] font-extrabold">
+                                                        {ratingLabels[r].label} {r === evalResult.suggestedRating && "✨"}
+                                                    </span>
+                                                    <span className="text-[9px] font-medium opacity-50 leading-none mt-0.5 text-center px-0.5">
+                                                        {ratingLabels[r].desc}
                                                     </span>
                                                 </motion.button>
                                             );

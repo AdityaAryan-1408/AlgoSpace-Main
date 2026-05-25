@@ -38,24 +38,24 @@ interface ReviewSessionProps {
 
 const ratingConfig = {
     AGAIN: {
-        label: "Again",
-        color: "bg-red-500 hover:bg-red-600 text-white",
-        desc: "Review tomorrow",
+        label: "❌ Forgot",
+        color: "bg-red-500/90 hover:bg-red-600 text-white",
+        desc: "No recall",
     },
     HARD: {
-        label: "Hard",
-        color: "bg-orange-500 hover:bg-orange-600 text-white",
-        desc: "Short interval",
+        label: "⚠️ Rusty",
+        color: "bg-orange-500/90 hover:bg-orange-600 text-white",
+        desc: "Hesitant",
     },
     GOOD: {
-        label: "Good",
-        color: "bg-blue-500 hover:bg-blue-600 text-white",
-        desc: "Normal interval",
+        label: "✨ Fluent",
+        color: "bg-blue-500/90 hover:bg-blue-600 text-white",
+        desc: "Fluent",
     },
     EASY: {
-        label: "Easy",
-        color: "bg-emerald-500 hover:bg-emerald-600 text-white",
-        desc: "Longer interval",
+        label: "🧠 Instinctive",
+        color: "bg-emerald-500/90 hover:bg-emerald-600 text-white",
+        desc: "Auto-pilot",
     },
 } as const;
 
