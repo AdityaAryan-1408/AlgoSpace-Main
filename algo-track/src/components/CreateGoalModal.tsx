@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Target, Plus, Trash2, Calendar } from "lucide-react";
+import { X, Target, Plus, Trash2, Calendar, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface Props {
@@ -16,6 +16,10 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [endDate, setEndDate] = useState("");
+  
+  // Custom metrics and targets
+  const [metricKey, setMetricKey] = useState("problems_solved");
+  const [targetValue, setTargetValue] = useState("10");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,16 +28,38 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
       return;
     }
 
+    const numericTarget = Number(targetValue);
+    if (isNaN(numericTarget) || numericTarget <= 0) {
+      setError("Target value must be a positive number.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError(null);
 
-      // Simple implementation focusing solely on volume for demonstration
+      // Map metric key to unit and type
+      let unit = "problems";
+      let goalType = "dsa_volume";
+
+      if (metricKey === "retained_pct") {
+        unit = "percent";
+        goalType = "dsa_retention";
+        if (numericTarget > 100) {
+          setError("Retention percentage cannot exceed 100%.");
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (metricKey === "topics_completed") {
+        unit = "topics";
+        goalType = "cs_topic_completion";
+      }
+
       const targets = [
         {
-          metricKey: "problems_solved",
-          targetValue: 30, // Default to a static 30 problems goal
-          unit: "problems",
+          metricKey,
+          targetValue: numericTarget,
+          unit,
         }
       ];
 
@@ -41,9 +67,9 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          description,
-          goalType: "dsa_volume",
+          title: title.trim(),
+          description: description.trim(),
+          goalType,
           status: "active",
           startDate,
           endDate,
@@ -77,7 +103,7 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Target className="w-5 h-5 text-blue-500" />
+            <Target className="w-5 h-5 text-cyan-500" />
             Create New Goal
           </h2>
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
@@ -99,8 +125,8 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Master Array Manipulation"
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Master Binary Trees"
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
                 required
               />
             </div>
@@ -112,8 +138,48 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Details about what you want to achieve"
                 rows={2}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
               />
+            </div>
+
+            {/* Metric Type Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-muted-foreground">Goal Metric <span className="text-red-500">*</span></label>
+                <select
+                  value={metricKey}
+                  onChange={(e) => {
+                    setMetricKey(e.target.value);
+                    if (e.target.value === "retained_pct") {
+                      setTargetValue("80");
+                    } else if (e.target.value === "topics_completed") {
+                      setTargetValue("5");
+                    } else {
+                      setTargetValue("10");
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm cursor-pointer"
+                >
+                  <option value="problems_solved">Problems Solved</option>
+                  <option value="retained_pct">Retention Percentage</option>
+                  <option value="topics_completed">Topics Mastered</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Target Value ({metricKey === "retained_pct" ? "%" : metricKey === "topics_completed" ? "topics" : "problems"}) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={metricKey === "retained_pct" ? 100 : 500}
+                  value={targetValue}
+                  onChange={(e) => setTargetValue(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                  required
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -123,7 +189,7 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
                   required
                 />
               </div>
@@ -133,10 +199,20 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
                   required
                 />
               </div>
+            </div>
+
+            {/* Explanatory subtext */}
+            <div className="p-3 bg-muted/40 border border-border rounded-lg flex gap-2 items-start text-xs text-muted-foreground">
+              <Sparkles className="w-4 h-4 text-cyan-500 shrink-0 mt-0.5" />
+              <span>
+                {metricKey === "problems_solved" && `Solve ${targetValue} flashcard problems within the specified timeframe to build strong algorithmic memory.`}
+                {metricKey === "retained_pct" && `Maintain an average of ${targetValue}% positive ratings (GOOD or EASY) on reviews to ensure optimal spaced repetition.`}
+                {metricKey === "topics_completed" && `Successfully complete and mark ${targetValue} core computer science topics as finished.`}
+              </span>
             </div>
           </form>
         </div>
@@ -148,10 +224,10 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
           <Button 
             type="submit" 
             form="create-goal-form" 
-            className="bg-blue-500 hover:bg-blue-600 text-white min-w-[100px]" 
+            className="bg-cyan-600 hover:bg-cyan-700 text-white min-w-[100px] text-sm" 
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Creating..." : "Save Goal"}
+            {isSubmitting ? "Saving..." : "Save Goal"}
           </Button>
         </div>
       </motion.div>

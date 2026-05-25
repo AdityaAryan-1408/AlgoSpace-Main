@@ -19,6 +19,7 @@ import { ReviewForecastWidget } from "./ReviewForecastWidget";
 import { StudyMetricsWidget } from "./StudyMetricsWidget";
 import { SmartNudgeBanner } from "./SmartNudgeBanner";
 import { QuickActionsRow } from "./QuickActionsRow";
+import { GoalsPlannerHub } from "./GoalsPlannerHub";
 import { NeedsAttentionWidget } from "./NeedsAttentionWidget";
 import { FeatureCarouselWidget } from "./FeatureCarouselWidget";
 import { motion, AnimatePresence } from "motion/react";
@@ -282,6 +283,8 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
       <MasteryHeatmap cards={cards} />
 
       <QuickActionsRow onAction={onStartReview} />
+
+      <GoalsPlannerHub onNavigate={onNavigate} />
 
       {/* Analytics Section */}
       <div className="mb-8">
