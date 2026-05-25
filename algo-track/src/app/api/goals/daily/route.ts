@@ -145,6 +145,21 @@ export async function POST(request: NextRequest) {
 
       if (updateError) throw new Error(updateError.message);
 
+      // Automatically sync parent checklist goal status
+      const { data: allItems } = await supabase
+        .from("goal_topic_items")
+        .select("status")
+        .eq("goal_id", itemData.goal_id);
+
+      if (allItems && allItems.length > 0) {
+        const allCompleted = allItems.every((it) => it.status === "completed");
+        const newGoalStatus = allCompleted ? "completed" : "active";
+        await supabase
+          .from("goals")
+          .update({ status: newGoalStatus })
+          .eq("id", itemData.goal_id);
+      }
+
       return jsonOk({ updated: updatedItem });
     }
 
@@ -187,6 +202,12 @@ export async function POST(request: NextRequest) {
 
       if (newGoalError) throw new Error(newGoalError.message);
       goalId = newGoal.id;
+    } else {
+      // If goal already exists, reset its status to active when adding a new item
+      await supabase
+        .from("goals")
+        .update({ status: "active" })
+        .eq("id", goalId);
     }
 
     // Insert new item in goal_topic_items
@@ -258,6 +279,21 @@ export async function DELETE(request: NextRequest) {
       // Delete the empty goal
       await supabase.from("goals").delete().eq("id", goalId);
       return jsonOk({ deleted: true, goalDeleted: true });
+    }
+
+    // Automatically sync parent checklist goal status on item deletion
+    const { data: remainingItems } = await supabase
+      .from("goal_topic_items")
+      .select("status")
+      .eq("goal_id", goalId);
+
+    if (remainingItems && remainingItems.length > 0) {
+      const allCompleted = remainingItems.every((it) => it.status === "completed");
+      const newGoalStatus = allCompleted ? "completed" : "active";
+      await supabase
+        .from("goals")
+        .update({ status: newGoalStatus })
+        .eq("id", goalId);
     }
 
     return jsonOk({ deleted: true, goalDeleted: false });

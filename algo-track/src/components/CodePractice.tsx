@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
@@ -113,6 +114,10 @@ interface Props {
 
 export function CodePractice({ card, onRate, onCancel }: Props) {
     const isDSA = card.type === "leetcode" || card.type === "sql";
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
     const [code, setCode] = useState("");
     const [isDuckUnlocked, setIsDuckUnlocked] = useState(false);
     const [selectedCurve, setSelectedCurve] = useState<"user" | "optimal" | null>(null);
@@ -513,7 +518,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                         </div>
 
                         {/* Feedback body */}
-                        <div className="p-4 space-y-4">
+                        <div className="p-4 pb-36 space-y-4">
                             {/* LeetCode-style Criteria Badges & Greetings for DSA evaluations */}
                             {isDSA && evalResult.criteria && (
                                 <div className="space-y-4">
@@ -1201,51 +1206,67 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
                                 </div>
                             )}
 
-                            {/* Accept Rating */}
-                            <div className="flex flex-col gap-3 pt-4 border-t border-border mt-4">
-                                <span className="text-sm text-foreground text-center font-medium">
-                                    AI suggests rating this as <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${ratingColors[evalResult.suggestedRating]}`}>{evalResult.suggestedRating}</span>
-                                </span>
-                                <p className="text-xs text-muted-foreground text-center mb-1">Select a rating to continue:</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {(["AGAIN", "HARD", "GOOD", "EASY"] as const).map((r) => (
+                            {/* Floating Glassmorphic Feedback Dock for Code Practice */}
+                            {isMounted && createPortal(
+                                <motion.div
+                                    initial={{ opacity: 0, y: 50, x: "-50%" }}
+                                    animate={{ opacity: 1, y: 0, x: "-50%" }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                                    className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-xl bg-card/85 dark:bg-card/75 backdrop-blur-xl border border-border/85 shadow-[0_15px_35px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.6)] rounded-2xl p-4 z-50 overflow-hidden flex flex-col gap-3"
+                                >
+                                    <div className="flex flex-col gap-1 w-full text-center">
+                                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-wider">
+                                            AI suggests rating this as <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${ratingColors[evalResult.suggestedRating]}`}>{evalResult.suggestedRating}</span>
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {(["AGAIN", "HARD", "GOOD", "EASY"] as const).map((r) => {
+                                            const isActive = selectedRating === r;
+                                            let activeBorder = "border-blue-500 bg-blue-500/10 text-blue-400";
+                                            if (r === "AGAIN") activeBorder = "border-red-500 bg-red-500/10 text-red-400";
+                                            if (r === "HARD") activeBorder = "border-orange-500 bg-orange-500/10 text-orange-400";
+                                            if (r === "EASY") activeBorder = "border-emerald-500 bg-emerald-500/10 text-emerald-400";
+                                            
+                                            return (
+                                                <motion.button
+                                                    key={r}
+                                                    whileHover={{ scale: 1.04, y: -1 }}
+                                                    whileTap={{ scale: 0.96 }}
+                                                    onClick={() => setSelectedRating(r)}
+                                                    className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl font-bold transition-all text-xs border cursor-pointer ${
+                                                        isActive 
+                                                            ? `${activeBorder} border-2 shadow-md` 
+                                                            : "border-border/50 bg-muted/20 opacity-70 hover:opacity-100"
+                                                    }`}
+                                                >
+                                                    <span>
+                                                        {r} {r === evalResult.suggestedRating && "✨"}
+                                                    </span>
+                                                </motion.button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex items-center justify-center gap-3 mt-1">
                                         <Button
-                                            key={r}
-                                            variant="outline"
-                                            onClick={() => setSelectedRating(r)}
-                                            className={`rounded-xl py-6 font-semibold transition-all ${
-                                                selectedRating === r
-                                                    ? `border-2 ${r === 'AGAIN' ? 'border-red-500 bg-red-500/5' : r === 'HARD' ? 'border-orange-500 bg-orange-500/5' : r === 'GOOD' ? 'border-blue-500 bg-blue-500/5' : 'border-emerald-500 bg-emerald-500/5'} font-bold`
-                                                    : "opacity-60 hover:opacity-100"
-                                            }`}
+                                            size="sm"
+                                            disabled={!selectedRating}
+                                            onClick={() => selectedRating && onRate(selectedRating)}
+                                            className="rounded-full font-black bg-foreground text-background hover:bg-foreground/90 px-5 py-1 text-xs h-8"
                                         >
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className={selectedRating === r ? (r === 'AGAIN' ? 'text-red-500' : r === 'HARD' ? 'text-orange-500' : r === 'GOOD' ? 'text-blue-500' : 'text-emerald-500') : ""}>
-                                                    {r} {r === evalResult.suggestedRating && "✨"}
-                                                </span>
-                                            </div>
+                                            Continue to Scheduling
                                         </Button>
-                                    ))}
-                                </div>
-                                <div className="flex flex-col items-center gap-2 mt-4">
-                                    <Button
-                                        size="lg"
-                                        disabled={!selectedRating}
-                                        onClick={() => selectedRating && onRate(selectedRating)}
-                                        className="w-full sm:w-64 rounded-full font-bold bg-foreground text-background hover:bg-foreground/90 py-6"
-                                    >
-                                        Continue to Scheduling
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={onCancel}
-                                        className="text-muted-foreground"
-                                    >
-                                        Skip review
-                                    </Button>
-                                </div>
-                            </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={onCancel}
+                                            className="text-muted-foreground text-xs h-8 px-3 rounded-full hover:bg-muted/40"
+                                        >
+                                            Skip review
+                                        </Button>
+                                    </div>
+                                </motion.div>,
+                                document.body
+                            )}
                         </div>
                     </motion.div>
                 )}
