@@ -248,6 +248,34 @@ export default function HomePage() {
     localStorage.setItem("algotrack-theme", theme);
   }, [theme]);
 
+  // Dynamically update favicon based on the selected theme
+  useEffect(() => {
+    const isDarkTheme = theme !== "light";
+    const logoUrl = isDarkTheme ? "/BLACKLOGO.png" : "/WHITELOGO.png";
+    
+    // Find or create favicon link
+    let favIcon = document.querySelector("link[rel='icon']") as HTMLLinkElement;
+    if (favIcon) {
+      favIcon.href = logoUrl;
+    } else {
+      favIcon = document.createElement("link");
+      favIcon.rel = "icon";
+      favIcon.href = logoUrl;
+      document.head.appendChild(favIcon);
+    }
+    
+    // Find or create apple-touch-icon link
+    let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+    if (appleIcon) {
+      appleIcon.href = logoUrl;
+    } else {
+      appleIcon = document.createElement("link");
+      appleIcon.rel = "apple-touch-icon";
+      appleIcon.href = logoUrl;
+      document.head.appendChild(appleIcon);
+    }
+  }, [theme]);
+
   // Manual refresh — syncs immediately and resets the auto-sync timer
   // Global Event Listeners for Command Palette
   useEffect(() => {
@@ -407,18 +435,19 @@ export default function HomePage() {
       <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer group"
             onClick={() => {
               setView("dashboard");
             }}
           >
-            <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center shadow-sm">
-              <span className="text-background font-bold text-lg leading-none">
-                A
-              </span>
-            </div>
-            <span className="font-bold text-lg tracking-tight hidden sm:inline-block">
-              AlgoTrack
+            <img 
+              src={theme === "light" ? "/logo-icon-light.png" : "/logo-icon-dark.png"} 
+              alt="AlgoSpace" 
+              className="h-9 w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
+            />
+            <span className="font-bold text-xl tracking-tight flex items-center">
+              <span className="text-foreground">Algo</span>
+              <span className="text-cyan-500 font-extrabold">Space</span>
             </span>
           </div>
 

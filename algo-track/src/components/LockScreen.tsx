@@ -36,11 +36,26 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
   const [shake, setShake] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 300);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Detect dark theme on mount and when classList changes
+    const checkDark = () => {
+      const isLight = document.documentElement.classList.contains("light") || document.documentElement.className === "";
+      setIsDark(!isLight);
+    };
+    checkDark();
+    
+    // Set up a MutationObserver to watch for class changes on documentElement
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -166,10 +181,18 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
                 </motion.div>
 
                 {/* Title */}
-                <div className="text-center">
-                  <h1 className="text-xl font-bold text-foreground tracking-tight">
-                    AlgoTrack
-                  </h1>
+                <div className="text-center w-full flex flex-col items-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
+                    <img 
+                      src={isDark ? "/logo-icon-dark.png" : "/logo-icon-light.png"} 
+                      alt="AlgoSpace" 
+                      className="h-10 w-auto object-contain" 
+                    />
+                    <span className="font-bold text-2xl tracking-tight flex items-center">
+                      <span className="text-foreground">Algo</span>
+                      <span className="text-cyan-500 font-extrabold">Space</span>
+                    </span>
+                  </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     Enter your passcode to continue
                   </p>

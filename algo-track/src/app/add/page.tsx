@@ -58,6 +58,31 @@ function AddCardPageContent() {
         localStorage.setItem("algotrack-dark-mode", String(isDarkMode));
     }, [isDarkMode]);
 
+    // Dynamically update favicon based on dark mode state
+    useEffect(() => {
+        const logoUrl = isDarkMode ? "/BLACKLOGO.png" : "/WHITELOGO.png";
+        
+        let favIcon = document.querySelector("link[rel='icon']") as HTMLLinkElement;
+        if (favIcon) {
+            favIcon.href = logoUrl;
+        } else {
+            favIcon = document.createElement("link");
+            favIcon.rel = "icon";
+            favIcon.href = logoUrl;
+            document.head.appendChild(favIcon);
+        }
+        
+        let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+        if (appleIcon) {
+            appleIcon.href = logoUrl;
+        } else {
+            appleIcon = document.createElement("link");
+            appleIcon.rel = "apple-touch-icon";
+            appleIcon.href = logoUrl;
+            document.head.appendChild(appleIcon);
+        }
+    }, [isDarkMode]);
+
     const handleSubmitted = () => {
         setSaved(true);
         setTimeout(() => router.push("/"), 1500);
@@ -100,12 +125,15 @@ function AddCardPageContent() {
                         </Button>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
-                                <span className="text-background font-bold text-sm leading-none">A</span>
-                            </div>
-                            <span className="font-bold text-sm tracking-tight hidden sm:inline-block">
-                                AlgoTrack
+                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push("/")}>
+                            <img 
+                                src={isDarkMode ? "/logo-icon-dark.png" : "/logo-icon-light.png"} 
+                                alt="AlgoSpace" 
+                                className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
+                            />
+                            <span className="font-bold text-lg tracking-tight flex items-center">
+                                <span className="text-foreground">Algo</span>
+                                <span className="text-cyan-500 font-extrabold">Space</span>
                             </span>
                         </div>
                         <div className="w-px h-6 bg-border mx-2" />

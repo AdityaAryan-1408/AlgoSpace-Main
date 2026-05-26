@@ -9,8 +9,10 @@ export const metadata: Metadata = {
   description: "Spaced repetition dashboard for interview prep",
   manifest: "/manifest.json",
   icons: [
-    { rel: "icon", url: "/icon-192.png", sizes: "192x192" },
-    { rel: "apple-touch-icon", url: "/icon-192.png" },
+    { rel: "icon", url: "/BLACKLOGO.png", media: "(prefers-color-scheme: dark)" },
+    { rel: "icon", url: "/WHITELOGO.png", media: "(prefers-color-scheme: light)" },
+    { rel: "apple-touch-icon", url: "/BLACKLOGO.png", media: "(prefers-color-scheme: dark)" },
+    { rel: "apple-touch-icon", url: "/WHITELOGO.png", media: "(prefers-color-scheme: light)" },
   ],
 };
 
