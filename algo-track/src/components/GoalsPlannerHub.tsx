@@ -70,6 +70,15 @@ interface StructuredGoal {
   }>;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (typeof window !== "undefined") {
+    const pw = localStorage.getItem("algotrack-password");
+    if (pw) headers["x-app-password"] = pw;
+  }
+  return headers;
+}
+
 export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
   // Calendar variables
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -135,7 +144,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
   const loadDailyChecklist = useCallback(async () => {
     try {
       setIsLoadingChecklist(true);
-      const res = await fetch(`/api/goals/daily?date=${selectedDateStr}`);
+      const res = await fetch(`/api/goals/daily?date=${selectedDateStr}`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to load daily checklist");
       const data = await res.json();
       setChecklistItems(data.items ?? []);
@@ -152,7 +161,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
     try {
       const startStr = getLocalDateString(weekDays[0]);
       const endStr = getLocalDateString(weekDays[6]);
-      const res = await fetch(`/api/goals/daily?startDate=${startStr}&endDate=${endStr}`);
+      const res = await fetch(`/api/goals/daily?startDate=${startStr}&endDate=${endStr}`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to load week checklists");
       const data = await res.json();
       setWeekChecklists(data.checklists ?? {});
@@ -166,8 +175,8 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
     try {
       setIsLoadingGoals(true);
       const [goalsRes, nudgesRes] = await Promise.all([
-        fetch("/api/goals?status=active"),
-        fetch("/api/coach/nudges")
+        fetch("/api/goals?status=active", { headers: getAuthHeaders() }),
+        fetch("/api/coach/nudges", { headers: getAuthHeaders() })
       ]);
 
       if (!goalsRes.ok) throw new Error("Failed to load goals");
@@ -219,7 +228,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
       setTaskError(null);
       const res = await fetch("/api/goals/daily", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           date: selectedDateStr,
           title: newTaskTitle.trim()
@@ -253,7 +262,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
 
       const res = await fetch("/api/goals/daily", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           itemId,
           status: newStatus
@@ -276,7 +285,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
     try {
       const res = await fetch("/api/goals/daily", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           itemId,
           goalId: checklistGoalId
@@ -304,7 +313,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
 
       const res = await fetch("/api/goals/daily", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           itemId,
           title: editingItemTitle.trim()

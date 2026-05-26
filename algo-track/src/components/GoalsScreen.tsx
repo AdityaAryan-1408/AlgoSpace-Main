@@ -23,6 +23,15 @@ import type { SmartNudge } from "@/lib/nudge-engine";
 import { CreateGoalModal } from "@/components/CreateGoalModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (typeof window !== "undefined") {
+    const pw = localStorage.getItem("algotrack-password");
+    if (pw) headers["x-app-password"] = pw;
+  }
+  return headers;
+}
+
 // ── Types ───────────────────────────────────────────────────────
 
 interface GoalPacingTarget {
@@ -346,8 +355,8 @@ export function GoalsScreen() {
 
       // Fetch goals and nudges in parallel
       const [goalsRes, nudgesRes] = await Promise.all([
-        fetch(`/api/goals${filter ? `?status=${filter}` : ""}`),
-        fetch("/api/coach/nudges"),
+        fetch(`/api/goals${filter ? `?status=${filter}` : ""}`, { headers: getAuthHeaders() }),
+        fetch("/api/coach/nudges", { headers: getAuthHeaders() }),
       ]);
 
       if (!goalsRes.ok) throw new Error("Failed to load goals");
@@ -384,7 +393,7 @@ export function GoalsScreen() {
     try {
       const res = await fetch(`/api/goals/${goalId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) throw new Error("Failed to update goal");
@@ -405,7 +414,7 @@ export function GoalsScreen() {
     });
     if (!confirmed) return;
     try {
-      const res = await fetch(`/api/goals/${goalId}`, { method: "DELETE" });
+      const res = await fetch(`/api/goals/${goalId}`, { method: "DELETE", headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Failed to delete goal");
       await loadGoals();
     } catch (err) {

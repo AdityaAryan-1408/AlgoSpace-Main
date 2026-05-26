@@ -63,9 +63,15 @@ export function CreateGoalModal({ onClose, onCreated }: Props) {
         }
       ];
 
+      const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (typeof window !== "undefined") {
+        const pw = localStorage.getItem("algotrack-password");
+        if (pw) authHeaders["x-app-password"] = pw;
+      }
+
       const res = await fetch("/api/goals", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),

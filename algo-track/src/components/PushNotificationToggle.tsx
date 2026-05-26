@@ -81,10 +81,16 @@ export function PushNotificationToggle() {
 
         const subscriptionJson = subscription.toJSON();
 
+        const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (typeof window !== "undefined") {
+            const pw = localStorage.getItem("algotrack-password");
+            if (pw) authHeaders["x-app-password"] = pw;
+        }
+
         // Send to backend
         await fetch("/api/push/subscribe", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders,
             body: JSON.stringify({
                 endpoint: subscriptionJson.endpoint,
                 p256dh: subscriptionJson.keys?.p256dh,

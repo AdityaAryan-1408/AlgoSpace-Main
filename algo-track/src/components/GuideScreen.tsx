@@ -177,6 +177,15 @@ function ProgressBar({
   );
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (typeof window !== "undefined") {
+    const pw = localStorage.getItem("algotrack-password");
+    if (pw) headers["x-app-password"] = pw;
+  }
+  return headers;
+}
+
 // ── Main Component ──────────────────────────────────────────────
 
 export function GuideScreen({ onNavigateToGoals, onStartRecovery }: GuideScreenProps) {
@@ -189,8 +198,8 @@ export function GuideScreen({ onNavigateToGoals, onStartRecovery }: GuideScreenP
     async function load() {
       try {
         const [overviewRes, recsRes] = await Promise.all([
-          fetch("/api/coach/overview"),
-          fetch("/api/coach/recommendations?limit=6")
+          fetch("/api/coach/overview", { headers: getAuthHeaders() }),
+          fetch("/api/coach/recommendations?limit=6", { headers: getAuthHeaders() })
         ]);
         
         if (!overviewRes.ok) throw new Error("Failed to load guide data");

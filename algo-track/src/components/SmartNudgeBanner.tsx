@@ -8,6 +8,15 @@ interface Props {
   analytics: AnalyticsData | null;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (typeof window !== "undefined") {
+    const pw = localStorage.getItem("algotrack-password");
+    if (pw) headers["x-app-password"] = pw;
+  }
+  return headers;
+}
+
 export function SmartNudgeBanner({ analytics }: Props) {
   const [dismissed, setDismissed] = useState(false);
   const [checklistNudge, setChecklistNudge] = useState<string | null>(null);
@@ -21,7 +30,7 @@ export function SmartNudgeBanner({ analytics }: Props) {
     const day = String(today.getDate()).padStart(2, "0");
     const todayStr = `${year}-${month}-${day}`;
 
-    fetch(`/api/goals/daily?date=${todayStr}`)
+    fetch(`/api/goals/daily?date=${todayStr}`, { headers: getAuthHeaders() })
       .then((res) => {
         if (!res.ok) return null;
         return res.json();
@@ -39,7 +48,7 @@ export function SmartNudgeBanner({ analytics }: Props) {
       .catch((err) => console.error("Error fetching daily checklist for nudge:", err));
 
     // 2. Fetch coach nudges for active structured goals
-    fetch("/api/coach/nudges")
+    fetch("/api/coach/nudges", { headers: getAuthHeaders() })
       .then((res) => {
         if (!res.ok) return null;
         return res.json();

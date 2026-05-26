@@ -40,7 +40,22 @@ export function handleApiError(error: unknown) {
   return jsonError("Unexpected server error.", 500);
 }
 
+export function assertAppPassword(request: NextRequest) {
+  const expected = process.env.APP_PASSWORD;
+
+  // If no password is configured, skip the check entirely
+  if (!expected || !expected.trim()) return;
+
+  const provided = request.headers.get("x-app-password");
+  if (!provided || provided.trim() !== expected.trim()) {
+    throw new ApiError("Unauthorized.", 401);
+  }
+}
+
 export async function withUser(request: NextRequest) {
+  // Enforce app-level password before anything else
+  assertAppPassword(request);
+
   const email = resolveUserEmail(request);
   if (!email) {
     throw new ApiError("User email is required.", 400);

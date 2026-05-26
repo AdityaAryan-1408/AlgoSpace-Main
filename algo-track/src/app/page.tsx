@@ -26,7 +26,7 @@ import { TrainingHub } from "@/components/TrainingHub";
 import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
@@ -119,7 +119,21 @@ export default function HomePage() {
   const extraFeaturesRef = useRef<HTMLDivElement>(null);
   const [globalPauseStatus, setGlobalPauseStatus] = useState<GlobalPauseStatus>({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
   const [showPauseModal, setShowPauseModal] = useState(false);
-  const { alert: alertModal } = useConfirmModal();
+  const { confirm, alert: alertModal } = useConfirmModal();
+
+  const handleLockApp = async () => {
+    const confirmed = await confirm({
+      title: "Lock AlgoTrack?",
+      message: "Are you sure you want to lock the application? You will need to enter your passcode to gain access again.",
+      confirmLabel: "Lock Now",
+      cancelLabel: "Keep Unlocked",
+      variant: "warning",
+    });
+
+    if (confirmed) {
+      window.dispatchEvent(new Event("manual-lock"));
+    }
+  };
 
   // Fetch global pause status
   const refreshPauseStatus = useCallback(async () => {
@@ -592,6 +606,16 @@ export default function HomePage() {
             </Button>
 
             <PushNotificationToggle />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLockApp}
+              className="rounded-full text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+              title="Lock Application"
+            >
+              <Lock className="w-4 h-4" />
+            </Button>
 
             <div className="relative">
               <Button

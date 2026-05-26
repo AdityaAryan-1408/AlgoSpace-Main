@@ -6,15 +6,30 @@ import type {
 } from "@/lib/analytics-engine";
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+    // Read saved password from localStorage (if available)
+    const savedPassword =
+        typeof window !== "undefined"
+            ? localStorage.getItem("algotrack-password")
+            : null;
+
     const res = await fetch(`/api${path}`, {
         ...options,
         headers: {
             "Content-Type": "application/json",
+            ...(savedPassword ? { "x-app-password": savedPassword } : {}),
             ...options?.headers,
         },
     });
 
     const body = await res.json().catch(() => ({ error: "Failed to parse response" }));
+
+    if (res.status === 401) {
+        // Password is wrong or was changed — trigger re-lock
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("auth-required"));
+        }
+        throw new Error(body.error || "Unauthorized");
+    }
 
     if (!res.ok) {
         throw new Error(body.error || `Request failed: ${res.status}`);
