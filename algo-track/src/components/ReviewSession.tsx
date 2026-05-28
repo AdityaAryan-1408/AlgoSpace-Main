@@ -16,10 +16,12 @@ import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { useConfirmModal } from "@/components/ConfirmModal";
+import { ConceptQuiz, type QuizQuestion } from "@/components/ConceptQuiz";
+
 
 export interface ReviewResult {
     card: Flashcard;
@@ -118,6 +120,14 @@ export function ReviewSession({
     const resultsRef = useRef<ReviewResult[]>([]);
     const completedRef = useRef(false);
     const [notesDrawerOpen, setNotesDrawerOpen] = useState(false);
+
+    // States for Concept Quizzer
+    const [showConceptQuiz, setShowConceptQuiz] = useState(false);
+    const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+    const [suggestedSubtopics, setSuggestedSubtopics] = useState<string[]>([]);
+    const [isQuizLoading, setIsQuizLoading] = useState(false);
+    const [quizError, setQuizError] = useState("");
+
 
     // Tomorrow's date string for the custom date picker min value
     const tomorrowStr = useMemo(() => {
@@ -285,6 +295,11 @@ export function ReviewSession({
             setAnswerResult(null);
             setPendingRating(null);
             setDismissedDryRunPrompt(false);
+            setShowConceptQuiz(false);
+            setQuizQuestions([]);
+            setSuggestedSubtopics([]);
+            setIsQuizLoading(false);
+            setQuizError("");
             cardStartTime.current = Date.now();
         } else {
             finishSession(newResults);
@@ -299,6 +314,132 @@ export function ReviewSession({
         setShowSpotTheBug(false);
         setShowAnswer(true);
     };
+
+    const prepareQuiz = async () => {
+        setIsQuizLoading(true);
+        setQuizError("");
+        try {
+            const card = cards[currentIndex];
+            const meta = card.metadata || {};
+            let bank = (meta.quizQuestions as QuizQuestion[]) || [];
+            let subtopics = (meta.suggestedSubtopics as string[]) || [];
+
+            let cachedKeywords = (meta.quizKeywords as string[]) || [];
+
+            if (bank.length === 0 || cachedKeywords.length === 0) {
+                // Generate from backend
+                const res = await fetch("/api/evaluate/theory-quiz", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: card.title,
+                        description: card.description,
+                        notes: card.notes
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to generate concept checkup quiz.");
+                }
+
+                const data = await res.json();
+                bank = data.questions || [];
+                subtopics = data.suggestedSubtopics || [];
+
+                if (bank.length === 0) {
+                    throw new Error("No questions could be generated for this card.");
+                }
+
+                // Cache permanently inside the database
+                const updatedMetadata = {
+                    ...card.metadata,
+                    quizQuestions: bank,
+                    suggestedSubtopics: subtopics,
+                    quizKeywords: data.keywords || [],
+                    quizClozeSentences: data.clozeSentences || [],
+                    quizConceptMatches: data.conceptMatches || [],
+                    askedQuestionIds: []
+                };
+
+                try {
+                    await updateCard(card.id, { metadata: updatedMetadata });
+                } catch (dbErr) {
+                    console.warn("Failed to cache quiz questions in database:", dbErr);
+                }
+                
+                // Locally update the active card reference so the UI is updated immediately
+                card.metadata = updatedMetadata;
+            }
+
+            // Questions Rotation Logic
+            const askedIds = (card.metadata.askedQuestionIds as string[]) || [];
+            let unasked = bank.filter(q => !askedIds.includes(q.id));
+
+            let selected: QuizQuestion[] = [];
+            
+            if (unasked.length < 5) {
+                // Not enough new questions, reset rotation
+                // Select 5 random questions from the full bank
+                const shuffled = [...bank].sort(() => 0.5 - Math.random());
+                selected = shuffled.slice(0, Math.min(5, bank.length));
+                
+                // We'll update the database's askedQuestionIds to contain these selected ones (resetting previous ones)
+                const newAskedIds = selected.map(q => q.id);
+                const updatedMetadata = {
+                    ...card.metadata,
+                    askedQuestionIds: newAskedIds
+                };
+                
+                try {
+                    await updateCard(card.id, { metadata: updatedMetadata });
+                } catch (dbErr) {
+                    console.warn("Failed to update asked question rotation in database:", dbErr);
+                }
+                card.metadata = updatedMetadata;
+            } else {
+                // Select 5 random questions from the unasked ones
+                const shuffled = [...unasked].sort(() => 0.5 - Math.random());
+                selected = shuffled.slice(0, 5);
+
+                const newAskedIds = [...askedIds, ...selected.map(q => q.id)];
+                const updatedMetadata = {
+                    ...card.metadata,
+                    askedQuestionIds: newAskedIds
+                };
+
+                try {
+                    await updateCard(card.id, { metadata: updatedMetadata });
+                } catch (dbErr) {
+                    console.warn("Failed to update asked question rotation in database:", dbErr);
+                }
+                card.metadata = updatedMetadata;
+            }
+
+            setQuizQuestions(selected);
+            setSuggestedSubtopics(subtopics);
+            setShowConceptQuiz(true);
+        } catch (err) {
+            console.error("prepareQuiz error:", err);
+            setQuizError(err instanceof Error ? err.message : "Failed to load concept checkup.");
+        } finally {
+            setIsQuizLoading(false);
+        }
+    };
+
+    const handleQuizComplete = (score: number) => {
+        const total = quizQuestions.length || 5;
+        const pct = (score / total) * 100;
+        let rating: Rating = "AGAIN";
+
+        if (pct >= 90) rating = "EASY";
+        else if (pct >= 70) rating = "GOOD";
+        else if (pct >= 40) rating = "HARD";
+
+        handleRate(rating);
+        setShowConceptQuiz(false);
+    };
+
 
     const submitFinalReview = async (manualDays?: number) => {
         if (!pendingRating || isSubmitting || completedRef.current) return;
@@ -678,6 +819,72 @@ export function ReviewSession({
                                             </div>
                                         );
                                     })}
+
+                                {currentCard.type === "cs" && (
+                                    <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 shadow-md flex flex-col gap-3 mt-4">
+                                        {showConceptQuiz ? (
+                                            <ConceptQuiz
+                                                questions={quizQuestions}
+                                                 keywords={(currentCard.metadata?.quizKeywords as string[]) || []}
+                                                 clozeSentences={(currentCard.metadata?.quizClozeSentences as string[]) || []}
+                                                 conceptMatches={(currentCard.metadata?.quizConceptMatches as Array<{ term: string; definition: string }>) || []}
+                                                suggestedSubtopics={suggestedSubtopics}
+                                                title={currentCard.title}
+                                                onCancel={() => setShowConceptQuiz(false)}
+                                                onComplete={handleQuizComplete}
+                                            />
+                                        ) : (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Brain className="w-4 h-4 text-cyan-500 animate-pulse" />
+                                                        <h4 className="text-xs font-semibold text-cyan-500 uppercase tracking-wider">
+                                                            Concept Checkup Quiz
+                                                        </h4>
+                                                    </div>
+                                                    {currentCard.metadata?.quizQuestions ? (
+                                                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold uppercase tracking-wider">
+                                                            Questions Cached
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold uppercase tracking-wider">
+                                                            Requires Generation
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                                    Test your memory immediately with 5 deep, rotating multiple-choice questions based on this concept. No typing required!
+                                                </p>
+                                                {quizError && (
+                                                    <span className="text-xs text-red-500 font-semibold mt-1">
+                                                        ⚠️ {quizError}
+                                                    </span>
+                                                )}
+                                                <div className="flex justify-end mt-1">
+                                                    <Button
+                                                        onClick={prepareQuiz}
+                                                        disabled={isQuizLoading}
+                                                        className="rounded-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-xs gap-1.5 px-5 py-2 shadow-sm cursor-pointer shadow-cyan-950/20"
+                                                    >
+                                                        {isQuizLoading ? (
+                                                            <>
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing Checkup...
+                                                            </>
+                                                        ) : currentCard.metadata?.quizQuestions ? (
+                                                            <>
+                                                                <Brain className="w-3.5 h-3.5" /> Start Concept Checkup
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Sparkles className="w-3.5 h-3.5" /> Run AI Checkup
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 shadow-[0_2px_10px_rgba(59,130,246,0.05)] flex flex-col gap-2 mt-4">
                                     <h4 className="text-xs font-semibold text-blue-500 uppercase tracking-wider flex items-center gap-1.5 text-blue-500">
