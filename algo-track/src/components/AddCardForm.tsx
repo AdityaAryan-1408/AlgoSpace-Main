@@ -75,6 +75,47 @@ export function AddCardForm({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [syncStatus, setSyncStatus] = useState<"" | "syncing" | "synced" | "failed">("");
+    const [isScraping, setIsScraping] = useState(false);
+    const [scrapeSuccess, setScrapeSuccess] = useState(false);
+    const [scrapeFailed, setScrapeFailed] = useState(false);
+    const [editorKey, setEditorKey] = useState("editor-desc-init");
+
+    const handleLeetCodeScrape = async () => {
+        if (!title.trim()) return;
+        setIsScraping(true);
+        setScrapeSuccess(false);
+        setScrapeFailed(false);
+        setError("");
+
+        try {
+            const res = await fetch(`/api/leetcode/scrape?query=${encodeURIComponent(title.trim())}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to auto-fill details from LeetCode.");
+            }
+
+            // Successfully scraped! Update states
+            setTitle(`${data.frontendId}. ${data.title}`);
+            setUrl(data.url);
+            setDifficulty(data.difficulty as Difficulty);
+            setDescription(data.description);
+            setTagsInput(data.tags.join(", "));
+            
+            // Re-mount the description editor with the new content
+            setEditorKey(`editor-desc-${Date.now()}`);
+
+            setScrapeSuccess(true);
+            setTimeout(() => setScrapeSuccess(false), 3000);
+        } catch (err: any) {
+            console.error("Scraper Error:", err);
+            setScrapeFailed(true);
+            setError(err.message || "Failed to fetch from LeetCode.");
+            setTimeout(() => setScrapeFailed(false), 4000);
+        } finally {
+            setIsScraping(false);
+        }
+    };
 
     const handleSubmit = async () => {
         if (!title.trim() || !description.trim()) {
@@ -192,17 +233,39 @@ export function AddCardForm({
                 </div>
             )}
 
-            <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Title *</label>
+<div className="flex flex-col gap-1.5">
+                <div className="flex justify-between items-center">
+                    <label className="text-sm font-medium text-foreground">Title *</label>
+                    {isCodeCard && platform === "LeetCode" && (
+                        <button
+                            type="button"
+                            onClick={handleLeetCodeScrape}
+                            disabled={isScraping || !title.trim()}
+                            className="text-xs font-bold text-cyan-500 hover:text-cyan-600 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isScraping ? (
+                                <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-500" /> Fetching...
+                                </>
+                            ) : scrapeSuccess ? (
+                                <span className="text-emerald-500 flex items-center gap-0.5">✓ Auto-Filled!</span>
+                            ) : scrapeFailed ? (
+                                <span className="text-red-500">✗ Failed</span>
+                            ) : (
+                                <>⚡ Auto-Fill LeetCode</>
+                            )}
+                        </button>
+                    )}
+                </div>
                 <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder={
                         cardType === "leetcode"
-                            ? "e.g. Two Sum"
+                            ? "e.g. Two Sum or 1"
                             : cardType === "sql"
-                                ? "e.g. Combine Two Tables"
+                                ? "e.g. Combine Two Tables or 175"
                                 : "e.g. ACID Properties"
                     }
                     className={inputCls}
@@ -248,6 +311,7 @@ export function AddCardForm({
                     Description *
                 </label>
                 <RichNotesEditor
+                    key={editorKey}
                     initialContent={description}
                     fallbackMarkdown={description}
                     onChange={(content) => setDescription(content)}
