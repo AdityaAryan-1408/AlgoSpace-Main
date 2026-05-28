@@ -1,20 +1,37 @@
 import { NextResponse } from "next/server";
 
+const LEETCODE_API_BASE = "https://leetcode-api-pied.vercel.app";
+
 // Clean HTML to Markdown converter tailored for LeetCode's markup styles
 function htmlToMarkdown(html: string): string {
     if (!html) return "";
     let md = html;
 
-    // Decode HTML entities
+    // STEP 1: Strip formatting tags INSIDE <pre> blocks so they don't become literal **text**
+    md = md.replace(/<pre>([\s\S]*?)<\/pre>/gi, (_match, inner: string) => {
+        let clean = inner;
+        clean = clean.replace(/<\/?strong>/gi, "");
+        clean = clean.replace(/<\/?b>/gi, "");
+        clean = clean.replace(/<\/?em>/gi, "");
+        clean = clean.replace(/<\/?i>/gi, "");
+        clean = clean.replace(/<\/?code>/gi, "");
+        return `<pre>${clean}</pre>`;
+    });
+
+    // Decode HTML entities — but NOT &lt; and &gt; yet (they'd be mistaken for HTML tags later)
     md = md.replace(/&nbsp;/g, " ")
-           .replace(/&lt;/g, "<")
-           .replace(/&gt;/g, ">")
            .replace(/&amp;/g, "&")
            .replace(/&quot;/g, '"')
-           .replace(/&#39;/g, "'");
+           .replace(/&#39;/g, "'")
+           .replace(/&#(\d+);/g, (_m, code) => String.fromCharCode(parseInt(code)))
+           .replace(/&#x([0-9a-fA-F]+);/g, (_m, code) => String.fromCharCode(parseInt(code, 16)));
 
     // Format Example headers in LeetCode style
-    md = md.replace(/<strong class="example">Example (\d+):<\/strong>/gi, "\n\n**Example $1:**\n");
+    md = md.replace(/<strong class="example">(.*?)<\/strong>/gi, "\n\n**$1**\n");
+
+    // Superscripts BEFORE removing tags (e.g. 10^4 from 10<sup>4</sup>)
+    md = md.replace(/<sup>/gi, "^").replace(/<\/sup>/gi, "");
+    md = md.replace(/<sub>/gi, "_").replace(/<\/sub>/gi, "");
 
     // Core paragraph & styling tags
     md = md.replace(/<p>/gi, "\n").replace(/<\/p>/gi, "\n");
@@ -29,17 +46,14 @@ function htmlToMarkdown(html: string): string {
     md = md.replace(/<h2>/gi, "## ").replace(/<\/h2>/gi, "\n");
     md = md.replace(/<h3>/gi, "### ").replace(/<\/h3>/gi, "\n");
 
-    // Code blocks
-    md = md.replace(/<pre>/gi, "\n```\n").replace(/<\/pre>/gi, "\n```\n");
+    // Code blocks — convert <pre> to plain text blocks (not fenced code)
+    // since BlockNote rich editor handles formatting itself
+    md = md.replace(/<pre>/gi, "\n").replace(/<\/pre>/gi, "\n");
 
     // Lists
     md = md.replace(/<ul>/gi, "\n").replace(/<\/ul>/gi, "\n");
     md = md.replace(/<ol>/gi, "\n").replace(/<\/ol>/gi, "\n");
     md = md.replace(/<li>/gi, "- ").replace(/<\/li>/gi, "\n");
-
-    // Superscripts and subscripts
-    md = md.replace(/<sup>/gi, "^").replace(/<\/sup>/gi, "");
-    md = md.replace(/<sub>/gi, "_").replace(/<\/sub>/gi, "");
 
     // Media & links
     md = md.replace(/<img[^>]*src="([^"]*)"[^>]*>/gi, "![]($1)");
@@ -48,12 +62,14 @@ function htmlToMarkdown(html: string): string {
     // Break lines
     md = md.replace(/<br\s*\/?>/gi, "\n");
 
-    // Remove remaining HTML tags
+    // Remove remaining HTML tags (divs, spans, etc.)
     md = md.replace(/<[^>]*>/g, "");
 
+    // NOW decode &lt; and &gt; — safe because all real HTML tags are already gone
+    md = md.replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+
     // Clean up excessive newlines
-    md = md.replace(/\n\s*\n\s*\n/g, "\n\n");
-    md = md.replace(/\n\s*\n/g, "\n\n");
+    md = md.replace(/\n{3,}/g, "\n\n");
 
     return md.trim();
 }
@@ -72,135 +88,82 @@ export async function GET(req: Request) {
 
         const cleanQuery = query.trim();
         let titleSlug = "";
+        let frontendId = "";
 
         // Check if query is a LeetCode URL
         const urlMatch = cleanQuery.match(/leetcode\.com\/problems\/([a-zA-Z0-9-]+)/i);
         if (urlMatch) {
             titleSlug = urlMatch[1];
+        }
+
+        // Check if query is a pure number (e.g. "1" or "15")
+        const isPureNumber = /^\d+$/.test(cleanQuery);
+
+        // Check if query starts with a number prefix (e.g. "1. Two Sum")
+        const numberPrefixMatch = cleanQuery.match(/^(\d+)[\.\s]+(.*)$/);
+
+        if (titleSlug) {
+            // We already have the slug from URL, fetch directly
+        } else if (isPureNumber || numberPrefixMatch) {
+            // Use the problem-by-ID endpoint directly
+            const problemId = isPureNumber ? cleanQuery : numberPrefixMatch![1];
+            frontendId = problemId;
         } else {
-            // Check if query starts with a number (e.g. "1. Two Sum" -> search query: "Two Sum" or "1")
-            const numberMatch = cleanQuery.match(/^(\d+)[\.\s]+(.*)$/);
-            const searchTerms = numberMatch ? numberMatch[2].trim() : cleanQuery;
-
-            // Search for question on LeetCode's official GraphQL Endpoint
-            const searchResponse = await fetch("https://leetcode.com/graphql", {
-                method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Chrome/120.0.0.0 Safari/537.36",
-                    "Referer": "https://leetcode.com/",
-                    "Origin": "https://leetcode.com"
-                },
-                body: JSON.stringify({
-                    query: `
-                        query problemsetQuestionList($filters: QuestionListFilterInput) {
-                          problemsetQuestionList(limit: 10, skip: 0, filters: $filters) {
-                            questions {
-                              frontendQuestionId: questionFrontendId
-                              title
-                              titleSlug
-                              difficulty
-                            }
-                          }
-                        }
-                    `,
-                    variables: {
-                        filters: { search: searchTerms }
-                    }
-                })
-            });
-
-            if (!searchResponse.ok) {
-                throw new Error("Failed to query LeetCode search endpoint.");
+            // Text search — use the /search endpoint to find the slug
+            const searchRes = await fetch(`${LEETCODE_API_BASE}/search?query=${encodeURIComponent(cleanQuery)}`);
+            if (!searchRes.ok) {
+                throw new Error("Failed to search LeetCode problems.");
             }
+            const searchResults = await searchRes.json();
 
-            const searchData = await searchResponse.json();
-            const questions = searchData.data?.problemsetQuestionList?.questions || [];
-
-            if (questions.length === 0) {
+            if (!Array.isArray(searchResults) || searchResults.length === 0) {
                 return NextResponse.json(
-                    { error: `Could not find LeetCode problem matching "${query}"` },
+                    { error: `Could not find a LeetCode problem matching "${cleanQuery}"` },
                     { status: 404 }
                 );
             }
 
-            // Select matching question
-            let matchedQuestion = null;
-
-            // If the query was a pure number (or had a number prefix), prioritize exact frontend ID match
-            const targetId = numberMatch ? numberMatch[1] : (cleanQuery.match(/^\d+$/) ? cleanQuery : null);
-            if (targetId) {
-                matchedQuestion = questions.find((q: any) => q.frontendQuestionId === targetId);
-            }
-
-            // Fallback to first search result if no ID match
-            if (!matchedQuestion) {
-                matchedQuestion = questions[0];
-            }
-
-            titleSlug = matchedQuestion.titleSlug;
+            // Use the first search result
+            titleSlug = searchResults[0].title_slug;
+            frontendId = searchResults[0].frontend_id;
         }
 
-        // Query the detailed question content
-        const detailResponse = await fetch("https://leetcode.com/graphql", {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Chrome/120.0.0.0 Safari/537.36",
-                "Referer": "https://leetcode.com/",
-                "Origin": "https://leetcode.com"
-            },
-            body: JSON.stringify({
-                query: `
-                    query questionData($titleSlug: String!) {
-                      question(titleSlug: $titleSlug) {
-                        questionFrontendId
-                        title
-                        titleSlug
-                        content
-                        difficulty
-                        topicTags {
-                          name
-                        }
-                      }
-                    }
-                `,
-                variables: { titleSlug }
-            })
-        });
+        // Fetch full problem details using either slug or ID
+        const lookupKey = titleSlug || frontendId;
+        const detailRes = await fetch(`${LEETCODE_API_BASE}/problem/${lookupKey}`);
 
-        if (!detailResponse.ok) {
-            throw new Error("Failed to fetch detailed problem information from LeetCode.");
+        if (!detailRes.ok) {
+            throw new Error(`Failed to fetch problem details for "${lookupKey}".`);
         }
 
-        const detailData = await detailResponse.json();
-        const question = detailData.data?.question;
+        const problem = await detailRes.json();
 
-        if (!question) {
+        if (!problem || !problem.title) {
             return NextResponse.json(
-                { error: `Could not resolve LeetCode question data for slug "${titleSlug}"` },
+                { error: `Could not resolve LeetCode question data for "${lookupKey}"` },
                 { status: 404 }
             );
         }
 
-        // Parse difficulty & tags
-        const rawDifficulty = question.difficulty || "Medium";
-        const tags = (question.topicTags || []).map((tag: any) => tag.name);
+        // Parse tags
+        const tags = (problem.topicTags || []).map((tag: { name: string }) => tag.name);
+        const rawDifficulty = (problem.difficulty || "Medium").toLowerCase();
 
         return NextResponse.json({
             success: true,
-            title: question.title,
-            frontendId: question.questionFrontendId,
-            url: `https://leetcode.com/problems/${question.titleSlug}/`,
-            description: htmlToMarkdown(question.content || ""),
-            difficulty: rawDifficulty.toLowerCase(),
+            title: problem.title,
+            frontendId: problem.questionFrontendId || problem.frontend_id || frontendId,
+            url: problem.url || `https://leetcode.com/problems/${problem.titleSlug || titleSlug}/`,
+            description: htmlToMarkdown(problem.content || ""),
+            difficulty: rawDifficulty,
             tags
         });
 
-    } catch (error: any) {
-        console.error("LeetCode Scrape Error:", error);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "An unexpected error occurred during scraping.";
+        console.error("LeetCode Scrape Error:", message);
         return NextResponse.json(
-            { error: error.message || "An unexpected error occurred during scraping." },
+            { error: message },
             { status: 500 }
         );
     }
