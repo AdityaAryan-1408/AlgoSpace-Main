@@ -115,6 +115,7 @@ export function ReviewSession({
         mode === "sprint" ? Math.max(1, timeLimitSeconds ?? 300) : null,
     );
     const [showCustomDate, setShowCustomDate] = useState(false);
+    const [customDaysInput, setCustomDaysInput] = useState("");
     const cardStartTime = useRef(Date.now());
     const sessionStartTime = useRef(Date.now());
     const resultsRef = useRef<ReviewResult[]>([]);
@@ -129,12 +130,7 @@ export function ReviewSession({
     const [quizError, setQuizError] = useState("");
 
 
-    // Tomorrow's date string for the custom date picker min value
-    const tomorrowStr = useMemo(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        return d.toISOString().split("T")[0];
-    }, []);
+
 
     useEffect(() => {
         if (cards[currentIndex]) {
@@ -1121,19 +1117,39 @@ export function ReviewSession({
                     {showCustomDate && (
                       <div className="flex items-center justify-center gap-2 mt-1 animate-in fade-in slide-in-from-top-1">
                         <input
-                          type="date"
-                          min={tomorrowStr}
-                          className="px-2 py-1 rounded-lg border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
-                          onChange={(e) => {
-                            if (!e.target.value) return;
-                            const picked = new Date(e.target.value + "T00:00:00");
-                            const now = new Date();
-                            now.setHours(0, 0, 0, 0);
-                            const diffDays = Math.max(1, Math.round((picked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-                            setShowCustomDate(false);
-                            submitFinalReview(diffDays);
+                          type="number"
+                          min="1"
+                          value={customDaysInput}
+                          onChange={(e) => setCustomDaysInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              const days = parseInt(customDaysInput);
+                              if (!isNaN(days) && days >= 1) {
+                                setShowCustomDate(false);
+                                setCustomDaysInput("");
+                                submitFinalReview(days);
+                              }
+                            }
                           }}
+                          autoFocus
+                          placeholder="e.g. 10"
+                          className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors text-center"
                         />
+                        <span className="text-[10px] text-muted-foreground">days</span>
+                        <button
+                          onClick={() => {
+                            const days = parseInt(customDaysInput);
+                            if (!isNaN(days) && days >= 1) {
+                              setShowCustomDate(false);
+                              setCustomDaysInput("");
+                              submitFinalReview(days);
+                            }
+                          }}
+                          disabled={!customDaysInput || parseInt(customDaysInput) < 1}
+                          className="px-2 py-1 rounded-lg bg-cyan-500 text-white text-[10px] font-semibold hover:bg-cyan-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Go
+                        </button>
                       </div>
                     )}
                   </div>

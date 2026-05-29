@@ -17,6 +17,7 @@ export function CalendarView({ cards, onRefresh }: CalendarViewProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [customDateCardId, setCustomDateCardId] = useState<string | null>(null);
+  const [customDaysValue, setCustomDaysValue] = useState<Record<string, string>>({});
 
   const getDaysInMonth = (year: number, month: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -153,19 +154,21 @@ export function CalendarView({ cards, onRefresh }: CalendarViewProps) {
     }
   };
 
-  const handleRescheduleToDate = async (card: Flashcard, dateStr: string) => {
-    if (isUpdating || !dateStr) return;
+  const handleRescheduleByDays = async (card: Flashcard, daysStr: string) => {
+    const days = parseInt(daysStr);
+    if (isUpdating || isNaN(days) || days < 1) return;
     setIsUpdating(true);
     setCustomDateCardId(null);
+    setCustomDaysValue(prev => { const copy = { ...prev }; delete copy[card.id]; return copy; });
 
     try {
-      const newDate = new Date(dateStr + "T00:00:00");
-      const diffTime = Math.abs(newDate.getTime() - today.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const newDate = new Date();
+      newDate.setDate(newDate.getDate() + days);
+      newDate.setHours(0, 0, 0, 0);
 
       await updateCard(card.id, {
         nextReview: newDate.toISOString(),
-        dueInDays: newDate < today ? 0 : diffDays,
+        dueInDays: days,
       });
 
       if (onRefresh) {
@@ -177,13 +180,6 @@ export function CalendarView({ cards, onRefresh }: CalendarViewProps) {
       setIsUpdating(false);
     }
   };
-
-  // Tomorrow date string for date input min
-  const tomorrowStr = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
-  })();
 
   const selectedDateStr = selectedDate ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` : "";
   const selectedCards = selectedDate ? (cardsByDate.get(selectedDateStr) || []) : [];
@@ -306,14 +302,25 @@ export function CalendarView({ cards, onRefresh }: CalendarViewProps) {
                         </div>
                       </div>
                       {customDateCardId === card.id && (
-                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                        <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
                           <input
-                            type="date"
-                            min={tomorrowStr}
+                            type="number"
+                            min="1"
                             autoFocus
-                            className="flex-1 px-2 py-1 rounded-lg border border-border bg-background text-foreground text-[11px] focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
-                            onChange={(e) => handleRescheduleToDate(card, e.target.value)}
+                            value={customDaysValue[card.id] || ""}
+                            onChange={(e) => setCustomDaysValue(prev => ({ ...prev, [card.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleRescheduleByDays(card, customDaysValue[card.id] || ""); }}
+                            placeholder="e.g. 5"
+                            className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-foreground text-[11px] focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors text-center"
                           />
+                          <span className="text-[10px] text-muted-foreground">days</span>
+                          <button
+                            onClick={() => handleRescheduleByDays(card, customDaysValue[card.id] || "")}
+                            disabled={!customDaysValue[card.id] || parseInt(customDaysValue[card.id]) < 1}
+                            className="px-2 py-1 rounded-lg bg-cyan-500 text-white text-[10px] font-semibold hover:bg-cyan-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                          >
+                            Go
+                          </button>
                         </div>
                       )}
                     </div>

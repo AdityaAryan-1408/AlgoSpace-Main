@@ -121,7 +121,7 @@ export function ReviewModal({
   const [showReschedule, setShowReschedule] = useState(false);
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
-  const customDateRef = useRef<HTMLInputElement>(null);
+  const [customDaysInput, setCustomDaysInput] = useState("");
   const [numberSelectMode, setNumberSelectMode] = useState<"random-quiz" | "reverse" | null>(null);
 
   // Topic Review States
@@ -233,13 +233,6 @@ export function ReviewModal({
     , availableTypes[0]);
   });
 
-  // Tomorrow's date for date picker min
-  const tomorrowStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
-  }, []);
-
   const handleReschedule = async (days: number) => {
     setIsRescheduling(true);
     try {
@@ -251,15 +244,13 @@ export function ReviewModal({
     }
   };
 
-  const handleCustomDateReschedule = (dateStr: string) => {
-    if (!dateStr) return;
-    const picked = new Date(dateStr + "T00:00:00");
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const diffDays = Math.max(1, Math.round((picked.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const handleCustomDaysReschedule = () => {
+    const days = parseInt(customDaysInput);
+    if (isNaN(days) || days < 1) return;
     setShowReschedule(false);
     setShowCustomDatePicker(false);
-    handleReschedule(diffDays);
+    setCustomDaysInput("");
+    handleReschedule(days);
   };
 
   // Filter and sort cards for the active tab
@@ -794,15 +785,26 @@ export function ReviewModal({
                         <div className="border-t border-border my-0.5" />
                         {showCustomDatePicker ? (
                           <div className="px-3 py-2 flex flex-col gap-1.5">
-                            <input
-                              ref={customDateRef}
-                              type="date"
-                              min={tomorrowStr}
-                              autoFocus
-                              className="w-full px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
-                              onChange={(e) => handleCustomDateReschedule(e.target.value)}
-                            />
-                            <span className="text-[10px] text-muted-foreground text-center">Pick any future date</span>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min="1"
+                                value={customDaysInput}
+                                onChange={(e) => setCustomDaysInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleCustomDaysReschedule(); }}
+                                autoFocus
+                                placeholder="e.g. 5"
+                                className="w-full px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                              />
+                              <button
+                                onClick={handleCustomDaysReschedule}
+                                disabled={!customDaysInput || parseInt(customDaysInput) < 1}
+                                className="px-2.5 py-1.5 rounded-lg bg-cyan-500 text-white text-xs font-semibold hover:bg-cyan-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                              >
+                                Go
+                              </button>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground text-center">Enter number of days</span>
                           </div>
                         ) : (
                           <button
@@ -810,7 +812,7 @@ export function ReviewModal({
                             className="flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted text-cyan-500"
                           >
                             <CalendarDays className="w-3.5 h-3.5" />
-                            Custom date…
+                            Custom days…
                           </button>
                         )}
                      </motion.div>

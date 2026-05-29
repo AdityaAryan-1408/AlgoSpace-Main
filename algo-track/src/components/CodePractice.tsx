@@ -144,6 +144,7 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
     const [eleganceResult, setEleganceResult] = useState<EleganceResult | null>(null);
     const [isFetchingElegance, setIsFetchingElegance] = useState(false);
     const [showElegance, setShowElegance] = useState(false);
+    const [showSandbox, setShowSandbox] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem(NITPICK_KEY);
@@ -923,10 +924,39 @@ export function CodePractice({ card, onRate, onCancel }: Props) {
 
                                             {/* Live Complexity Sandbox Integration */}
                                             <div className="mt-3 pt-3 border-t border-border/40">
-                                                <ComplexitySandbox 
-                                                    complexity={evalResult.criteria.efficiency.userTime} 
-                                                    optimalComplexity={evalResult.criteria.efficiency.optimalTime} 
-                                                />
+                                                <button
+                                                    onClick={() => setShowSandbox(!showSandbox)}
+                                                    className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <Cpu className="w-4 h-4 text-cyan-500" />
+                                                        Live Complexity Sandbox
+                                                    </div>
+                                                    {showSandbox ? (
+                                                        <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                                    ) : (
+                                                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                                    )}
+                                                </button>
+
+                                                <AnimatePresence>
+                                                    {showSandbox && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, height: 0 }}
+                                                            animate={{ opacity: 1, height: "auto" }}
+                                                            exit={{ opacity: 0, height: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="mt-2">
+                                                                <ComplexitySandbox 
+                                                                    complexity={evalResult.criteria.efficiency.userTime} 
+                                                                    optimalComplexity={evalResult.criteria.efficiency.optimalTime} 
+                                                                />
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
                                             </div>
                                         </div>
                                     )}
