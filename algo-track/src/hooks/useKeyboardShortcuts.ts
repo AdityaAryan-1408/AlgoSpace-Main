@@ -10,6 +10,8 @@ interface KeyboardShortcutHandlers {
     onToggleTheme: () => void;
     /** Whether a modal is currently open (shortcuts should be disabled) */
     isModalOpen: boolean;
+    /** Whether keyboard shortcuts are globally disabled */
+    disabled?: boolean;
 }
 
 /**
@@ -29,8 +31,11 @@ export function useKeyboardShortcuts({
     onRefresh,
     onToggleTheme,
     isModalOpen,
+    disabled = false,
 }: KeyboardShortcutHandlers) {
     useEffect(() => {
+        if (disabled) return;
+
         const handler = (e: KeyboardEvent) => {
             // Don't fire shortcuts when typing in inputs
             const target = e.target as HTMLElement;
@@ -68,5 +73,5 @@ export function useKeyboardShortcuts({
 
         document.addEventListener("keydown", handler);
         return () => document.removeEventListener("keydown", handler);
-    }, [onAddCard, onReview, onDashboard, onRefresh, onToggleTheme, isModalOpen]);
+    }, [onAddCard, onReview, onDashboard, onRefresh, onToggleTheme, isModalOpen, disabled]);
 }

@@ -444,3 +444,21 @@ export async function shuffleAllReviews(): Promise<{ shuffled: number }> {
         body: JSON.stringify({ action: "shuffle_all" }),
     });
 }
+
+export async function fetchUserProfile(): Promise<{ user: any }> {
+    return apiFetch<{ user: any }>("/users/me");
+}
+
+export async function updateUserProfile(updates: {
+    remindersEnabled?: boolean;
+    timezone?: string;
+    preferences?: {
+        defaultTheme?: string;
+        keyboardShortcutsEnabled?: boolean;
+    };
+}): Promise<{ user: any }> {
+    return apiFetch<{ user: any }>("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+    });
+}

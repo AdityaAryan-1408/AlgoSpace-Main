@@ -26,10 +26,14 @@ export async function PATCH(request: NextRequest) {
     if (body?.timezone != null && typeof body.timezone !== "string") {
       throw new ApiError("timezone must be a string when provided.");
     }
+    if (body?.preferences != null && typeof body.preferences !== "object") {
+      throw new ApiError("preferences must be an object when provided.");
+    }
 
     const profile = await updateReminderSettings(user.id, {
       remindersEnabled: body?.remindersEnabled,
       timezone: body?.timezone?.trim(),
+      preferences: body?.preferences,
     });
 
     return jsonOk({ user: profile });

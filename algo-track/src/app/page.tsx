@@ -26,15 +26,16 @@ import { TrainingHub } from "@/components/TrainingHub";
 import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock, Sliders } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus } from "@/lib/client-api";
+import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus, fetchUserProfile } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
 import type { Flashcard, CardType } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
+import { PreferencesModal } from "@/components/PreferencesModal";
 
 type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub" | "vague-interviewer";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
@@ -119,7 +120,26 @@ export default function HomePage() {
   const extraFeaturesRef = useRef<HTMLDivElement>(null);
   const [globalPauseStatus, setGlobalPauseStatus] = useState<GlobalPauseStatus>({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
   const [showPauseModal, setShowPauseModal] = useState(false);
+  const [showPreferencesModal, setShowPreferencesModal] = useState(false);
+  const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(false);
   const { confirm, alert: alertModal } = useConfirmModal();
+
+  // Load preferences from backend on mount
+  useEffect(() => {
+    fetchUserProfile().then(({ user }) => {
+      const prefs = user?.metadata?.preferences;
+      if (prefs) {
+        if (prefs.keyboardShortcutsEnabled !== undefined) {
+          setKeyboardShortcutsEnabled(prefs.keyboardShortcutsEnabled);
+        }
+        if (prefs.defaultTheme) {
+          setTheme(prefs.defaultTheme);
+        }
+      }
+    }).catch(err => {
+      console.error("Failed to load user preferences on mount:", err);
+    });
+  }, []);
 
   const handleLockApp = async () => {
     const confirmed = await confirm({
@@ -427,6 +447,7 @@ export default function HomePage() {
     onRefresh: () => handleManualRefresh(),
     onToggleTheme: toggleTheme,
     isModalOpen: showAddCardModal || showReviewModal,
+    disabled: !keyboardShortcutsEnabled,
   });
 
   return (
@@ -544,6 +565,14 @@ export default function HomePage() {
                     >
                       <LayoutGrid className="w-4 h-4 text-cyan-500" />
                       Training Hub
+                    </button>
+                    <div className="my-1 border-b border-border/50"></div>
+                    <button
+                      onClick={() => { setShowPreferencesModal(true); setIsExtraFeaturesOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:text-cyan-500 hover:bg-cyan-500/10 text-muted-foreground hover:text-foreground font-medium"
+                    >
+                      <Sliders className="w-4 h-4 text-cyan-500" />
+                      Preferences
                     </button>
 
                   </motion.div>
@@ -1017,6 +1046,21 @@ export default function HomePage() {
               onChanged={() => {
                 setShowPauseModal(false);
                 syncFromApi(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showPreferencesModal && (
+            <PreferencesModal
+              currentTheme={theme}
+              keyboardShortcutsEnabled={keyboardShortcutsEnabled}
+              onClose={() => setShowPreferencesModal(false)}
+              onChanged={(newPrefs) => {
+                setShowPreferencesModal(false);
+                setKeyboardShortcutsEnabled(newPrefs.keyboardShortcutsEnabled);
+                setTheme(newPrefs.defaultTheme);
               }}
             />
           )}

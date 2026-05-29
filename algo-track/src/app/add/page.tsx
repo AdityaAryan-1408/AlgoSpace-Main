@@ -12,7 +12,7 @@ import type { CardType, Difficulty } from "@/data";
 function AddCardPageContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [theme, setTheme] = useState("light");
     const [saved, setSaved] = useState(false);
 
     // Read URL params
@@ -38,29 +38,45 @@ function AddCardPageContent() {
         description,
     };
 
+    // Theme setup from local storage and backend
     useEffect(() => {
-        const saved = localStorage.getItem("algotrack-dark-mode");
-        if (
-            saved === "true" ||
-            (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches)
-        ) {
-            setIsDarkMode(true);
-            document.documentElement.classList.add("dark");
+        // 1. Initial quick load from local storage
+        const savedTheme = localStorage.getItem("algotrack-theme");
+        if (savedTheme) {
+            setTheme(savedTheme);
+            document.documentElement.className = savedTheme === "light" ? "" : savedTheme;
+        } else {
+            const savedDark = localStorage.getItem("algotrack-dark-mode");
+            if (savedDark === "true" || window.matchMedia("(prefers-color-scheme: dark)").matches) {
+                setTheme("dark");
+                document.documentElement.className = "dark";
+            }
         }
+
+        // 2. Fetch user settings from server (persistent theme preference)
+        import("@/lib/client-api").then(({ fetchUserProfile }) => {
+            fetchUserProfile().then(({ user }) => {
+                const serverTheme = user?.metadata?.preferences?.defaultTheme;
+                if (serverTheme) {
+                    setTheme(serverTheme);
+                    document.documentElement.className = serverTheme === "light" ? "" : serverTheme;
+                    localStorage.setItem("algotrack-theme", serverTheme);
+                }
+            }).catch(err => {
+                console.error("Failed to load user preferences in add card page:", err);
+            });
+        });
     }, []);
 
     useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-        }
-        localStorage.setItem("algotrack-dark-mode", String(isDarkMode));
-    }, [isDarkMode]);
+        document.documentElement.className = theme === "light" ? "" : theme;
+        localStorage.setItem("algotrack-theme", theme);
+    }, [theme]);
 
-    // Dynamically update favicon based on dark mode state
+    // Dynamically update favicon based on theme state
     useEffect(() => {
-        const logoUrl = isDarkMode ? "/BLACKLOGO.png" : "/WHITELOGO.png";
+        const isDarkTheme = theme !== "light";
+        const logoUrl = isDarkTheme ? "/BLACKLOGO.png" : "/WHITELOGO.png";
         
         let favIcon = document.querySelector("link[rel='icon']") as HTMLLinkElement;
         if (favIcon) {
@@ -81,7 +97,11 @@ function AddCardPageContent() {
             appleIcon.href = logoUrl;
             document.head.appendChild(appleIcon);
         }
-    }, [isDarkMode]);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme(prev => prev === "light" ? "dark" : "light");
+    };
 
     const handleSubmitted = () => {
         setSaved(true);
@@ -127,7 +147,7 @@ function AddCardPageContent() {
                     <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2 cursor-pointer group" onClick={() => router.push("/")}>
                             <img 
-                                src={isDarkMode ? "/logo-icon-dark.png" : "/logo-icon-light.png"} 
+                                src={theme === "light" ? "/logo-icon-light.png" : "/logo-icon-dark.png"} 
                                 alt="AlgoSpace" 
                                 className="h-8 w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
                             />
@@ -140,10 +160,10 @@ function AddCardPageContent() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setIsDarkMode(!isDarkMode)}
+                            onClick={toggleTheme}
                             className="rounded-full"
                         >
-                            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                            {theme === "light" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
                         </Button>
                     </div>
                 </div>

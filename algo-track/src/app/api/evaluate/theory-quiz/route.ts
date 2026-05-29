@@ -38,7 +38,7 @@ RULES FOR RESOURCE GENERATION:
      - "questionText": The text of the question.
      - "options": An array of exactly 4 strings.
      - "correctOptionIndex": The index (0, 1, 2, or 3) of the correct option.
-     - "explanation": A clear 1-2 sentence explanation of why the correct option is right.
+     - "explanation": A clear, comprehensive, and detailed 3-4 sentence explanation. Break down exactly why the correct option is correct, and explain why the incorrect options are incorrect.
      - "subtopic": The specific facet covered.
    - "suggestedSubtopics": An array of 3 to 4 related advanced study topics.
    - "keywords": An array of 6 to 8 strings (the key terms).

@@ -565,7 +565,7 @@ export async function getUserProfile(userId: string) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, timezone, reminders_enabled")
+    .select("id, email, timezone, reminders_enabled, metadata")
     .eq("id", userId)
     .maybeSingle();
 
@@ -581,6 +581,10 @@ export async function updateReminderSettings(
   updates: {
     remindersEnabled?: boolean;
     timezone?: string;
+    preferences?: {
+      defaultTheme?: string;
+      keyboardShortcutsEnabled?: boolean;
+    };
   },
 ) {
   const profile = await getUserProfile(userId);
@@ -589,18 +593,30 @@ export async function updateReminderSettings(
   }
 
   const supabase = getSupabaseAdmin();
-  const nextEnabled = updates.remindersEnabled ?? profile.reminders_enabled;
-  const nextTimezone = updates.timezone ?? profile.timezone;
+  const nextEnabled = updates.remindersEnabled ?? (profile as any).reminders_enabled;
+  const nextTimezone = updates.timezone ?? (profile as any).timezone;
+
+  const existingMeta = ((profile as any).metadata as Record<string, unknown>) || {};
+  const existingPrefs = (existingMeta.preferences as Record<string, unknown>) || {};
+  const nextPrefs = {
+    ...existingPrefs,
+    ...(updates.preferences ?? {}),
+  };
+  const nextMeta = {
+    ...existingMeta,
+    preferences: nextPrefs,
+  };
 
   const { data, error } = await supabase
     .from("users")
     .update({
       reminders_enabled: nextEnabled,
       timezone: nextTimezone,
+      metadata: nextMeta,
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId)
-    .select("id, email, timezone, reminders_enabled")
+    .select("id, email, timezone, reminders_enabled, metadata")
     .maybeSingle();
 
   if (error) {
