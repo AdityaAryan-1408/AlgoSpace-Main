@@ -130,7 +130,7 @@ function GoalCard({
               <div className="flex items-center gap-2">
                 <CardTitle className="text-base">{goal.title}</CardTitle>
                 <Badge className={`text-[10px] ${getStatusColor(goal.status)}`}>
-                  {goal.status}
+                  {goal.status === "abandoned" && goal.goalType === "custom_checklist" ? "incomplete" : goal.status}
                 </Badge>
               </div>
               {goal.description && (

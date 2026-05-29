@@ -114,13 +114,19 @@ export async function POST(request: NextRequest) {
       // Verify goal ownership
       const { data: goal, error: goalError } = await supabase
         .from("goals")
-        .select("id")
+        .select("id, start_date")
         .eq("id", itemData.goal_id)
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (goalError || !goal) {
         throw new ApiError("Goal access denied.");
+      }
+
+      const today = new Date();
+      const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+      if (goal.start_date < todayStr) {
+        throw new ApiError("This checklist is locked because the day has passed.", 400);
       }
 
       const updatePayload: any = {
@@ -169,6 +175,12 @@ export async function POST(request: NextRequest) {
     }
     if (!title || !title.trim()) {
       throw new ApiError("title is required to add an item.");
+    }
+
+    const today = new Date();
+    const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+    if (date < todayStr) {
+      throw new ApiError("This checklist is locked because the day has passed.", 400);
     }
 
     // Find or create daily checklist goal for this date
@@ -249,13 +261,19 @@ export async function DELETE(request: NextRequest) {
     // Verify goal ownership
     const { data: goal, error: goalError } = await supabase
       .from("goals")
-      .select("id")
+      .select("id, start_date")
       .eq("id", goalId)
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (goalError || !goal) {
       throw new ApiError("Goal not found or access denied.");
+    }
+
+    const today = new Date();
+    const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+    if (goal.start_date < todayStr) {
+      throw new ApiError("This checklist is locked because the day has passed.", 400);
     }
 
     // Delete item

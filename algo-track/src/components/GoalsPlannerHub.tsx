@@ -14,7 +14,8 @@ import {
   Sparkles, 
   AlertCircle, 
   Trophy,
-  Pencil
+  Pencil,
+  Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/Button";
@@ -79,17 +80,55 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+// Helper to get today's date adjusted to the 12 AM UTC (5:30 AM IST) reset time
+function getSrsToday(): Date {
+  const today = new Date();
+  return new Date(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+}
+
 export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
   // Calendar variables
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => getSrsToday());
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
-    const today = new Date();
+    const today = getSrsToday();
     const day = today.getDay();
     const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Adjust to start on Monday
     const monday = new Date(today.setDate(diff));
     monday.setHours(0, 0, 0, 0);
     return monday;
   });
+
+  const [timeLeftStr, setTimeLeftStr] = useState("");
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const now = new Date();
+      const nextReset = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        0,
+        0,
+        0,
+        0
+      );
+      const msLeft = nextReset - now.getTime();
+      if (msLeft <= 0) {
+        setTimeLeftStr("00:00:00");
+        return;
+      }
+      const hours = Math.floor(msLeft / 3_600_000);
+      const minutes = Math.floor((msLeft % 3_600_000) / 60_000);
+      const seconds = Math.floor((msLeft % 60_000) / 1000);
+      
+      const pad = (num: number) => String(num).padStart(2, "0");
+      setTimeLeftStr(`${pad(hours)}:${pad(minutes)}:${pad(seconds)}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // State
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
@@ -115,6 +154,11 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
   }, []);
 
   const selectedDateStr = useMemo(() => getLocalDateString(selectedDate), [selectedDate, getLocalDateString]);
+
+  const isPastDay = useMemo(() => {
+    const todayStr = getLocalDateString(getSrsToday());
+    return selectedDateStr < todayStr;
+  }, [selectedDateStr, getLocalDateString]);
 
   // Compute 7 days of the visible week
   const weekDays = useMemo(() => {
@@ -349,6 +393,12 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
     if (completed === items.length) {
       return "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"; // Completed (Green)
     }
+    
+    const todayStr = getLocalDateString(getSrsToday());
+    if (dateStr < todayStr) {
+      return "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"; // Can't do / Incomplete past day (Red)
+    }
+    
     if (completed > 0) {
       return "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"; // In Progress (Blue)
     }
@@ -362,9 +412,18 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
         <div className="flex flex-col flex-1 min-h-0">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-cyan-500" />
-              <h2 className="text-base font-bold text-foreground">Daily Planner</h2>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-cyan-500" />
+                <h2 className="text-base font-bold text-foreground">Daily Planner</h2>
+              </div>
+              {timeLeftStr && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <Clock className="w-3.5 h-3.5 text-cyan-500/80 animate-pulse" />
+                  <span>Next reset in:</span>
+                  <span className="font-semibold font-mono text-cyan-400/90">{timeLeftStr}</span>
+                </span>
+              )}
             </div>
             
             <div className="flex items-center gap-1">
@@ -391,7 +450,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
             {weekDays.map((day) => {
               const dayStr = getLocalDateString(day);
               const isSelected = selectedDateStr === dayStr;
-              const isToday = getLocalDateString(new Date()) === dayStr;
+              const isToday = getLocalDateString(getSrsToday()) === dayStr;
               const dotStyle = getDotStyle(dayStr);
 
               return (
@@ -479,7 +538,8 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => handleToggleTask(item.id, item.status)}
-                          className="w-4 h-4 rounded border-border text-cyan-600 focus:ring-cyan-500 cursor-pointer"
+                          disabled={isPastDay}
+                          className={`w-4 h-4 rounded border-border text-cyan-600 focus:ring-cyan-500 ${isPastDay ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
                         />
                         {isEditing ? (
                           <input
@@ -505,27 +565,29 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {!isEditing && (
+                      {!isPastDay && (
+                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {!isEditing && (
+                            <button
+                              onClick={() => {
+                                setEditingItemId(item.id);
+                                setEditingItemTitle(item.title);
+                              }}
+                              className="p-1 hover:bg-muted text-muted-foreground hover:text-cyan-500 rounded-lg transition-all cursor-pointer"
+                              title="Edit task"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => {
-                              setEditingItemId(item.id);
-                              setEditingItemTitle(item.title);
-                            }}
-                            className="p-1 hover:bg-muted text-muted-foreground hover:text-cyan-500 rounded-lg transition-all cursor-pointer"
-                            title="Edit task"
+                            onClick={() => handleDeleteTask(item.id)}
+                            className="p-1 hover:bg-muted text-red-500 hover:text-red-600 rounded-lg transition-all cursor-pointer"
+                            title="Delete task"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDeleteTask(item.id)}
-                          className="p-1 hover:bg-muted text-red-500 hover:text-red-600 rounded-lg transition-all cursor-pointer"
-                          title="Delete task"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </motion.div>
                   );
                 })}
@@ -534,33 +596,40 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
           </div>
         </div>
 
-        {/* Add custom checklist item input */}
-        <form onSubmit={handleAddTask} className="mt-auto pt-2">
-          {taskError && (
-            <p className="text-[10px] text-red-500 mb-1.5 font-medium">{taskError}</p>
-          )}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder={`+ Add daily goal for ${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}...`}
-              disabled={isSubmittingTask}
-              className="flex-1 px-3.5 py-2 bg-background border border-border rounded-xl text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 placeholder-muted-foreground/60"
-            />
-            <Button
-              type="submit"
-              disabled={isSubmittingTask || !newTaskTitle.trim()}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl px-3 py-2 shrink-0"
-            >
-              {isSubmittingTask ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Plus className="w-3.5 h-3.5" />
-              )}
-            </Button>
+        {/* Add custom checklist item input / Locked message */}
+        {isPastDay ? (
+          <div className="mt-auto pt-4 border-t border-border/40 flex items-center justify-center gap-2 text-muted-foreground text-xs bg-muted/10 py-2.5 rounded-xl border border-dashed border-border/40">
+            <Lock className="w-3.5 h-3.5 text-muted-foreground/80 animate-bounce" />
+            <span>This checklist is locked because the day has passed.</span>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleAddTask} className="mt-auto pt-2">
+            {taskError && (
+              <p className="text-[10px] text-red-500 mb-1.5 font-medium">{taskError}</p>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder={`+ Add daily goal for ${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}...`}
+                disabled={isSubmittingTask}
+                className="flex-1 px-3.5 py-2 bg-background border border-border rounded-xl text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 placeholder-muted-foreground/60"
+              />
+              <Button
+                type="submit"
+                disabled={isSubmittingTask || !newTaskTitle.trim()}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl px-3 py-2 shrink-0"
+              >
+                {isSubmittingTask ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" />
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* ── Active Structured Goal Panel (Right Side) ──────────────────── */}

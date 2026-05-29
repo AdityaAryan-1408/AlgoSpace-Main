@@ -17,7 +17,8 @@ export type GoalType =
   | "dsa_volume"
   | "dsa_retention"
   | "cs_topic_completion"
-  | "hybrid_prep_plan";
+  | "hybrid_prep_plan"
+  | "custom_checklist";
 
 export type GoalStatus =
   | "draft"

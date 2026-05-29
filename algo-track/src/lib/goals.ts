@@ -65,13 +65,39 @@ export async function listGoals(
     .order("created_at", { ascending: false });
 
   if (status) {
-    query = query.eq("status", status);
+    if (status === "active" || status === "abandoned") {
+      query = query.in("status", ["active", "abandoned"]);
+    } else {
+      query = query.eq("status", status);
+    }
   }
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  const goals = ((data ?? []) as GoalDbRow[]).map(mapGoalRowToGoal);
+  let goals = ((data ?? []) as GoalDbRow[]).map(mapGoalRowToGoal);
+
+  // Dynamically update status of past uncompleted custom checklists to abandoned
+  const today = new Date();
+  const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+
+  goals = goals.map((goal) => {
+    if (
+      goal.goalType === "custom_checklist" &&
+      goal.status === "active" &&
+      goal.endDate < todayStr
+    ) {
+      return {
+        ...goal,
+        status: "abandoned",
+      };
+    }
+    return goal;
+  });
+
+  if (status) {
+    goals = goals.filter((g) => g.status === status);
+  }
 
   // Fetch targets and topic items for each goal
   if (goals.length > 0) {
@@ -136,6 +162,18 @@ export async function getGoalById(
   if (!data) return null;
 
   const goal = mapGoalRowToGoal(data as GoalDbRow);
+
+  // Dynamically update status of past uncompleted custom checklists to abandoned
+  const today = new Date();
+  const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+
+  if (
+    goal.goalType === "custom_checklist" &&
+    goal.status === "active" &&
+    goal.endDate < todayStr
+  ) {
+    goal.status = "abandoned";
+  }
 
   // Fetch targets and topic items in parallel
   const [targetsResult, topicItemsResult] = await Promise.all([

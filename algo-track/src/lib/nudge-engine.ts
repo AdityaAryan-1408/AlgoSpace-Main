@@ -87,14 +87,14 @@ export async function getSmartNudges(
 
   if (goalsError) throw new Error(goalsError.message);
 
-  const activeGoals = (goalsData ?? []) as Array<{
+  const activeGoals = ((goalsData ?? []) as Array<{
     id: string;
     title: string;
     goal_type: string;
     start_date: string;
     end_date: string;
     status: string;
-  }>;
+  }>).filter(g => g.goal_type !== "custom_checklist");
 
   // 2. In parallel: get weakness analysis + goal metrics
   const [weakness, ...goalResults] = await Promise.all([
