@@ -23,6 +23,47 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+const cardMatchesCoreTag = (card: Flashcard, coreTag: string): boolean => {
+  if (card.type !== "cs") return false;
+  const lowerTags = (card.tags || []).map(t => t.toLowerCase());
+  const lowerTopicIds = (card.topicIds || []).map(id => id.toLowerCase());
+  
+  if (coreTag === "CN") {
+    return (
+      lowerTags.includes("cn") ||
+      lowerTags.includes("network") ||
+      lowerTags.includes("networks") ||
+      lowerTags.includes("computer networks") ||
+      lowerTopicIds.some(id => id.startsWith("cn."))
+    );
+  }
+  if (coreTag === "OS") {
+    return (
+      lowerTags.includes("os") ||
+      lowerTags.includes("operating system") ||
+      lowerTags.includes("operating systems") ||
+      lowerTopicIds.some(id => id.startsWith("os."))
+    );
+  }
+  if (coreTag === "DBMS") {
+    return (
+      lowerTags.includes("dbms") ||
+      lowerTags.includes("database") ||
+      lowerTags.includes("db") ||
+      lowerTags.includes("transactions") ||
+      lowerTopicIds.some(id => id.startsWith("dbms."))
+    );
+  }
+  if (coreTag === "System Design") {
+    return (
+      lowerTags.includes("system design") ||
+      lowerTags.includes("design") ||
+      lowerTopicIds.some(id => id.startsWith("sd."))
+    );
+  }
+  return false;
+};
+
 interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
@@ -126,6 +167,7 @@ export function ReviewModal({
 
   // Topic Review States
   const [topicReviewStep, setTopicReviewStep] = useState<null | "topics" | "detail">(null);
+  const [activeTopicTab, setActiveTopicTab] = useState<"dsa" | "sql" | "core">("dsa");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [topicCardCount, setTopicCardCount] = useState(10);
   const [topicStrategy, setTopicStrategy] = useState<"random" | "weakest" | "manual">("random");
@@ -163,32 +205,58 @@ export function ReviewModal({
       .sort((a, b) => b.count - a.count);
   }, [totalCards]);
 
+  const coreStats = useMemo(() => {
+    const coreTags = ["CN", "OS", "DBMS", "System Design"];
+    return coreTags.map(tag => {
+      const cards = totalCards.filter(c => cardMatchesCoreTag(c, tag));
+      let totalGood = 0;
+      let totalReviews = 0;
+      for (const card of cards) {
+        totalGood += card.history?.good || 0;
+        totalReviews += card.history?.total || 0;
+      }
+      const mastery = totalReviews > 0 ? (totalGood / totalReviews) * 100 : 0;
+      return {
+        tag,
+        count: cards.length,
+        mastery
+      };
+    });
+  }, [totalCards]);
+
   const topicCards = useMemo(() => {
     if (!selectedTopic) return [];
+    if (activeTopicTab === "sql") {
+      return totalCards.filter(c => c.type === "sql");
+    }
+    if (activeTopicTab === "core") {
+      return totalCards.filter(c => cardMatchesCoreTag(c, selectedTopic));
+    }
     return totalCards.filter(c => c.type === "leetcode" && c.tags.includes(selectedTopic));
-  }, [totalCards, selectedTopic]);
+  }, [totalCards, selectedTopic, activeTopicTab]);
 
   // A state that holds the current curated subset of cards for the review
   const [curatedQueue, setCuratedQueue] = useState<Flashcard[]>([]);
 
   // Function to shuffle/regenerate the random selection
   const regenerateRandomQueue = useCallback(() => {
-    if (!selectedTopic) return;
-    const pool = totalCards.filter(c => c.type === "leetcode" && c.tags.includes(selectedTopic));
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    if (topicCards.length === 0) return;
+    const shuffled = [...topicCards].sort(() => 0.5 - Math.random());
     setCuratedQueue(shuffled.slice(0, topicCardCount));
-  }, [selectedTopic, totalCards, topicCardCount]);
+  }, [topicCards, topicCardCount]);
 
   // Sync curatedQueue based on strategy & count
   useEffect(() => {
-    if (!selectedTopic) return;
-    const pool = totalCards.filter(c => c.type === "leetcode" && c.tags.includes(selectedTopic));
+    if (topicCards.length === 0) {
+      setCuratedQueue([]);
+      return;
+    }
     
     if (topicStrategy === "random") {
-      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      const shuffled = [...topicCards].sort(() => 0.5 - Math.random());
       setCuratedQueue(shuffled.slice(0, topicCardCount));
     } else if (topicStrategy === "weakest") {
-      const sorted = [...pool].sort((a, b) => {
+      const sorted = [...topicCards].sort((a, b) => {
         const aGood = a.history?.good || 0;
         const aTotal = a.history?.total || 0;
         const bGood = b.history?.good || 0;
@@ -200,10 +268,10 @@ export function ReviewModal({
       setCuratedQueue(sorted.slice(0, topicCardCount));
     } else {
       // manual
-      const selected = pool.filter(c => manualSelectedIds.has(c.id));
+      const selected = topicCards.filter(c => manualSelectedIds.has(c.id));
       setCuratedQueue(selected);
     }
-  }, [selectedTopic, topicCardCount, topicStrategy, totalCards, manualSelectedIds]);
+  }, [topicCards, topicCardCount, topicStrategy, manualSelectedIds]);
 
   const handleTopicStart = () => {
     if (curatedQueue.length === 0) return;
@@ -346,9 +414,9 @@ export function ReviewModal({
           </div>
           <h2 className="text-2xl font-bold text-foreground pr-10">
             {topicReviewStep === "topics"
-              ? "Review by Topic"
+              ? `Review by Topic — ${activeTopicTab === "core" ? "Core CS" : "DSA"}`
               : topicReviewStep === "detail"
-                ? "Topic Settings"
+                ? `${activeTopicTab === "sql" ? "SQL Settings" : "Topic Settings"}`
                 : numberSelectMode === "random-quiz"
                   ? "Random Quiz"
                   : numberSelectMode === "reverse"
@@ -357,7 +425,9 @@ export function ReviewModal({
           </h2>
           <p className="text-muted-foreground text-sm pr-10">
             {topicReviewStep === "topics"
-              ? "Select a core DSA topic tag below to practice specific algorithmic concepts."
+              ? activeTopicTab === "core"
+                ? "Select a Core CS topic tag below to practice specific core fundamentals."
+                : "Select a core DSA topic tag below to practice specific algorithmic concepts."
               : topicReviewStep === "detail"
                 ? "Tailor your review size, selection strategy, and choose specific questions."
                 : numberSelectMode
@@ -415,57 +485,151 @@ export function ReviewModal({
           </div>
         )}
 
+        {/* Topic Review Tabs (DSA, SQL, Core) */}
+        {topicReviewStep && (
+          <div className="px-6 md:px-8 pt-4">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border w-fit">
+              {[
+                { key: "dsa", label: "DSA" },
+                { key: "sql", label: "SQL" },
+                { key: "core", label: "Core" }
+              ].map(tab => {
+                const isActive = activeTopicTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => {
+                      setActiveTopicTab(tab.key as any);
+                      if (tab.key === "sql") {
+                        setSelectedTopic("SQL");
+                        setTopicReviewStep("detail");
+                        const sqlCards = totalCards.filter(c => c.type === "sql");
+                        setTopicCardCount(Math.min(10, sqlCards.length));
+                        setTopicStrategy("random");
+                        setManualSelectedIds(new Set(sqlCards.map(c => c.id)));
+                      } else {
+                        setSelectedTopic(null);
+                        setTopicReviewStep("topics");
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      isActive
+                        ? "bg-background text-foreground shadow-sm border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {topicReviewStep === "topics" ? (
           <div className="flex-1 overflow-y-auto p-6 md:p-8 pt-4 flex flex-col gap-4 bg-muted/5">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-foreground text-xs uppercase tracking-wider text-muted-foreground">DSA Topics</h3>
-              <span className="text-xs text-muted-foreground">Select a tag to customize practice</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {topicStats.map(({ tag, count, mastery }) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTopic(tag);
-                    setTopicReviewStep("detail");
-                    const cardsForTag = totalCards.filter(c => c.type === "leetcode" && c.tags.includes(tag));
-                    setTopicCardCount(Math.min(10, cardsForTag.length));
-                    setTopicStrategy("random");
-                    setManualSelectedIds(new Set(cardsForTag.map(c => c.id)));
-                  }}
-                  className="p-4 rounded-xl border border-border bg-card hover:bg-muted/40 hover:border-cyan-500/30 transition-all flex flex-col gap-2.5 text-left group cursor-pointer shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-semibold text-foreground text-sm group-hover:text-cyan-500 transition-colors">{tag}</span>
-                    <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-muted/60 text-muted-foreground">
-                      {count} {count === 1 ? "card" : "cards"}
-                    </Badge>
-                  </div>
-                  {/* Mastery Bar */}
-                  <div className="w-full flex flex-col gap-1">
-                    <div className="flex items-center justify-between text-[9px] text-muted-foreground font-bold">
-                      <span>AVERAGE MASTERY</span>
-                      <span className="text-foreground">{Math.round(mastery)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all" 
-                        style={{ width: `${mastery}%` }} 
-                      />
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {activeTopicTab === "dsa" ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-foreground text-xs uppercase tracking-wider text-muted-foreground">DSA Topics</h3>
+                  <span className="text-xs text-muted-foreground">Select a tag to customize practice</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {topicStats.map(({ tag, count, mastery }) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTopic(tag);
+                        setTopicReviewStep("detail");
+                        const cardsForTag = totalCards.filter(c => c.type === "leetcode" && c.tags.includes(tag));
+                        setTopicCardCount(Math.min(10, cardsForTag.length));
+                        setTopicStrategy("random");
+                        setManualSelectedIds(new Set(cardsForTag.map(c => c.id)));
+                      }}
+                      className="p-4 rounded-xl border border-border bg-card hover:bg-muted/40 hover:border-cyan-500/30 transition-all flex flex-col gap-2.5 text-left group cursor-pointer shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-foreground text-sm group-hover:text-cyan-500 transition-colors">{tag}</span>
+                        <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-muted/60 text-muted-foreground">
+                          {count} {count === 1 ? "card" : "cards"}
+                        </Badge>
+                      </div>
+                      {/* Mastery Bar */}
+                      <div className="w-full flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[9px] text-muted-foreground font-bold">
+                          <span>AVERAGE MASTERY</span>
+                          <span className="text-foreground">{Math.round(mastery)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all" 
+                            style={{ width: `${mastery}%` }} 
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-foreground text-xs uppercase tracking-wider text-muted-foreground">Core CS Topics</h3>
+                  <span className="text-xs text-muted-foreground">Select a category to customize practice</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {coreStats.map(({ tag, count, mastery }) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTopic(tag);
+                        setTopicReviewStep("detail");
+                        const cardsForTag = totalCards.filter(c => cardMatchesCoreTag(c, tag));
+                        setTopicCardCount(Math.min(10, cardsForTag.length));
+                        setTopicStrategy("random");
+                        setManualSelectedIds(new Set(cardsForTag.map(c => c.id)));
+                      }}
+                      className="p-4 rounded-xl border border-border bg-card hover:bg-muted/40 hover:border-cyan-500/30 transition-all flex flex-col gap-2.5 text-left group cursor-pointer shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-foreground text-sm group-hover:text-cyan-500 transition-colors">{tag}</span>
+                        <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-muted/60 text-muted-foreground">
+                          {count} {count === 1 ? "card" : "cards"}
+                        </Badge>
+                      </div>
+                      {/* Mastery Bar */}
+                      <div className="w-full flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[9px] text-muted-foreground font-bold">
+                          <span>AVERAGE MASTERY</span>
+                          <span className="text-foreground">{Math.round(mastery)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all" 
+                            style={{ width: `${mastery}%` }} 
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : topicReviewStep === "detail" && selectedTopic ? (
           <div className="flex-1 overflow-y-auto p-6 md:p-8 pt-4 flex flex-col gap-6 bg-muted/5">
             {/* Header / Topic banner */}
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
-                <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest text-left block">SELECTED TOPIC</span>
-                <h3 className="text-xl font-bold text-foreground mt-0.5 text-left">{selectedTopic}</h3>
+                <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest text-left block">
+                  {activeTopicTab === "sql" ? "DATABASE" : activeTopicTab === "core" ? "CORE CONCEPT" : "SELECTED TOPIC"}
+                </span>
+                <h3 className="text-xl font-bold text-foreground mt-0.5 text-left">
+                  {activeTopicTab === "sql" ? "SQL / Database" : selectedTopic}
+                </h3>
               </div>
                <Badge variant="secondary" className="text-xs bg-cyan-500/5 text-cyan-500 border-cyan-500/20 px-3 py-1 font-semibold rounded-full shrink-0">
                 {topicCards.length} {topicCards.length === 1 ? "Question" : "Questions"}
@@ -725,8 +889,13 @@ export function ReviewModal({
             {topicReviewStep ? (
               <Button variant="ghost" onClick={() => {
                 if (topicReviewStep === "detail") {
-                  setTopicReviewStep("topics");
-                  setSelectedTopic(null);
+                  if (activeTopicTab === "sql") {
+                    setTopicReviewStep(null);
+                    setSelectedTopic(null);
+                  } else {
+                    setTopicReviewStep("topics");
+                    setSelectedTopic(null);
+                  }
                 } else {
                   setTopicReviewStep(null);
                 }
@@ -821,13 +990,14 @@ export function ReviewModal({
               </div>
             )}
 
-            {!numberSelectMode && !topicReviewStep && totalCards.filter(c => c.type === "leetcode").length > 0 && (
+            {!numberSelectMode && !topicReviewStep && totalCards.length > 0 && (
               <Button
                 variant="ghost"
                 className="font-semibold text-muted-foreground hover:text-cyan-500 gap-2 hover:bg-cyan-500/5 transition-all rounded-lg"
                 onClick={() => {
                   setTopicReviewStep("topics");
                   setSelectedTopic(null);
+                  setActiveTopicTab("dsa");
                 }}
               >
                 <Tags className="w-4 h-4" />
