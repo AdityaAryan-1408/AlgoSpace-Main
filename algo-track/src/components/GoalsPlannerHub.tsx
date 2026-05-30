@@ -15,10 +15,13 @@ import {
   AlertCircle, 
   Trophy,
   Pencil,
-  Lock
+  Lock,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/Button";
+import { EditGoalModal } from "@/components/EditGoalModal";
 
 interface GoalsPlannerHubProps {
   onNavigate?: (view: string) => void;
@@ -36,7 +39,7 @@ interface StructuredGoal {
   id: string;
   title: string;
   description: string;
-  goal_type: string;
+  goalType: string;
   status: string;
   startDate: string;
   endDate: string;
@@ -47,6 +50,7 @@ interface StructuredGoal {
     currentValue: number;
     unit: string;
   }>;
+  topicItems?: any[];
   pacing?: {
     elapsedDays: number;
     remainingDays: number;
@@ -135,6 +139,72 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
   const [checklistGoalId, setChecklistGoalId] = useState<string | null>(null);
   const [weekChecklists, setWeekChecklists] = useState<Record<string, { items: ChecklistItem[] }>>({});
   const [activeGoals, setActiveGoals] = useState<StructuredGoal[]>([]);
+  const [goalInputValues, setGoalInputValues] = useState<Record<string, string>>({});
+  const [editingGoal, setEditingGoal] = useState<StructuredGoal | null>(null);
+  const [isChecklistExpanded, setIsChecklistExpanded] = useState(false);
+
+  const handleStructuredChecklistToggle = async (itemId: string, currentStatus: string, notesStr: string) => {
+    try {
+      let total = 1;
+      let remaining = 0;
+      let unit = "items";
+      try {
+        const parsed = JSON.parse(notesStr || "{}");
+        total = parsed.total ?? 1;
+        remaining = parsed.remaining ?? 0;
+        unit = parsed.unit ?? "items";
+      } catch (e) {}
+
+      const isCompleted = currentStatus === "completed";
+      const newStatus = isCompleted ? "not_started" : "completed";
+      const newRemaining = isCompleted ? total : 0;
+      const newNotes = JSON.stringify({ total, remaining: newRemaining, unit });
+
+      const res = await fetch("/api/goals/topic-items", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          itemId,
+          status: newStatus,
+          notes: newNotes,
+        })
+      });
+      if (!res.ok) throw new Error("Failed to toggle item");
+      await loadActiveGoals();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleStructuredChecklistCount = async (itemId: string, newRemaining: number, notesStr: string) => {
+    try {
+      let total = 1;
+      let unit = "items";
+      try {
+        const parsed = JSON.parse(notesStr || "{}");
+        total = parsed.total ?? 1;
+        unit = parsed.unit ?? "items";
+      } catch (e) {}
+
+      const val = Math.max(0, Math.min(total, newRemaining));
+      const newStatus = val === 0 ? "completed" : "in_progress";
+      const newNotes = JSON.stringify({ total, remaining: val, unit });
+
+      const res = await fetch("/api/goals/topic-items", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          itemId,
+          status: newStatus,
+          notes: newNotes,
+        })
+      });
+      if (!res.ok) throw new Error("Failed to update count");
+      await loadActiveGoals();
+    } catch (err) {
+      console.error(err);
+    }
+  };
   
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItemTitle, setEditingItemTitle] = useState("");
@@ -229,7 +299,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
 
       // Map structured goals and filter out custom checklists
       const enrichedGoals = (goalsData.goals as StructuredGoal[])
-        .filter(g => g.goal_type !== "custom_checklist")
+        .filter(g => g.goalType !== "custom_checklist")
         .map((goal) => {
           const nudgeReport = (nudgesData.goals ?? []).find(
             (g: { goalId: string }) => g.goalId === goal.id,
@@ -661,7 +731,7 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
               </Button>
             </div>
           ) : (
-            <div className="flex-grow overflow-y-auto space-y-4 pr-1 min-h-0">
+            <div className="flex-grow overflow-y-auto space-y-4 pr-3 min-h-0">
               {activeGoals.slice(0, 1).map((goal) => {
                 const daysLeft = Math.max(
                   0,
@@ -670,13 +740,28 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
                 
                 return (
                   <div key={goal.id} className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        {goal.title}
-                        <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 text-[9px] font-bold rounded uppercase">
-                          Active
-                        </span>
-                      </h3>
+                    <div className="space-y-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                            {goal.title}
+                            <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 text-[9px] font-bold rounded uppercase">
+                              Active
+                            </span>
+                          </h3>
+                        </div>
+                        {goal.goalType === "structured_checklist" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditingGoal(goal)}
+                            className="w-7 h-7 rounded-lg text-muted-foreground hover:text-cyan-500 bg-muted/40 hover:bg-cyan-500/10 flex items-center justify-center cursor-pointer flex-shrink-0"
+                            title="Edit Tasks"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                       {goal.description && (
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {goal.description}
@@ -707,8 +792,22 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
                             <span className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
                               {target.metricKey.replace(/_/g, " ")}
                             </span>
-                            <span className="font-bold text-foreground">
+                            <span className="font-bold text-foreground flex items-center gap-1">
                               {target.currentValue} / {target.targetValue} {target.unit} ({pct}%)
+                              {goal.goalType === "structured_checklist" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsChecklistExpanded(!isChecklistExpanded)}
+                                  className="p-0.5 hover:bg-muted/80 active:bg-muted rounded text-muted-foreground hover:text-cyan-500 cursor-pointer transition-colors flex items-center justify-center"
+                                  title={isChecklistExpanded ? "Hide checklist tasks" : "Show checklist tasks"}
+                                >
+                                  {isChecklistExpanded ? (
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              )}
                             </span>
                           </div>
                           
@@ -750,6 +849,55 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
                         {daysLeft} days remaining
                       </span>
                     </div>
+
+                    {/* Custom Structured Checklist items */}
+                    {isChecklistExpanded && goal.goalType === "structured_checklist" && goal.topicItems && goal.topicItems.length > 0 && (
+                      <div className="space-y-1.5 pr-1">
+                        <h4 className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                          Goal Tasks
+                        </h4>
+                        <div className="space-y-2">
+                          {goal.topicItems.map((item) => {
+                            let total = 1;
+                            let remaining = 0;
+                            let unit = "items";
+                            try {
+                              const parsed = JSON.parse(item.notes || "{}");
+                              total = parsed.total ?? 1;
+                              remaining = parsed.remaining ?? 0;
+                              unit = parsed.unit ?? "items";
+                            } catch (e) {}
+
+                            const isChecked = item.status === "completed" || remaining === 0;
+                            const itemPct = total > 0 ? Math.min(100, Math.round(((total - remaining) / total) * 100)) : 0;
+
+                            return (
+                              <div
+                                key={item.id}
+                                className="p-2.5 rounded-xl border border-border/40 bg-muted/10 text-xs space-y-1.5 hover:border-cyan-500/10 transition-all"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className={`font-semibold truncate max-w-[220px] ${isChecked ? "text-muted-foreground opacity-60 line-through" : "text-foreground"}`}>
+                                    {item.title}
+                                  </span>
+                                  <span className="font-bold text-muted-foreground text-[10px] flex-shrink-0">
+                                    {total - remaining} / {total} {unit} ({itemPct}%)
+                                  </span>
+                                </div>
+                                <div className="w-full h-1 bg-muted/50 rounded-full overflow-hidden">
+                                  <motion.div 
+                                    className="h-full rounded-full bg-cyan-500"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${itemPct}%` }}
+                                    transition={{ duration: 0.3 }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Coach Nudges */}
                     {goal.nudges && goal.nudges.length > 0 && (
@@ -796,6 +944,17 @@ export function GoalsPlannerHub({ onNavigate }: GoalsPlannerHubProps) {
           </div>
         )}
       </div>
+
+      {editingGoal && (
+        <EditGoalModal
+          goal={editingGoal}
+          onClose={() => setEditingGoal(null)}
+          onUpdated={async () => {
+            setEditingGoal(null);
+            await loadActiveGoals();
+          }}
+        />
+      )}
     </div>
   );
 }

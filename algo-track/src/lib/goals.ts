@@ -83,7 +83,7 @@ export async function listGoals(
 
   goals = goals.map((goal) => {
     if (
-      goal.goalType === "custom_checklist" &&
+      (goal.goalType === "custom_checklist" || goal.goalType === "structured_checklist") &&
       goal.status === "active" &&
       goal.endDate < todayStr
     ) {
@@ -255,7 +255,7 @@ export async function createGoal(
       title: t.title,
       status: "not_started",
       deadline: t.deadline ?? null,
-      notes: "",
+      notes: (t as any).notes ?? "",
     }));
 
     const { error: topicError } = await supabase
@@ -495,6 +495,42 @@ export async function refreshGoalTargets(
       case "topics_completed":
         newValue = completedTopics;
         break;
+      case "checklist_completion": {
+        const { data: items } = await supabase
+          .from("goal_topic_items")
+          .select("notes, status")
+          .eq("goal_id", goalId);
+        
+        let completedUnits = 0;
+        let totalUnits = 0;
+        for (const item of items ?? []) {
+          try {
+            const parsed = JSON.parse(item.notes || "{}");
+            const total = parsed.total ?? (item.status === "completed" ? 1 : 0);
+            const remaining = parsed.remaining ?? (item.status === "completed" ? 0 : total);
+            completedUnits += Math.max(0, total - remaining);
+            totalUnits += total;
+          } catch (e) {
+            if (item.status === "completed") {
+              completedUnits += 1;
+              totalUnits += 1;
+            } else {
+              totalUnits += 1;
+            }
+          }
+        }
+        newValue = completedUnits;
+        
+        await supabase
+          .from("goal_targets")
+          .update({ 
+            current_value: newValue,
+            target_value: totalUnits > 0 ? totalUnits : 1
+          })
+          .eq("id", target.id);
+        
+        continue;
+      }
       default:
         // Unknown metric, skip
         continue;

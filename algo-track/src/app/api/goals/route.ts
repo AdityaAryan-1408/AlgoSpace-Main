@@ -5,7 +5,7 @@ import {
   jsonOk,
   withUser,
 } from "@/lib/api";
-import { listGoals, createGoal } from "@/lib/goals";
+import { listGoals, createGoal, refreshGoalTargets } from "@/lib/goals";
 
 /**
  * GET /api/goals?status=active
@@ -20,6 +20,14 @@ export async function GET(request: NextRequest) {
     const user = await withUser(request);
     const status =
       request.nextUrl.searchParams.get("status") ?? undefined;
+    
+    const initialGoals = await listGoals(user.id, status);
+    for (const g of initialGoals) {
+      if (g.goalType === "structured_checklist" && g.status === "active") {
+        await refreshGoalTargets(g.id, user.id);
+      }
+    }
+
     const goals = await listGoals(user.id, status);
     return jsonOk({ goals });
   } catch (error) {

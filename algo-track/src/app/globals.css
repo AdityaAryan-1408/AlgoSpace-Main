@@ -204,6 +204,8 @@
 @layer base {
   * {
     @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(163, 163, 163, 0.25) transparent;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -213,21 +215,20 @@
     user-select: text;
   }
   
-  /* Custom Log-Style Scrollbar */
+  /* Premium Ultra-Slim Rounded Scrollbar */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: var(--background);
-    border-left: 1px solid var(--border);
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--muted-foreground);
-    border-radius: 0px; /* Flat, terminal-like edges */
+    background: rgba(163, 163, 163, 0.25);
+    border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--foreground);
+    background: rgba(6, 182, 212, 0.5); /* Sleek Cyan Glow on Hover */
   }
 }
 

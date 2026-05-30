@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Trash2,
   Play,
+  Pencil,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/Button";
 import type { Goal } from "@/types";
 import type { SmartNudge } from "@/lib/nudge-engine";
 import { CreateGoalModal } from "@/components/CreateGoalModal";
+import { EditGoalModal } from "@/components/EditGoalModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
 
 function getAuthHeaders(): Record<string, string> {
@@ -92,12 +94,18 @@ function GoalCard({
   goal,
   onStatusChange,
   onDelete,
+  onUpdate,
+  onEdit,
 }: {
   goal: GoalWithNudges;
   onStatusChange: (goalId: string, newStatus: string) => void;
   onDelete: (goalId: string) => void;
+  onUpdate?: () => Promise<void> | void;
+  onEdit?: (goal: GoalWithNudges) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [inputValues, setInputValues] = useState<Record<string, string>>({});
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
   const daysLeft = Math.max(
     0,
@@ -115,6 +123,69 @@ function GoalCard({
   );
   const elapsed = totalDays - daysLeft;
   const timeProgress = Math.min(100, Math.round((elapsed / totalDays) * 100));
+
+  const handleChecklistToggle = async (itemId: string, currentStatus: string, notesStr: string) => {
+    try {
+      let total = 1;
+      let remaining = 0;
+      let unit = "items";
+      try {
+        const parsed = JSON.parse(notesStr || "{}");
+        total = parsed.total ?? 1;
+        remaining = parsed.remaining ?? 0;
+        unit = parsed.unit ?? "items";
+      } catch (e) {}
+
+      const isCompleted = currentStatus === "completed";
+      const newStatus = isCompleted ? "not_started" : "completed";
+      const newRemaining = isCompleted ? total : 0;
+      const newNotes = JSON.stringify({ total, remaining: newRemaining, unit });
+
+      const res = await fetch("/api/goals/topic-items", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          itemId,
+          status: newStatus,
+          notes: newNotes,
+        })
+      });
+      if (!res.ok) throw new Error("Failed to toggle item");
+      if (onUpdate) await onUpdate();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleChecklistCount = async (itemId: string, newRemaining: number, notesStr: string) => {
+    try {
+      let total = 1;
+      let unit = "items";
+      try {
+        const parsed = JSON.parse(notesStr || "{}");
+        total = parsed.total ?? 1;
+        unit = parsed.unit ?? "items";
+      } catch (e) {}
+
+      const val = Math.max(0, Math.min(total, newRemaining));
+      const newStatus = val === 0 ? "completed" : "in_progress";
+      const newNotes = JSON.stringify({ total, remaining: val, unit });
+
+      const res = await fetch("/api/goals/topic-items", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          itemId,
+          status: newStatus,
+          notes: newNotes,
+        })
+      });
+      if (!res.ok) throw new Error("Failed to update count");
+      if (onUpdate) await onUpdate();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <motion.div
@@ -143,10 +214,10 @@ function GoalCard({
               variant="ghost"
               size="icon"
               onClick={() => setExpanded(!expanded)}
-              className="flex-shrink-0"
+              className="flex-shrink-0 animate-pulse"
             >
               {expanded ? (
-                <ChevronUp className="w-4 h-4" />
+                <ChevronUp className="w-4 h-4 text-cyan-500" />
               ) : (
                 <ChevronDown className="w-4 h-4" />
               )}
@@ -239,26 +310,143 @@ function GoalCard({
                 exit={{ height: 0, opacity: 0 }}
                 className="space-y-4 overflow-hidden"
               >
-                {/* Topic items */}
+                {/* Topic items / Custom checklist */}
                 {goal.topicItems && goal.topicItems.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Topics
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {goal.goalType === "structured_checklist" ? "Checklist Items" : "Topics"}
                     </p>
-                    {goal.topicItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
-                      >
-                        <span className="text-sm">{item.title}</span>
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px]"
-                        >
-                          {item.status.replace(/_/g, " ")}
-                        </Badge>
+                    
+                    {goal.goalType === "structured_checklist" ? (
+                      <div className="space-y-2">
+                        {goal.topicItems.map((item) => {
+                          let total = 1;
+                          let remaining = 0;
+                          let unit = "items";
+                          try {
+                            const parsed = JSON.parse(item.notes || "{}");
+                            total = parsed.total ?? 1;
+                            remaining = parsed.remaining ?? 0;
+                            unit = parsed.unit ?? "items";
+                          } catch (e) {}
+
+                          const isChecked = item.status === "completed" || remaining === 0;
+                          const inputValue = inputValues[item.id] ?? String(remaining);
+
+                          const handleInputChange = (val: string) => {
+                            setInputValues(prev => ({ ...prev, [item.id]: val }));
+                          };
+
+                          const handleInputSubmit = () => {
+                            const valStr = inputValue.trim();
+                            if (!valStr) {
+                              setInputValues(prev => {
+                                const copy = { ...prev };
+                                delete copy[item.id];
+                                return copy;
+                              });
+                              return;
+                            }
+
+                            let newRemaining = remaining;
+                            if (valStr.startsWith("-")) {
+                              const sub = parseInt(valStr.slice(1), 10);
+                              if (!isNaN(sub)) {
+                                newRemaining = Math.max(0, remaining - sub);
+                              }
+                            } else if (valStr.startsWith("+")) {
+                              const add = parseInt(valStr.slice(1), 10);
+                              if (!isNaN(add)) {
+                                newRemaining = Math.min(total, remaining + add);
+                              }
+                            } else {
+                              const num = parseInt(valStr, 10);
+                              if (!isNaN(num)) {
+                                newRemaining = Math.max(0, Math.min(total, num));
+                              }
+                            }
+
+                            setInputValues(prev => {
+                              const copy = { ...prev };
+                              delete copy[item.id];
+                              return copy;
+                            });
+                            handleChecklistCount(item.id, newRemaining, item.notes);
+                          };
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/20 gap-3 hover:border-cyan-500/25 transition-all group"
+                            >
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleChecklistToggle(item.id, item.status, item.notes)}
+                                  className="w-4 h-4 rounded border-border text-cyan-600 focus:ring-cyan-500 cursor-pointer"
+                                />
+                                <span className={`text-sm font-medium transition-all ${isChecked ? "line-through text-muted-foreground opacity-60" : "text-foreground"}`}>
+                                  {item.title}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleChecklistCount(item.id, remaining - 1, item.notes)}
+                                  disabled={remaining === 0}
+                                  className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center text-xs font-bold hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                
+                                <input
+                                  type="text"
+                                  value={inputValue}
+                                  onChange={(e) => handleInputChange(e.target.value)}
+                                  onBlur={handleInputSubmit}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleInputSubmit();
+                                  }}
+                                  className="w-12 py-1 text-center bg-card border border-border rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-cyan-500 text-foreground"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleChecklistCount(item.id, remaining + 1, item.notes)}
+                                  disabled={remaining >= total}
+                                  className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center text-xs font-bold hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  +
+                                </button>
+                                
+                                <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider pl-1 select-none">
+                                  / {total} {unit} left
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="space-y-2">
+                        {goal.topicItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
+                          >
+                            <span className="text-sm">{item.title}</span>
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px]"
+                            >
+                              {item.status.replace(/_/g, " ")}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -287,38 +475,76 @@ function GoalCard({
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 pt-2 border-t border-border">
-                  {goal.status === "active" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onStatusChange(goal.id, "paused")}
-                      className="gap-1.5 text-xs"
-                    >
-                      <Pause className="w-3 h-3" />
-                      Pause
-                    </Button>
+                <div className="flex items-center gap-2 pt-2 border-t border-border flex-wrap">
+                  {showCompleteConfirm ? (
+                    <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-xl text-xs">
+                      <span className="font-semibold text-emerald-500">Complete goal?</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          setShowCompleteConfirm(false);
+                          onStatusChange(goal.id, "completed");
+                        }}
+                        className="h-7 px-2.5 text-[10px] bg-emerald-500 text-white hover:bg-emerald-600 rounded-lg cursor-pointer"
+                      >
+                        Yes, Complete
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowCompleteConfirm(false)}
+                        className="h-7 px-2 text-[10px] hover:bg-muted rounded-lg cursor-pointer text-muted-foreground"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {goal.status === "active" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onStatusChange(goal.id, "paused")}
+                          className="gap-1.5 text-xs"
+                        >
+                          <Pause className="w-3 h-3" />
+                          Pause
+                        </Button>
+                      )}
+                      {goal.status === "paused" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onStatusChange(goal.id, "active")}
+                          className="gap-1.5 text-xs"
+                        >
+                          <Play className="w-3 h-3" />
+                          Resume
+                        </Button>
+                      )}
+                      {goal.status === "active" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowCompleteConfirm(true)}
+                          className="gap-1.5 text-xs text-emerald-500"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          Complete
+                        </Button>
+                      )}
+                    </>
                   )}
-                  {goal.status === "paused" && (
+                  {goal.goalType === "structured_checklist" && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onStatusChange(goal.id, "active")}
-                      className="gap-1.5 text-xs"
+                      onClick={() => onEdit?.(goal)}
+                      className="gap-1.5 text-xs text-cyan-500"
                     >
-                      <Play className="w-3 h-3" />
-                      Resume
-                    </Button>
-                  )}
-                  {goal.status === "active" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onStatusChange(goal.id, "completed")}
-                      className="gap-1.5 text-xs text-emerald-500"
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      Complete
+                      <Pencil className="w-3 h-3" />
+                      Edit Tasks
                     </Button>
                   )}
                   <Button
@@ -348,6 +574,7 @@ export function GoalsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("active");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<GoalWithNudges | null>(null);
 
   const loadGoals = useCallback(async () => {
     try {
@@ -482,6 +709,8 @@ export function GoalsScreen() {
                 goal={goal}
                 onStatusChange={handleStatusChange}
                 onDelete={handleDelete}
+                onUpdate={loadGoals}
+                onEdit={setEditingGoal}
               />
             ))}
           </AnimatePresence>
@@ -493,6 +722,17 @@ export function GoalsScreen() {
           onClose={() => setShowCreateModal(false)}
           onCreated={async () => {
             setShowCreateModal(false);
+            await loadGoals();
+          }}
+        />
+      )}
+
+      {editingGoal && (
+        <EditGoalModal
+          goal={editingGoal}
+          onClose={() => setEditingGoal(null)}
+          onUpdated={async () => {
+            setEditingGoal(null);
             await loadGoals();
           }}
         />

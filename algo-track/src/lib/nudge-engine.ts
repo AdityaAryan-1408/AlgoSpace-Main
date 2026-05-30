@@ -176,6 +176,27 @@ export async function getSmartNudges(
             status,
           ));
         }
+
+        if (metricKey === "checklist_completion") {
+          const { data: targetRow } = await supabase
+            .from("goal_targets")
+            .select("unit")
+            .eq("goal_id", goal.id)
+            .eq("metric_key", "checklist_completion")
+            .maybeSingle();
+          const unitStr = (targetRow as any)?.unit || "items";
+          nudges.push(...generateChecklistPaceNudges(
+            goal.id,
+            goal.title,
+            adjustedPace,
+            actualPace,
+            initialPace,
+            remainingWork,
+            pacing.remainingDays,
+            status,
+            unitStr
+          ));
+        }
       }
     }
 
@@ -372,6 +393,65 @@ function generateTopicPaceNudges(
       priority: "warning",
       message: `${overdueTopics} topic${overdueTopics !== 1 ? "s are" : " is"} past their deadline. Prioritize the${overdueTopics === 1 ? "" : "se"} before starting new ones.`,
       value: overdueTopics,
+    });
+  }
+
+  return nudges;
+}
+
+function generateChecklistPaceNudges(
+  goalId: string,
+  goalTitle: string,
+  adjustedPace: number,
+  actualPace: number,
+  initialPace: number,
+  remainingWork: number,
+  remainingDays: number,
+  status: string,
+  unit: string
+): SmartNudge[] {
+  const nudges: SmartNudge[] = [];
+  const deficit = Math.round((initialPace - actualPace) * remainingDays);
+
+  if (status === "on_track") {
+    nudges.push({
+      id: `checklist-pace-ontrack-${goalId}`,
+      goalId,
+      category: "celebration",
+      priority: "info",
+      metricKey: "checklist_completion",
+      message: `Great pace on "${goalTitle}"! You're on track. Complete ${adjustedPace} ${unit}/day to finish in time.`,
+      value: adjustedPace,
+    });
+  } else if (status === "slightly_behind") {
+    nudges.push({
+      id: `checklist-pace-behind-${goalId}`,
+      goalId,
+      category: "solve_pace",
+      priority: "warning",
+      metricKey: "checklist_completion",
+      message: `You are slightly behind schedule on "${goalTitle}". Complete ${adjustedPace} ${unit}/day for the next ${Math.min(7, remainingDays)} days to catch up.`,
+      value: adjustedPace,
+    });
+  } else if (status === "at_risk") {
+    nudges.push({
+      id: `checklist-pace-risk-${goalId}`,
+      goalId,
+      category: "solve_pace",
+      priority: "critical",
+      metricKey: "checklist_completion",
+      message: `${remainingWork} ${unit} remaining with ${remainingDays} days left. Target ${adjustedPace} ${unit}/day to finish your checklist in time.`,
+      value: adjustedPace,
+    });
+  } else if (status === "critical") {
+    nudges.push({
+      id: `checklist-pace-critical-${goalId}`,
+      goalId,
+      category: "solve_pace",
+      priority: "critical",
+      metricKey: "checklist_completion",
+      message: `Critically behind on "${goalTitle}" — ${remainingWork} ${unit} remaining for ${remainingDays} days (need ${adjustedPace}/day). Consider extending the deadline.`,
+      value: adjustedPace,
     });
   }
 

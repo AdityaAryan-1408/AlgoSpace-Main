@@ -18,7 +18,8 @@ export type GoalType =
   | "dsa_retention"
   | "cs_topic_completion"
   | "hybrid_prep_plan"
-  | "custom_checklist";
+  | "custom_checklist"
+  | "structured_checklist";
 
 export type GoalStatus =
   | "draft"
