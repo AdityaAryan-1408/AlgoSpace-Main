@@ -279,3 +279,24 @@
 .animate-pulse-slow {
   animation: pulse-slow 3s ease-in-out infinite;
 }
+
+/* Ensure BlockNote root portal containers stack above modals */
+body > .bn-root {
+  position: relative !important;
+  z-index: 99999 !important;
+}
+
+/* Ensure BlockNote root portal child elements stack above modals without breaking their absolute/fixed positioning */
+body > .bn-root div {
+  z-index: 99999 !important;
+}
+
+/* Ensure BlockNote floating menus, popovers, and side drag handles are rendered on top of modals */
+.bn-bubble-menu,
+.bn-side-menu,
+.bn-slash-menu,
+.mantine-Popover-dropdown,
+.mantine-Menu-dropdown,
+[class^="bn-"] {
+  z-index: 99999 !important;
+}
