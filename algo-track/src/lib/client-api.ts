@@ -399,6 +399,12 @@ export interface GlobalPauseStatus {
     until: string | null;
     autoResume: boolean;
     remainingDays: number | null;
+    types?: {
+        all: GlobalPauseStatus;
+        leetcode: GlobalPauseStatus;
+        cs: GlobalPauseStatus;
+        sql: GlobalPauseStatus;
+    };
 }
 
 export async function fetchGlobalPauseStatus(): Promise<GlobalPauseStatus> {
@@ -408,26 +414,30 @@ export async function fetchGlobalPauseStatus(): Promise<GlobalPauseStatus> {
 export async function pauseAllReviews(
     days: number,
     autoResume: boolean,
+    type: "all" | "leetcode" | "cs" | "sql" = "all",
 ): Promise<GlobalPauseStatus> {
     return apiFetch<GlobalPauseStatus>("/reviews/pause", {
         method: "POST",
-        body: JSON.stringify({ action: "pause", days, autoResume }),
+        body: JSON.stringify({ action: "pause", days, autoResume, type }),
     });
 }
 
-export async function resumeAllReviews(): Promise<{ resumed: boolean }> {
+export async function resumeAllReviews(
+    type: "all" | "leetcode" | "cs" | "sql" = "all",
+): Promise<{ resumed: boolean }> {
     return apiFetch<{ resumed: boolean }>("/reviews/pause", {
         method: "POST",
-        body: JSON.stringify({ action: "resume" }),
+        body: JSON.stringify({ action: "resume", type }),
     });
 }
 
 export async function extendGlobalPause(
     additionalDays: number,
+    type: "all" | "leetcode" | "cs" | "sql" = "all",
 ): Promise<GlobalPauseStatus> {
     return apiFetch<GlobalPauseStatus>("/reviews/pause", {
         method: "POST",
-        body: JSON.stringify({ action: "extend", additionalDays }),
+        body: JSON.stringify({ action: "extend", additionalDays, type }),
     });
 }
 

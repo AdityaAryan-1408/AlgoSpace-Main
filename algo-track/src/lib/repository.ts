@@ -634,6 +634,31 @@ export interface GlobalPauseState {
   until: string | null;
   autoResume: boolean;
   remainingDays: number | null; // days left in pause
+  types?: {
+    all: GlobalPauseState;
+    leetcode: GlobalPauseState;
+    cs: GlobalPauseState;
+    sql: GlobalPauseState;
+  };
+}
+
+function getPauseState(gp: any): GlobalPauseState {
+  if (!gp || gp.active !== true) {
+    return { active: false, startedAt: null, until: null, autoResume: false, remainingDays: null };
+  }
+  const until = gp.until as string | null;
+  let remainingDays: number | null = null;
+  if (until) {
+    const diff = new Date(until).getTime() - Date.now();
+    remainingDays = Math.max(0, Math.ceil(diff / 86_400_000));
+  }
+  return {
+    active: true,
+    startedAt: (gp.started_at as string) || null,
+    until,
+    autoResume: (gp.auto_resume as boolean) || false,
+    remainingDays,
+  };
 }
 
 export async function getGlobalPauseStatus(userId: string): Promise<GlobalPauseState> {
@@ -648,24 +673,21 @@ export async function getGlobalPauseStatus(userId: string): Promise<GlobalPauseS
 
   const meta = (data?.metadata as Record<string, unknown>) || {};
   const gp = (meta.global_pause as Record<string, unknown>) || null;
+  const tp = (meta.type_pauses as Record<string, unknown>) || {};
 
-  if (!gp || gp.active !== true) {
-    return { active: false, startedAt: null, until: null, autoResume: false, remainingDays: null };
-  }
-
-  const until = gp.until as string | null;
-  let remainingDays: number | null = null;
-  if (until) {
-    const diff = new Date(until).getTime() - Date.now();
-    remainingDays = Math.max(0, Math.ceil(diff / 86_400_000));
-  }
+  const allStatus = getPauseState(tp.all || gp);
+  const leetcodeStatus = getPauseState(tp.leetcode);
+  const csStatus = getPauseState(tp.cs);
+  const sqlStatus = getPauseState(tp.sql);
 
   return {
-    active: true,
-    startedAt: (gp.started_at as string) || null,
-    until,
-    autoResume: (gp.auto_resume as boolean) || false,
-    remainingDays,
+    ...allStatus,
+    types: {
+      all: allStatus,
+      leetcode: leetcodeStatus,
+      cs: csStatus,
+      sql: sqlStatus,
+    }
   };
 }
 
@@ -673,6 +695,7 @@ export async function globalPauseReviews(
   userId: string,
   pauseDays: number,
   autoResume: boolean,
+  cardType: "all" | "leetcode" | "cs" | "sql" = "all",
 ) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
@@ -680,10 +703,16 @@ export async function globalPauseReviews(
   untilDate.setDate(untilDate.getDate() + pauseDays);
 
   // 1. Get all active (non-paused) cards
-  const { data: cards, error: cardsError } = await supabase
+  let query = supabase
     .from("cards")
-    .select("id, next_review_at, metadata")
+    .select("id, type, next_review_at, metadata")
     .eq("user_id", userId);
+
+  if (cardType !== "all") {
+    query = query.eq("type", cardType);
+  }
+
+  const { data: cards, error: cardsError } = await query;
 
   if (cardsError) throw new Error(cardsError.message);
 
@@ -705,6 +734,7 @@ export async function globalPauseReviews(
           original_next_review_at: card.next_review_at,
           pause_started_at: now.toISOString(),
           globally_paused: true,
+          paused_by_type: cardType,
         },
         updated_at: now.toISOString(),
       })
@@ -724,18 +754,33 @@ export async function globalPauseReviews(
   if (userFetchError) throw new Error(userFetchError.message);
 
   const userMeta = (userData?.metadata as Record<string, unknown>) || {};
+  const currentTp = (userMeta.type_pauses as Record<string, unknown>) || {};
+
+  const newPauseObj = {
+    active: true,
+    started_at: now.toISOString(),
+    until: untilDate.toISOString(),
+    auto_resume: autoResume,
+  };
+
+  const updatedTp = {
+    ...currentTp,
+    [cardType]: newPauseObj,
+  };
+
+  const updatedUserMeta: Record<string, unknown> = {
+    ...userMeta,
+    type_pauses: updatedTp,
+  };
+
+  if (cardType === "all") {
+    updatedUserMeta.global_pause = newPauseObj;
+  }
+
   const { error: userUpdateError } = await supabase
     .from("users")
     .update({
-      metadata: {
-        ...userMeta,
-        global_pause: {
-          active: true,
-          started_at: now.toISOString(),
-          until: untilDate.toISOString(),
-          auto_resume: autoResume,
-        },
-      },
+      metadata: updatedUserMeta,
       updated_at: now.toISOString(),
     })
     .eq("id", userId);
@@ -745,7 +790,10 @@ export async function globalPauseReviews(
   return getGlobalPauseStatus(userId);
 }
 
-export async function globalResumeReviews(userId: string) {
+export async function globalResumeReviews(
+  userId: string,
+  cardType: "all" | "leetcode" | "cs" | "sql" = "all",
+) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
 
@@ -760,15 +808,23 @@ export async function globalResumeReviews(userId: string) {
 
   const userMeta = (userData?.metadata as Record<string, unknown>) || {};
   const gp = (userMeta.global_pause as Record<string, unknown>) || {};
-  const userPauseStartedAt = gp.started_at
-    ? new Date(gp.started_at as string)
+  const tp = (userMeta.type_pauses as Record<string, unknown>) || {};
+  const targetPauseObj = (cardType === "all" ? (tp.all || gp) : tp[cardType]) as Record<string, unknown> || {};
+  const userPauseStartedAt = targetPauseObj.started_at
+    ? new Date(targetPauseObj.started_at as string)
     : now;
 
   // 1. Fetch all globally-paused cards
-  const { data: cards, error: cardsError } = await supabase
+  let query = supabase
     .from("cards")
-    .select("id, metadata, last_reviewed_at, interval_days")
+    .select("id, type, metadata, last_reviewed_at, interval_days")
     .eq("user_id", userId);
+
+  if (cardType !== "all") {
+    query = query.eq("type", cardType);
+  }
+
+  const { data: cards, error: cardsError } = await query;
 
   if (cardsError) throw new Error(cardsError.message);
 
@@ -784,6 +840,14 @@ export async function globalResumeReviews(userId: string) {
 
     // Only restore cards that were globally paused (not individually paused)
     if (meta.globally_paused !== true) continue;
+
+    // Filter by cardType: a card matches if we are resuming all, or if its paused_by_type matches,
+    // or if paused_by_type is missing and card type matches cardType
+    if (cardType !== "all") {
+      const pausedByType = meta.paused_by_type as string | undefined;
+      const isMatch = pausedByType === cardType || (!pausedByType && card.type === cardType);
+      if (!isMatch) continue;
+    }
 
     // Determine the pause start time for this card
     const cardPauseStartedAt = meta.pause_started_at
@@ -837,11 +901,12 @@ export async function globalResumeReviews(userId: string) {
     const nextReviewIso = nextReview.toISOString();
 
     // Clean up the global-pause metadata
-    const { remaining_review_days, globally_paused, original_next_review_at, pause_started_at, ...cleanMeta } = meta;
+    const { remaining_review_days, globally_paused, original_next_review_at, pause_started_at, paused_by_type, ...cleanMeta } = meta;
     void remaining_review_days;
     void globally_paused;
     void original_next_review_at;
     void pause_started_at;
+    void paused_by_type;
 
     const { error } = await supabase
       .from("cards")
@@ -857,13 +922,29 @@ export async function globalResumeReviews(userId: string) {
   }
 
   // 2. Clear user pause state
-  const { global_pause, ...cleanUserMeta } = userMeta;
-  void global_pause;
+  let updatedUserMeta = { ...userMeta };
+
+  if (cardType === "all") {
+    const { global_pause, type_pauses, ...clean } = userMeta;
+    void global_pause;
+    void type_pauses;
+    updatedUserMeta = clean;
+  } else {
+    const cleanTp = { ...tp };
+    delete cleanTp[cardType];
+    
+    const { global_pause, ...clean } = userMeta;
+    void global_pause;
+    updatedUserMeta = {
+      ...clean,
+      type_pauses: cleanTp,
+    };
+  }
 
   const { error: userUpdateError } = await supabase
     .from("users")
     .update({
-      metadata: cleanUserMeta,
+      metadata: updatedUserMeta,
       updated_at: now.toISOString(),
     })
     .eq("id", userId);
@@ -987,7 +1068,11 @@ export async function shuffleAllCards(userId: string) {
   return { shuffled: cards.length };
 }
 
-export async function extendGlobalPause(userId: string, additionalDays: number) {
+export async function extendGlobalPause(
+  userId: string,
+  additionalDays: number,
+  cardType: "all" | "leetcode" | "cs" | "sql" = "all",
+) {
   const supabase = getSupabaseAdmin();
 
   const { data: userData, error: fetchError } = await supabase
@@ -999,71 +1084,119 @@ export async function extendGlobalPause(userId: string, additionalDays: number) 
   if (fetchError) throw new Error(fetchError.message);
 
   const userMeta = (userData?.metadata as Record<string, unknown>) || {};
-  const gp = (userMeta.global_pause as Record<string, unknown>) || {};
-
-  if (gp.active !== true) {
-    throw new Error("Reviews are not currently paused.");
-  }
-
-  const currentUntil = new Date(gp.until as string);
-  currentUntil.setDate(currentUntil.getDate() + additionalDays);
-
-  const { error: updateError } = await supabase
-    .from("users")
-    .update({
-      metadata: {
-        ...userMeta,
-        global_pause: {
-          ...gp,
-          until: currentUntil.toISOString(),
+  
+  if (cardType === "all") {
+    const gp = (userMeta.global_pause as Record<string, unknown>) || {};
+    if (gp.active !== true) throw new Error("Reviews are not currently paused.");
+    const currentUntil = new Date(gp.until as string);
+    currentUntil.setDate(currentUntil.getDate() + additionalDays);
+    
+    // update global_pause and type_pauses.all
+    const tp = (userMeta.type_pauses as Record<string, unknown>) || {};
+    const updatedTp = {
+      ...tp,
+      all: {
+        ...((tp.all as Record<string, unknown>) || gp),
+        until: currentUntil.toISOString(),
+      }
+    };
+    
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({
+        metadata: {
+          ...userMeta,
+          global_pause: {
+            ...gp,
+            until: currentUntil.toISOString(),
+          },
+          type_pauses: updatedTp,
         },
-      },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
 
-  if (updateError) throw new Error(updateError.message);
+    if (updateError) throw new Error(updateError.message);
+  } else {
+    const tp = (userMeta.type_pauses as Record<string, unknown>) || {};
+    const p = (tp[cardType] as Record<string, unknown>) || {};
+    if (p.active !== true) throw new Error(`${cardType} reviews are not currently paused.`);
+    const currentUntil = new Date(p.until as string);
+    currentUntil.setDate(currentUntil.getDate() + additionalDays);
+    
+    const updatedTp = {
+      ...tp,
+      [cardType]: {
+        ...p,
+        until: currentUntil.toISOString(),
+      }
+    };
+
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({
+        metadata: {
+          ...userMeta,
+          type_pauses: updatedTp,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    if (updateError) throw new Error(updateError.message);
+  }
 
   return getGlobalPauseStatus(userId);
 }
 
 /**
- * Returns users whose global pause expires within the next ~24 hours (for advance email).
+ * Returns users whose global pause or specific card-type pause expires within the next ~24-48 hours (for advance email).
  */
 export async function listUsersWithExpiringPause() {
   const supabase = getSupabaseAdmin();
   const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // We need to search users whose metadata.global_pause.until is between now and tomorrow
-  // Supabase JSON filtering: metadata->global_pause->>until
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, metadata")
-    .not("metadata->global_pause", "is", null);
+    .select("id, email, metadata");
 
   if (error) throw new Error(error.message);
 
-  return (data ?? [])
-    .filter((user) => {
-      const meta = (user.metadata as Record<string, unknown>) || {};
-      const gp = (meta.global_pause as Record<string, unknown>) || {};
-      if (gp.active !== true || gp.auto_resume !== true) return false;
+  const expiring: Array<{ id: string; email: string; until: string; type: "all" | "leetcode" | "cs" | "sql" }> = [];
+
+  for (const user of data ?? []) {
+    const meta = (user.metadata as Record<string, unknown>) || {};
+    
+    // Check global_pause (all)
+    const gp = (meta.global_pause as Record<string, unknown>) || {};
+    if (gp.active === true && gp.auto_resume === true) {
       const until = new Date(gp.until as string);
-      // Expires within 24-48h from now (so we send 1 day before)
       const hoursUntilExpiry = (until.getTime() - now.getTime()) / 3_600_000;
-      return hoursUntilExpiry > 0 && hoursUntilExpiry <= 48;
-    })
-    .map((user) => ({
-      id: user.id,
-      email: user.email as string,
-      until: ((user.metadata as Record<string, unknown>)?.global_pause as Record<string, unknown>)?.until as string,
-    }));
+      if (hoursUntilExpiry > 0 && hoursUntilExpiry <= 48) {
+        expiring.push({ id: user.id, email: user.email as string, until: gp.until as string, type: "all" });
+      }
+    }
+
+    // Check type_pauses
+    const tp = (meta.type_pauses as Record<string, unknown>) || {};
+    for (const type of ["all", "leetcode", "cs", "sql"] as const) {
+      const p = (tp[type] as Record<string, unknown>) || {};
+      if (p.active === true && p.auto_resume === true) {
+        const until = new Date(p.until as string);
+        const hoursUntilExpiry = (until.getTime() - now.getTime()) / 3_600_000;
+        if (hoursUntilExpiry > 0 && hoursUntilExpiry <= 48) {
+          if (type === "all" && expiring.some(e => e.id === user.id && e.type === "all")) continue;
+          expiring.push({ id: user.id, email: user.email as string, until: p.until as string, type });
+        }
+      }
+    }
+  }
+
+  return expiring;
 }
 
 /**
- * Returns users whose global pause has expired and auto_resume is true.
+ * Returns users whose global pause or specific card-type pause has expired and auto_resume is true.
  */
 export async function listUsersWithExpiredPause() {
   const supabase = getSupabaseAdmin();
@@ -1071,23 +1204,39 @@ export async function listUsersWithExpiredPause() {
 
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, metadata")
-    .not("metadata->global_pause", "is", null);
+    .select("id, email, metadata");
 
   if (error) throw new Error(error.message);
 
-  return (data ?? [])
-    .filter((user) => {
-      const meta = (user.metadata as Record<string, unknown>) || {};
-      const gp = (meta.global_pause as Record<string, unknown>) || {};
-      if (gp.active !== true || gp.auto_resume !== true) return false;
+  const expired: Array<{ id: string; email: string; type: "all" | "leetcode" | "cs" | "sql" }> = [];
+
+  for (const user of data ?? []) {
+    const meta = (user.metadata as Record<string, unknown>) || {};
+    
+    // Check global_pause (all)
+    const gp = (meta.global_pause as Record<string, unknown>) || {};
+    if (gp.active === true && gp.auto_resume === true) {
       const until = new Date(gp.until as string);
-      return until.getTime() <= now.getTime();
-    })
-    .map((user) => ({
-      id: user.id,
-      email: user.email as string,
-    }));
+      if (until.getTime() <= now.getTime()) {
+        expired.push({ id: user.id, email: user.email as string, type: "all" });
+      }
+    }
+
+    // Check type_pauses
+    const tp = (meta.type_pauses as Record<string, unknown>) || {};
+    for (const type of ["all", "leetcode", "cs", "sql"] as const) {
+      const p = (tp[type] as Record<string, unknown>) || {};
+      if (p.active === true && p.auto_resume === true) {
+        const until = new Date(p.until as string);
+        if (until.getTime() <= now.getTime()) {
+          if (type === "all" && expired.some(e => e.id === user.id && e.type === "all")) continue;
+          expired.push({ id: user.id, email: user.email as string, type });
+        }
+      }
+    }
+  }
+
+  return expired;
 }
 
 

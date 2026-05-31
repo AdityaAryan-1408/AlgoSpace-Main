@@ -21,6 +21,15 @@ interface GlobalPauseModalProps {
     onChanged: () => void;
 }
 
+type PauseType = "all" | "leetcode" | "cs" | "sql";
+
+const TABS = [
+    { id: "all" as const, label: "All", icon: "🌐" },
+    { id: "leetcode" as const, label: "DSA", icon: "💻" },
+    { id: "cs" as const, label: "CS Core", icon: "📚" },
+    { id: "sql" as const, label: "SQL", icon: "🗄️" },
+];
+
 const PAUSE_PRESETS = [
     { days: 7, label: "1 Week" },
     { days: 14, label: "2 Weeks" },
@@ -38,6 +47,7 @@ export function GlobalPauseModal({
     onClose,
     onChanged,
 }: GlobalPauseModalProps) {
+    const [activeTab, setActiveTab] = useState<PauseType>("all");
     const [selectedDays, setSelectedDays] = useState<number | null>(7);
     const [customDays, setCustomDays] = useState("");
     const [useCustom, setUseCustom] = useState(false);
@@ -45,6 +55,13 @@ export function GlobalPauseModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showExtend, setShowExtend] = useState(false);
     const { alert: alertModal } = useConfirmModal();
+
+    const getTabStatus = (tabId: PauseType) => {
+        if (tabId === "all") return pauseStatus;
+        return pauseStatus.types?.[tabId] || { active: false, startedAt: null, until: null, autoResume: false, remainingDays: null };
+    };
+
+    const tabStatus = getTabStatus(activeTab);
 
     const effectiveDays = useCustom
         ? parseInt(customDays, 10) || 0
@@ -54,7 +71,7 @@ export function GlobalPauseModal({
         if (effectiveDays < 1) return;
         setIsSubmitting(true);
         try {
-            await pauseAllReviews(effectiveDays, autoResume);
+            await pauseAllReviews(effectiveDays, autoResume, activeTab);
             onChanged();
         } catch (err) {
             console.error("Failed to pause reviews:", err);
@@ -66,7 +83,7 @@ export function GlobalPauseModal({
     const handleResume = async () => {
         setIsSubmitting(true);
         try {
-            await resumeAllReviews();
+            await resumeAllReviews(activeTab);
             onChanged();
         } catch (err) {
             console.error("Failed to resume reviews:", err);
@@ -78,7 +95,7 @@ export function GlobalPauseModal({
     const handleExtend = async (days: number) => {
         setIsSubmitting(true);
         try {
-            await extendGlobalPause(days);
+            await extendGlobalPause(days, activeTab);
             onChanged();
         } catch (err) {
             console.error("Failed to extend pause:", err);
@@ -130,6 +147,32 @@ export function GlobalPauseModal({
         });
     };
 
+    const getTabTitle = () => {
+        const isPaused = tabStatus.active;
+        if (activeTab === "all") return isPaused ? "All Reviews Paused" : "Pause All Reviews";
+        if (activeTab === "leetcode") return isPaused ? "DSA Reviews Paused" : "Pause DSA Reviews";
+        if (activeTab === "cs") return isPaused ? "CS Core Reviews Paused" : "Pause CS Core Reviews";
+        if (activeTab === "sql") return isPaused ? "SQL Reviews Paused" : "Pause SQL Reviews";
+        return "Pause Reviews";
+    };
+
+    const getTabSubtitle = () => {
+        const isPaused = tabStatus.active;
+        if (activeTab === "all") return isPaused ? "Your entire review schedule is frozen" : "Take a complete break from all reviews";
+        if (activeTab === "leetcode") return isPaused ? "DSA cards are frozen" : "Temporarily pause DSA problem reviews";
+        if (activeTab === "cs") return isPaused ? "CS Core cards are frozen" : "Temporarily pause CS Core concept reviews";
+        if (activeTab === "sql") return isPaused ? "SQL cards are frozen" : "Temporarily pause SQL query reviews";
+        return "Take a break from reviews";
+    };
+
+    const getCategoryLabel = (type: PauseType) => {
+        if (type === "all") return "All";
+        if (type === "leetcode") return "DSA";
+        if (type === "cs") return "CS Core";
+        if (type === "sql") return "SQL";
+        return "";
+    };
+
     return createPortal(
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm"
@@ -146,7 +189,7 @@ export function GlobalPauseModal({
                 {/* Header */}
                 <div className="p-5 border-b border-border flex items-center justify-between bg-muted/10">
                     <div className="flex items-center gap-2.5">
-                        {pauseStatus.active ? (
+                        {tabStatus.active ? (
                             <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center">
                                 <Pause className="w-4 h-4 text-amber-500" />
                             </div>
@@ -157,14 +200,10 @@ export function GlobalPauseModal({
                         )}
                         <div>
                             <h3 className="text-base font-semibold text-foreground">
-                                {pauseStatus.active
-                                    ? "Reviews Paused"
-                                    : "Pause All Reviews"}
+                                {getTabTitle()}
                             </h3>
                             <p className="text-xs text-muted-foreground">
-                                {pauseStatus.active
-                                    ? "Your review schedule is frozen"
-                                    : "Take a break from reviews"}
+                                {getTabSubtitle()}
                             </p>
                         </div>
                     </div>
@@ -178,29 +217,59 @@ export function GlobalPauseModal({
                     </Button>
                 </div>
 
+                {/* Category Tabs */}
+                <div className="px-5 pt-4 border-b border-border bg-muted/5">
+                    <div className="flex p-1 rounded-xl bg-muted/40 border border-border/50 gap-1">
+                        {TABS.map((tab) => {
+                            const isPaused = getTabStatus(tab.id).active;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => {
+                                        setActiveTab(tab.id);
+                                        setShowExtend(false);
+                                    }}
+                                    className={`relative flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-lg text-[11px] font-semibold transition-all duration-200 cursor-pointer ${
+                                        isActive
+                                            ? "bg-background text-foreground shadow-sm border border-border"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted/10 border border-transparent"
+                                    }`}
+                                >
+                                    <span className="text-sm mb-0.5">{tab.icon}</span>
+                                    <span>{tab.label}</span>
+                                    {isPaused && (
+                                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 {/* Body */}
                 <div className="p-5 flex flex-col gap-5">
-                    {pauseStatus.active ? (
+                    {tabStatus.active ? (
                         /* ── Paused State ────────────────── */
                         <>
                             <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
                                 <div className="flex items-center gap-2 mb-2">
                                     <Clock className="w-4 h-4 text-amber-500" />
                                     <span className="text-sm font-semibold text-amber-500">
-                                        Pause Status
+                                        Pause Status ({getCategoryLabel(activeTab)})
                                     </span>
                                 </div>
                                 <div className="space-y-1.5 text-sm text-foreground/80">
-                                    {pauseStatus.until && (
+                                    {tabStatus.until && (
                                         <p>
                                             Resumes:{" "}
                                             <strong className="text-foreground">
-                                                {formatDate(pauseStatus.until)}
+                                                {formatDate(tabStatus.until)}
                                             </strong>
-                                            {pauseStatus.remainingDays != null && (
+                                            {tabStatus.remainingDays != null && (
                                                 <span className="text-muted-foreground ml-1">
-                                                    ({pauseStatus.remainingDays} day
-                                                    {pauseStatus.remainingDays !== 1
+                                                    ({tabStatus.remainingDays} day
+                                                    {tabStatus.remainingDays !== 1
                                                         ? "s"
                                                         : ""}{" "}
                                                     left)
@@ -211,15 +280,15 @@ export function GlobalPauseModal({
                                     <p className="text-xs text-muted-foreground">
                                         Mode:{" "}
                                         <strong>
-                                            {pauseStatus.autoResume
+                                            {tabStatus.autoResume
                                                 ? "Auto-resume"
                                                 : "Manual resume"}
                                         </strong>
                                     </p>
-                                    {pauseStatus.startedAt && (
+                                    {tabStatus.startedAt && (
                                         <p className="text-xs text-muted-foreground">
                                             Paused since:{" "}
-                                            {formatDate(pauseStatus.startedAt)}
+                                            {formatDate(tabStatus.startedAt)}
                                         </p>
                                     )}
                                 </div>
@@ -273,7 +342,7 @@ export function GlobalPauseModal({
                                 )}
                                 {isSubmitting
                                     ? "Resuming..."
-                                    : "Resume Reviews Now"}
+                                    : `Resume ${getCategoryLabel(activeTab)} Reviews`}
                             </Button>
                         </>
                     ) : (
@@ -281,7 +350,7 @@ export function GlobalPauseModal({
                         <>
                             <div>
                                 <p className="text-sm font-medium text-foreground mb-3">
-                                    How long do you want to pause?
+                                    How long do you want to pause {getCategoryLabel(activeTab)} reviews?
                                 </p>
 
                                 {/* Preset buttons */}
@@ -383,47 +452,49 @@ export function GlobalPauseModal({
                                 )}
                                 {isSubmitting
                                     ? "Pausing..."
-                                    : `Pause for ${effectiveDays} day${effectiveDays !== 1 ? "s" : ""}`}
+                                    : `Pause ${getCategoryLabel(activeTab)} for ${effectiveDays} day${effectiveDays !== 1 ? "s" : ""}`}
                             </Button>
 
-                            {/* Redistribute button */}
-                            <div className="border-t border-border pt-4 mt-1">
-                                <p className="text-xs text-muted-foreground mb-2 text-center">
-                                    Too many reviews piled up? Spread them evenly.
-                                </p>
-                                <Button
-                                    variant="outline"
-                                    onClick={handleRedistribute}
-                                    disabled={isSubmitting}
-                                    className="w-full rounded-full gap-2 text-sm"
-                                >
-                                    {isSubmitting ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Clock className="w-4 h-4" />
-                                    )}
-                                    Redistribute Reviews (7/day)
-                                </Button>
-
-                                <div className="mt-3 pt-3 border-t border-border/50">
+                            {/* Redistribute & Shuffle (Only show under "All" tab) */}
+                            {activeTab === "all" && (
+                                <div className="border-t border-border pt-4 mt-1">
                                     <p className="text-xs text-muted-foreground mb-2 text-center">
-                                        Want to review everything? Shuffle all cards randomly and spread at 7/day.
+                                        Too many reviews piled up? Spread them evenly.
                                     </p>
                                     <Button
                                         variant="outline"
-                                        onClick={handleShuffleAll}
+                                        onClick={handleRedistribute}
                                         disabled={isSubmitting}
-                                        className="w-full rounded-full gap-2 text-sm border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400"
+                                        className="w-full rounded-full gap-2 text-sm"
                                     >
                                         {isSubmitting ? (
                                             <Loader2 className="w-4 h-4 animate-spin" />
                                         ) : (
-                                            <Shuffle className="w-4 h-4" />
+                                            <Clock className="w-4 h-4" />
                                         )}
-                                        Shuffle &amp; Spread All Cards (7/day)
+                                        Redistribute Reviews (7/day)
                                     </Button>
+
+                                    <div className="mt-3 pt-3 border-t border-border/50">
+                                        <p className="text-xs text-muted-foreground mb-2 text-center">
+                                            Want to review everything? Shuffle all cards randomly and spread at 7/day.
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleShuffleAll}
+                                            disabled={isSubmitting}
+                                            className="w-full rounded-full gap-2 text-sm border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400"
+                                        >
+                                            {isSubmitting ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Shuffle className="w-4 h-4" />
+                                            )}
+                                            Shuffle &amp; Spread All Cards (7/day)
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </>
                     )}
                 </div>

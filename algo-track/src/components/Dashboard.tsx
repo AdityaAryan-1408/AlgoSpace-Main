@@ -219,11 +219,12 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
       .catch((err) => console.error("Failed to fetch pause status:", err));
   }, []);
 
-  const handleQuickResume = async () => {
+  const handleQuickResume = async (type: "all" | "leetcode" | "cs" | "sql" = "all") => {
     setIsResuming(true);
     try {
-      await resumeAllReviews();
-      setPauseStatus({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
+      await resumeAllReviews(type);
+      const updatedStatus = await fetchGlobalPauseStatus();
+      setPauseStatus(updatedStatus);
       onRefresh();
     } catch (err) {
       console.error("Failed to resume:", err);
@@ -232,16 +233,37 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
     }
   };
 
+  const activePauses = useMemo(() => {
+    if (!pauseStatus) return [];
+    const list = [];
+    if (pauseStatus.active) {
+      list.push({ type: "all" as const, label: "All Reviews Paused", status: pauseStatus });
+    }
+    if (pauseStatus.types) {
+      if (pauseStatus.types.leetcode.active && !pauseStatus.active) {
+        list.push({ type: "leetcode" as const, label: "DSA Reviews Paused", status: pauseStatus.types.leetcode });
+      }
+      if (pauseStatus.types.cs.active && !pauseStatus.active) {
+        list.push({ type: "cs" as const, label: "CS Core Reviews Paused", status: pauseStatus.types.cs });
+      }
+      if (pauseStatus.types.sql.active && !pauseStatus.active) {
+        list.push({ type: "sql" as const, label: "SQL Reviews Paused", status: pauseStatus.types.sql });
+      }
+    }
+    return list;
+  }, [pauseStatus]);
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8">
       <SmartNudgeBanner analytics={analytics} />
 
-      {/* Global Pause Banner */}
-      {pauseStatus?.active && (
+      {/* Category Pause Banners */}
+      {activePauses.map((pause) => (
         <motion.div
+          key={pause.type}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 backdrop-blur-sm"
+          className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 backdrop-blur-sm animate-pulse-subtle"
         >
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -250,22 +272,22 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
               </div>
               <div>
                 <p className="text-sm font-semibold text-amber-500">
-                  Reviews Paused
+                  {pause.label}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {pauseStatus.remainingDays != null && pauseStatus.remainingDays > 0
-                    ? `${pauseStatus.remainingDays} day${pauseStatus.remainingDays !== 1 ? "s" : ""} remaining`
+                  {pause.status.remainingDays != null && pause.status.remainingDays > 0
+                    ? `${pause.status.remainingDays} day${pause.status.remainingDays !== 1 ? "s" : ""} remaining`
                     : "Paused indefinitely"}
-                  {pauseStatus.autoResume && " · Auto-resume enabled"}
-                  {pauseStatus.until && (
-                    <> · Resumes {new Date(pauseStatus.until).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
+                  {pause.status.autoResume && " · Auto-resume enabled"}
+                  {pause.status.until && (
+                    <> · Resumes {new Date(pause.status.until).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
                   )}
                 </p>
               </div>
             </div>
             <Button
               size="sm"
-              onClick={handleQuickResume}
+              onClick={() => handleQuickResume(pause.type)}
               disabled={isResuming}
               className="rounded-full shrink-0 gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
             >
@@ -278,7 +300,7 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
             </Button>
           </div>
         </motion.div>
-      )}
+      ))}
 
       <MasteryHeatmap cards={cards} />
 

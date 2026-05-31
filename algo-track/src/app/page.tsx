@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Dashboard } from "@/components/Dashboard";
 import { ReviewModal } from "@/components/ReviewModal";
 import { ReviewSession } from "@/components/ReviewSession";
@@ -184,6 +184,28 @@ export default function HomePage() {
       if (showSpinner) setIsSyncing(false);
     }
   }, [refreshPauseStatus]);
+
+  const isAnyPauseActive = !!(
+    globalPauseStatus.active ||
+    globalPauseStatus.types?.leetcode?.active ||
+    globalPauseStatus.types?.cs?.active ||
+    globalPauseStatus.types?.sql?.active
+  );
+
+  const pauseButtonTitle = useMemo(() => {
+    if (globalPauseStatus.active) {
+      return `Reviews paused (${globalPauseStatus.remainingDays ?? '?'} days left)`;
+    }
+    const pausedLabels = [];
+    if (globalPauseStatus.types?.leetcode?.active) pausedLabels.push("DSA");
+    if (globalPauseStatus.types?.cs?.active) pausedLabels.push("CS Core");
+    if (globalPauseStatus.types?.sql?.active) pausedLabels.push("SQL");
+    
+    if (pausedLabels.length > 0) {
+      return `${pausedLabels.join(", ")} reviews paused`;
+    }
+    return "Pause reviews";
+  }, [globalPauseStatus]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -585,13 +607,13 @@ export default function HomePage() {
               size="sm"
               onClick={() => setShowPauseModal(true)}
               className={`gap-1.5 transition-all relative ${
-                globalPauseStatus.active
+                isAnyPauseActive
                   ? "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
                   : "text-muted-foreground hover:text-foreground"
               }`}
-              title={globalPauseStatus.active ? `Reviews paused (${globalPauseStatus.remainingDays ?? '?'} days left)` : "Pause reviews"}
+              title={pauseButtonTitle}
             >
-              {globalPauseStatus.active ? (
+              {isAnyPauseActive ? (
                 <>
                   <span className="relative flex items-center justify-center">
                     <Pause className="w-4 h-4" />

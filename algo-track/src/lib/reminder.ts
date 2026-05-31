@@ -62,19 +62,28 @@ export async function runDailyReminderJob(): Promise<ReminderJobResult> {
     const expiredPauseUsers = await listUsersWithExpiredPause();
     for (const user of expiredPauseUsers) {
       try {
-        await globalResumeReviews(user.id);
+        await globalResumeReviews(user.id, user.type);
         result.pauseAutoResumed += 1;
 
         // Send "Your reviews have resumed" email
         if (resendApiKey && reminderFromEmail) {
+          const categoryLabel =
+            user.type === "all"
+              ? "All Reviews"
+              : user.type === "leetcode"
+              ? "DSA Reviews"
+              : user.type === "cs"
+              ? "CS Core Reviews"
+              : "SQL Reviews";
           await sendPauseResumedEmail({
             apiKey: resendApiKey,
             from: reminderFromEmail,
             to: user.email,
+            categoryLabel,
           });
         }
       } catch (err) {
-        console.error(`Failed to auto-resume user ${user.id}:`, err);
+        console.error(`Failed to auto-resume user ${user.id} (${user.type}):`, err);
       }
     }
   } catch (err) {
@@ -88,10 +97,19 @@ export async function runDailyReminderJob(): Promise<ReminderJobResult> {
       for (const user of expiringUsers) {
         try {
           const untilDate = new Date(user.until);
+          const categoryLabel =
+            user.type === "all"
+              ? "All Reviews"
+              : user.type === "leetcode"
+              ? "DSA Reviews"
+              : user.type === "cs"
+              ? "CS Core Reviews"
+              : "SQL Reviews";
           await sendPauseExpiryWarningEmail({
             apiKey: resendApiKey,
             from: reminderFromEmail,
             to: user.email,
+            categoryLabel,
             resumeDate: untilDate.toLocaleDateString("en-US", {
               weekday: "long",
               month: "long",
@@ -261,6 +279,7 @@ async function sendPauseExpiryWarningEmail(input: {
   from: string;
   to: string;
   resumeDate: string;
+  categoryLabel: string;
 }) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -271,11 +290,11 @@ async function sendPauseExpiryWarningEmail(input: {
     body: JSON.stringify({
       from: input.from,
       to: input.to,
-      subject: "AlgoTrack: Your reviews resume tomorrow",
+      subject: `AlgoTrack: Your ${input.categoryLabel} resume tomorrow`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.5;">
           <h2>⏰ Reviews Resuming Soon</h2>
-          <p>Your paused reviews will automatically resume on <strong>${input.resumeDate}</strong>.</p>
+          <p>Your paused <strong>${input.categoryLabel}</strong> will automatically resume on <strong>${input.resumeDate}</strong>.</p>
           <p>If you're not ready yet, open AlgoTrack and extend your pause.</p>
           <p style="color: #666; font-size: 14px;">You can also manually resume at any time by clicking "Resume Reviews" in the app.</p>
         </div>
@@ -298,6 +317,7 @@ async function sendPauseResumedEmail(input: {
   apiKey: string;
   from: string;
   to: string;
+  categoryLabel: string;
 }) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -308,11 +328,11 @@ async function sendPauseResumedEmail(input: {
     body: JSON.stringify({
       from: input.from,
       to: input.to,
-      subject: "AlgoTrack: Your reviews have resumed!",
+      subject: `AlgoTrack: Your ${input.categoryLabel} have resumed!`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.5;">
           <h2>✅ Reviews Resumed</h2>
-          <p>Your pause period has ended and your reviews are back on track.</p>
+          <p>Your pause period has ended and your <strong>${input.categoryLabel}</strong> are back on track.</p>
           <p>Open AlgoTrack to check your review queue and keep your streak alive!</p>
         </div>
       `,
@@ -329,4 +349,3 @@ async function sendPauseResumedEmail(input: {
     error: text || `HTTP ${response.status}`,
   };
 }
-
