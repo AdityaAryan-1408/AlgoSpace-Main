@@ -67,6 +67,7 @@ const cardMatchesCoreTag = (card: Flashcard, coreTag: string): boolean => {
 interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
+  maxDailyReviews?: number | null;
   onClose: () => void;
   onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, typeFilter?: CardType, orderedCards?: Flashcard[]) => void;
   onRescheduled?: () => void;
@@ -152,6 +153,7 @@ function SortableCard({ card, isLast }: { card: Flashcard; isLast: boolean }) {
 export function ReviewModal({
   dueCards,
   totalCards,
+  maxDailyReviews,
   onClose,
   onStart,
   onRescheduled,
@@ -339,7 +341,7 @@ export function ReviewModal({
       ? dueCards
       : dueCards.filter(c => c.type === activeTab);
 
-    return [...filtered].sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
       const ratingDiff =
         ratingPriority[a.lastRating] - ratingPriority[b.lastRating];
       if (ratingDiff !== 0) return ratingDiff;
@@ -350,7 +352,12 @@ export function ReviewModal({
 
       return a.title.localeCompare(b.title);
     });
-  }, [dueCards, activeTab]);
+
+    if (maxDailyReviews !== null && maxDailyReviews !== undefined && maxDailyReviews > 0) {
+      return sorted.slice(0, maxDailyReviews);
+    }
+    return sorted;
+  }, [dueCards, activeTab, maxDailyReviews]);
 
   const [orderedCards, setOrderedCards] = useState<Flashcard[]>([]);
 
@@ -434,7 +441,9 @@ export function ReviewModal({
                   ? "Select the number of questions you want to review."
                   : dueCards.length === 0
                     ? "No cards are due right now. Check back later!"
-                    : `${dueCards.length} card${dueCards.length !== 1 ? "s" : ""} due today. Hard and recently failed cards are queued first.`}
+                    : maxDailyReviews && dueCards.length > maxDailyReviews
+                      ? `${maxDailyReviews} card${maxDailyReviews !== 1 ? "s" : ""} due today (capped from ${dueCards.length} total backlog cards).`
+                      : `${dueCards.length} card${dueCards.length !== 1 ? "s" : ""} due today. Hard and recently failed cards are queued first.`}
           </p>
         </div>
 

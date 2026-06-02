@@ -441,17 +441,17 @@ export async function extendGlobalPause(
     });
 }
 
-export async function redistributeReviews(): Promise<{ redistributed: number }> {
+export async function redistributeReviews(cardsPerDay?: number): Promise<{ redistributed: number }> {
     return apiFetch<{ redistributed: number }>("/reviews/pause", {
         method: "POST",
-        body: JSON.stringify({ action: "redistribute" }),
+        body: JSON.stringify({ action: "redistribute", cardsPerDay }),
     });
 }
 
-export async function shuffleAllReviews(): Promise<{ shuffled: number }> {
+export async function shuffleAllReviews(cardsPerDay?: number): Promise<{ shuffled: number }> {
     return apiFetch<{ shuffled: number }>("/reviews/pause", {
         method: "POST",
-        body: JSON.stringify({ action: "shuffle_all" }),
+        body: JSON.stringify({ action: "shuffle_all", cardsPerDay }),
     });
 }
 
@@ -465,6 +465,7 @@ export async function updateUserProfile(updates: {
     preferences?: {
         defaultTheme?: string;
         keyboardShortcutsEnabled?: boolean;
+        maxDailyReviews?: number | null;
     };
 }): Promise<{ user: any }> {
     return apiFetch<{ user: any }>("/users/me", {

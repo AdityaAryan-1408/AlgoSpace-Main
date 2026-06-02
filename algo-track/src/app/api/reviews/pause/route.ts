@@ -72,12 +72,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "redistribute") {
-      const result = await redistributeCards(user.id);
+      const cardsPerDay = body?.cardsPerDay;
+      if (cardsPerDay != null && (typeof cardsPerDay !== "number" || !Number.isInteger(cardsPerDay) || cardsPerDay < 1)) {
+        throw new ApiError("cardsPerDay must be a positive integer.", 400);
+      }
+      const result = await redistributeCards(user.id, cardsPerDay ?? 7);
       return jsonOk(result);
     }
 
     if (action === "shuffle_all") {
-      const result = await shuffleAllCards(user.id);
+      const cardsPerDay = body?.cardsPerDay;
+      if (cardsPerDay != null && (typeof cardsPerDay !== "number" || !Number.isInteger(cardsPerDay) || cardsPerDay < 1)) {
+        throw new ApiError("cardsPerDay must be a positive integer.", 400);
+      }
+      const result = await shuffleAllCards(user.id, cardsPerDay ?? 7);
       return jsonOk(result);
     }
 

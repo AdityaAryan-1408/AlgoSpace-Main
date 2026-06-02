@@ -52,6 +52,7 @@ export function GlobalPauseModal({
     const [customDays, setCustomDays] = useState("");
     const [useCustom, setUseCustom] = useState(false);
     const [autoResume, setAutoResume] = useState(true);
+    const [cardsPerDay, setCardsPerDay] = useState<number>(7);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showExtend, setShowExtend] = useState(false);
     const { alert: alertModal } = useConfirmModal();
@@ -107,10 +108,10 @@ export function GlobalPauseModal({
     const handleRedistribute = async () => {
         setIsSubmitting(true);
         try {
-            const result = await redistributeReviews();
+            const result = await redistributeReviews(cardsPerDay);
             alertModal({
                 title: "Reviews Redistributed",
-                message: `Redistributed ${result.redistributed} cards across review days (7 per day).`,
+                message: `Redistributed ${result.redistributed} cards across review days (${cardsPerDay} per day).`,
                 variant: "info",
             });
             onChanged();
@@ -124,11 +125,11 @@ export function GlobalPauseModal({
     const handleShuffleAll = async () => {
         setIsSubmitting(true);
         try {
-            const result = await shuffleAllReviews();
-            const totalDays = Math.ceil(result.shuffled / 7);
+            const result = await shuffleAllReviews(cardsPerDay);
+            const totalDays = Math.ceil(result.shuffled / cardsPerDay);
             alertModal({
                 title: "All Cards Shuffled",
-                message: `Randomly shuffled ${result.shuffled} cards and spread them at 7/day. You'll cycle through all of them in ~${totalDays} days.`,
+                message: `Randomly shuffled ${result.shuffled} cards and spread them at ${cardsPerDay}/day. You'll cycle through all of them in ~${totalDays} days.`,
                 variant: "info",
             });
             onChanged();
@@ -184,7 +185,7 @@ export function GlobalPauseModal({
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md bg-card rounded-2xl shadow-2xl overflow-hidden border border-border"
+                className="w-full max-w-md bg-card rounded-2xl shadow-2xl overflow-hidden border border-border max-h-[90vh] flex flex-col"
             >
                 {/* Header */}
                 <div className="p-5 border-b border-border flex items-center justify-between bg-muted/10">
@@ -248,7 +249,7 @@ export function GlobalPauseModal({
                 </div>
 
                 {/* Body */}
-                <div className="p-5 flex flex-col gap-5">
+                <div className="p-5 flex flex-col gap-5 overflow-y-auto flex-1">
                     {tabStatus.active ? (
                         /* ── Paused State ────────────────── */
                         <>
@@ -457,41 +458,75 @@ export function GlobalPauseModal({
 
                             {/* Redistribute & Shuffle (Only show under "All" tab) */}
                             {activeTab === "all" && (
-                                <div className="border-t border-border pt-4 mt-1">
-                                    <p className="text-xs text-muted-foreground mb-2 text-center">
-                                        Too many reviews piled up? Spread them evenly.
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleRedistribute}
-                                        disabled={isSubmitting}
-                                        className="w-full rounded-full gap-2 text-sm"
-                                    >
-                                        {isSubmitting ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Clock className="w-4 h-4" />
-                                        )}
-                                        Redistribute Reviews (7/day)
-                                    </Button>
+                                <div className="border-t border-border pt-4 mt-1 space-y-4">
+                                    <div className="p-3 rounded-xl border border-border bg-muted/10">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-semibold text-foreground">
+                                                Redistribution Rate
+                                            </span>
+                                            <span className="text-xs text-cyan-500 font-bold">
+                                                {cardsPerDay} cards / day
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="range"
+                                                min={1}
+                                                max={50}
+                                                value={cardsPerDay}
+                                                onChange={(e) => setCardsPerDay(Number(e.target.value))}
+                                                className="flex-1 accent-cyan-500 cursor-pointer h-1 bg-muted-foreground/20 rounded-lg appearance-none"
+                                            />
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={100}
+                                                value={cardsPerDay}
+                                                onChange={(e) => {
+                                                    const val = Math.max(1, Math.min(100, Number(e.target.value) || 1));
+                                                    setCardsPerDay(val);
+                                                }}
+                                                className="w-14 p-1 text-center text-xs font-semibold rounded-lg border border-border bg-background outline-none text-foreground"
+                                            />
+                                        </div>
+                                    </div>
 
-                                    <div className="mt-3 pt-3 border-t border-border/50">
+                                    <div>
                                         <p className="text-xs text-muted-foreground mb-2 text-center">
-                                            Want to review everything? Shuffle all cards randomly and spread at 7/day.
+                                            Too many reviews piled up? Spread them evenly.
                                         </p>
                                         <Button
                                             variant="outline"
-                                            onClick={handleShuffleAll}
+                                            onClick={handleRedistribute}
                                             disabled={isSubmitting}
-                                            className="w-full rounded-full gap-2 text-sm border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400"
+                                            className="w-full rounded-full gap-2 text-sm"
                                         >
                                             {isSubmitting ? (
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                             ) : (
-                                                <Shuffle className="w-4 h-4" />
+                                                <Clock className="w-4 h-4" />
                                             )}
-                                            Shuffle &amp; Spread All Cards (7/day)
+                                            Redistribute Reviews ({cardsPerDay}/day)
                                         </Button>
+
+                                        <div className="mt-3 pt-3 border-t border-border/50">
+                                            <p className="text-xs text-muted-foreground mb-2 text-center">
+                                                Want to review everything? Shuffle all cards randomly and spread at {cardsPerDay}/day.
+                                            </p>
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleShuffleAll}
+                                                disabled={isSubmitting}
+                                                className="w-full rounded-full gap-2 text-sm border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400"
+                                            >
+                                                {isSubmitting ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Shuffle className="w-4 h-4" />
+                                                )}
+                                                Shuffle &amp; Spread All Cards ({cardsPerDay}/day)
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             )}

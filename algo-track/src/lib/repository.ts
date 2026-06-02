@@ -584,6 +584,7 @@ export async function updateReminderSettings(
     preferences?: {
       defaultTheme?: string;
       keyboardShortcutsEnabled?: boolean;
+      maxDailyReviews?: number | null;
     };
   },
 ) {
@@ -959,7 +960,7 @@ export async function globalResumeReviews(
  * Cards with next_review_at in the past are split into groups of 7 per day
  * starting from today. Future-scheduled cards are left untouched.
  */
-export async function redistributeCards(userId: string) {
+export async function redistributeCards(userId: string, cardsPerDay: number = 7) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
   const nowIso = now.toISOString();
@@ -984,10 +985,9 @@ export async function redistributeCards(userId: string) {
     return { redistributed: 0 };
   }
 
-  // Stagger: 7 cards per day starting from day 1
-  const BATCH_SIZE = 7;
+  // Stagger: cardsPerDay cards per day starting from day 1
   for (let i = 0; i < cards.length; i++) {
-    const dayOffset = Math.floor(i / BATCH_SIZE) + 1; // start from day 1
+    const dayOffset = Math.floor(i / cardsPerDay) + 1; // start from day 1
     const nextReview = new Date(now);
     nextReview.setDate(nextReview.getDate() + dayOffset);
     // Set to start of that day (midnight UTC) for clean scheduling
@@ -1009,14 +1009,14 @@ export async function redistributeCards(userId: string) {
 }
 
 /**
- * Shuffle ALL unpaused cards randomly and distribute them 7/day.
+ * Shuffle ALL unpaused cards randomly and distribute them X/day.
  * Unlike redistributeCards (which only touches overdue cards), this takes
  * every active card regardless of its current next_review_at, shuffles
- * them into a random order, and staggers them at 7 cards/day starting
+ * them into a random order, and staggers them at cardsPerDay cards/day starting
  * from tomorrow. This guarantees every card gets a review slot even if
  * the user hasn't been able to keep up with the normal SRS schedule.
  */
-export async function shuffleAllCards(userId: string) {
+export async function shuffleAllCards(userId: string, cardsPerDay: number = 7) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
 
@@ -1044,10 +1044,9 @@ export async function shuffleAllCards(userId: string) {
     [cards[i], cards[j]] = [cards[j], cards[i]];
   }
 
-  // Stagger: 7 cards per day starting from day 1 (tomorrow)
-  const BATCH_SIZE = 7;
+  // Stagger: cardsPerDay cards per day starting from day 1 (tomorrow)
   for (let i = 0; i < cards.length; i++) {
-    const dayOffset = Math.floor(i / BATCH_SIZE) + 1; // start from day 1
+    const dayOffset = Math.floor(i / cardsPerDay) + 1; // start from day 1
     const nextReview = new Date(now);
     nextReview.setDate(nextReview.getDate() + dayOffset);
     // Set to start of that day (midnight UTC) for clean scheduling

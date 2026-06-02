@@ -92,12 +92,13 @@ const getDifficultyColor = (diff: string) => {
 interface DashboardProps {
   cards: Flashcard[];
   dueCount: number;
+  totalDueCount?: number;
   onRefresh: () => void;
   onStartReview: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, type?: "leetcode" | "cs") => void;
   onNavigate?: (view: string) => void;
 }
 
-export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigate }: DashboardProps) {
+export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartReview, onNavigate }: DashboardProps) {
   const [selectedCard, setSelectedCard] = useState<Flashcard | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -384,7 +385,15 @@ export function Dashboard({ cards, dueCount, onRefresh, onStartReview, onNavigat
         >
           <Clock className="w-5 h-5 text-medium shrink-0" />
           <span className="text-sm font-medium text-medium">
-            You have <strong>{dueCount}</strong> card{dueCount !== 1 ? "s" : ""} due for review today.
+            {totalDueCount && totalDueCount > dueCount ? (
+              <>
+                You have <strong>{dueCount}</strong> card{dueCount !== 1 ? "s" : ""} due for review today (capped from {totalDueCount} total backlog cards).
+              </>
+            ) : (
+              <>
+                You have <strong>{dueCount}</strong> card{dueCount !== 1 ? "s" : ""} due for review today.
+              </>
+            )}
           </span>
         </motion.div>
       )}

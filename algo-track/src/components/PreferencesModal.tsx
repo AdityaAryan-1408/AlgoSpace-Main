@@ -10,8 +10,9 @@ import { updateUserProfile } from "@/lib/client-api";
 interface PreferencesModalProps {
     currentTheme: string;
     keyboardShortcutsEnabled: boolean;
+    maxDailyReviews: number | null;
     onClose: () => void;
-    onChanged: (newPrefs: { defaultTheme: string; keyboardShortcutsEnabled: boolean }) => void;
+    onChanged: (newPrefs: { defaultTheme: string; keyboardShortcutsEnabled: boolean; maxDailyReviews: number | null }) => void;
 }
 
 const AVAILABLE_THEMES = [
@@ -36,24 +37,34 @@ const SHORTCUTS = [
 export function PreferencesModal({
     currentTheme,
     keyboardShortcutsEnabled,
+    maxDailyReviews,
     onClose,
     onChanged,
 }: PreferencesModalProps) {
     const [theme, setTheme] = useState(currentTheme);
     const [shortcutsEnabled, setShortcutsEnabled] = useState(keyboardShortcutsEnabled);
+    const [maxReviews, setMaxReviews] = useState<string>(
+        maxDailyReviews ? String(maxDailyReviews) : ""
+    );
     const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSave = async () => {
         setIsSubmitting(true);
+        const parsedMaxReviews = maxReviews.trim() === "" ? null : parseInt(maxReviews, 10);
         try {
             await updateUserProfile({
                 preferences: {
                     defaultTheme: theme,
                     keyboardShortcutsEnabled: shortcutsEnabled,
+                    maxDailyReviews: parsedMaxReviews,
                 },
             });
-            onChanged({ defaultTheme: theme, keyboardShortcutsEnabled: shortcutsEnabled });
+            onChanged({
+                defaultTheme: theme,
+                keyboardShortcutsEnabled: shortcutsEnabled,
+                maxDailyReviews: parsedMaxReviews,
+            });
         } catch (err) {
             console.error("Failed to save user preferences:", err);
         } finally {
@@ -171,6 +182,35 @@ export function PreferencesModal({
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                    </div>
+
+                    {/* Maximum Daily Reviews Option */}
+                    <div className="flex flex-col gap-3 p-4 rounded-xl border border-border bg-muted/10">
+                        <div className="flex items-center gap-3">
+                            <Sliders className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <div className="flex-1">
+                                <span className="text-sm font-semibold text-foreground">
+                                    Maximum Daily Reviews Cap
+                                </span>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Cap reviews shown per day. Excess cards stay in backlog. Leave blank for unlimited.
+                                </p>
+                            </div>
+                            <div className="shrink-0 flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Unlimited"
+                                    value={maxReviews}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === "" || /^[0-9]+$/.test(val)) {
+                                            setMaxReviews(val);
+                                        }
+                                    }}
+                                    className="w-24 px-2 py-1.5 text-center text-xs font-semibold rounded-lg border border-border bg-background outline-none text-foreground focus:border-cyan-500"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Theme selector option */}

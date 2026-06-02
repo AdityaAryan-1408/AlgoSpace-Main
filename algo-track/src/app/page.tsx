@@ -36,6 +36,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { ImportListModal } from "@/components/ImportListModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
 import { PreferencesModal } from "@/components/PreferencesModal";
+import { RecoveryModeModal } from "@/components/RecoveryModeModal";
 
 type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub" | "vague-interviewer";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
@@ -122,6 +123,8 @@ export default function HomePage() {
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
   const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(false);
+  const [maxDailyReviews, setMaxDailyReviews] = useState<number | null>(null);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const { confirm, alert: alertModal } = useConfirmModal();
 
   // Load preferences from backend on mount
@@ -134,6 +137,9 @@ export default function HomePage() {
         }
         if (prefs.defaultTheme) {
           setTheme(prefs.defaultTheme);
+        }
+        if (prefs.maxDailyReviews !== undefined) {
+          setMaxDailyReviews(prefs.maxDailyReviews);
         }
       }
     }).catch(err => {
@@ -191,6 +197,14 @@ export default function HomePage() {
     globalPauseStatus.types?.cs?.active ||
     globalPauseStatus.types?.sql?.active
   );
+
+  const prioritizedAndCappedDueCards = useMemo(() => {
+    const sorted = prioritizeDueCards(dueCards);
+    if (maxDailyReviews !== null && maxDailyReviews > 0) {
+      return sorted.slice(0, maxDailyReviews);
+    }
+    return sorted;
+  }, [dueCards, maxDailyReviews]);
 
   const pauseButtonTitle = useMemo(() => {
     if (globalPauseStatus.active) {
@@ -640,9 +654,9 @@ export default function HomePage() {
             >
               <PlayCircle className="w-4 h-4" />
               <span className="hidden sm:inline-block">Review</span>
-              {!globalPauseStatus.active && dueCards.length > 0 && (
+              {!globalPauseStatus.active && prioritizedAndCappedDueCards.length > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                  {dueCards.length}
+                  {prioritizedAndCappedDueCards.length}
                 </span>
               )}
             </Button>
@@ -760,7 +774,8 @@ export default function HomePage() {
               >
                 <Dashboard 
                   cards={cards} 
-                  dueCount={dueCards.length} 
+                  dueCount={prioritizedAndCappedDueCards.length} 
+                  totalDueCount={dueCards.length}
                   onRefresh={() => syncFromApi(false)}
                   onNavigate={(v) => setView(v as View)}
                   onStartReview={(mode, count, type) => {
@@ -805,15 +820,7 @@ export default function HomePage() {
               >
                 <GuideScreen
                   onNavigateToGoals={() => setView("goals")}
-                  onStartRecovery={() => {
-                    // For now, navigate to guide with recovery focus
-                    // Will be enhanced in later phases
-                    alertModal({
-                      title: "Coming Soon",
-                      message: "Recovery mode will be available in a future update!",
-                      variant: "info",
-                    });
-                  }}
+                  onStartRecovery={() => setShowRecoveryModal(true)}
                 />
               </motion.div>
             )}
@@ -1031,6 +1038,7 @@ export default function HomePage() {
             <ReviewModal
               dueCards={dueCards}
               totalCards={cards}
+              maxDailyReviews={maxDailyReviews}
               onClose={() => setShowReviewModal(false)}
               onStart={handleStartReview}
               onRescheduled={() => {
@@ -1078,11 +1086,25 @@ export default function HomePage() {
             <PreferencesModal
               currentTheme={theme}
               keyboardShortcutsEnabled={keyboardShortcutsEnabled}
+              maxDailyReviews={maxDailyReviews}
               onClose={() => setShowPreferencesModal(false)}
               onChanged={(newPrefs) => {
                 setShowPreferencesModal(false);
                 setKeyboardShortcutsEnabled(newPrefs.keyboardShortcutsEnabled);
                 setTheme(newPrefs.defaultTheme);
+                setMaxDailyReviews(newPrefs.maxDailyReviews);
+                syncFromApi(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showRecoveryModal && (
+            <RecoveryModeModal
+              onClose={() => setShowRecoveryModal(false)}
+              onChanged={() => {
+                syncFromApi(false);
               }}
             />
           )}
