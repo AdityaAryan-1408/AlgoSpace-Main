@@ -155,6 +155,18 @@ export async function getSmartNudges(
             pacing.remainingDays,
             status,
           ));
+          const projectionNudge = generatePaceProjectionNudge(
+            goal.id,
+            goal.title,
+            metricKey,
+            actualPace,
+            remainingWork,
+            pacing.remainingDays,
+            "problems",
+          );
+          if (projectionNudge) {
+            nudges.push(projectionNudge);
+          }
         }
 
         if (metricKey === "retained_pct") {
@@ -196,6 +208,18 @@ export async function getSmartNudges(
             status,
             unitStr
           ));
+          const projectionNudge = generatePaceProjectionNudge(
+            goal.id,
+            goal.title,
+            metricKey,
+            actualPace,
+            remainingWork,
+            pacing.remainingDays,
+            unitStr,
+          );
+          if (projectionNudge) {
+            nudges.push(projectionNudge);
+          }
         }
       }
     }
@@ -456,6 +480,49 @@ function generateChecklistPaceNudges(
   }
 
   return nudges;
+}
+
+function generatePaceProjectionNudge(
+  goalId: string,
+  goalTitle: string,
+  metricKey: string,
+  actualPace: number,
+  remainingWork: number,
+  remainingDays: number,
+  unit: string,
+): SmartNudge | null {
+  if (remainingWork <= 0 || actualPace <= 0) return null;
+
+  const estimatedDays = remainingWork / actualPace;
+  const diff = remainingDays - estimatedDays;
+
+  // Round to 1 decimal place
+  const diffRounded = Math.round(Math.abs(diff) * 10) / 10;
+  const daysText = diffRounded === 1 ? "1 day" : `${diffRounded} days`;
+
+  if (diff > 0.1) {
+    return {
+      id: `pace-projection-${metricKey}-${goalId}`,
+      goalId,
+      category: "celebration",
+      priority: "info",
+      metricKey,
+      message: `At your current pace of ${actualPace} ${unit}/day, you can complete "${goalTitle}" about ${daysText} before the set date.`,
+      value: actualPace,
+    };
+  } else if (diff < -0.1) {
+    return {
+      id: `pace-projection-${metricKey}-${goalId}`,
+      goalId,
+      category: "solve_pace",
+      priority: "warning",
+      metricKey,
+      message: `At your current pace of ${actualPace} ${unit}/day, you will finish "${goalTitle}" about ${daysText} after the set date.`,
+      value: actualPace,
+    };
+  }
+
+  return null;
 }
 
 function generateWeaknessNudges(weakSpots: WeakSpot[]): SmartNudge[] {

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
-import { Plus, Loader2, Github, X } from "lucide-react";
-import { createCard, updateCard } from "@/lib/client-api";
-import type { Difficulty, CardType } from "@/data";
+import { Plus, Loader2, Github, X, ChevronLeft, ChevronRight, CalendarDays, Calendar as CalendarIcon } from "lucide-react";
+import { createCard, updateCard, fetchAllCards } from "@/lib/client-api";
+import type { Difficulty, CardType, Flashcard } from "@/data";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
+import { motion, AnimatePresence } from "motion/react";
 
 export interface AddCardFormDefaults {
     type?: CardType;
@@ -29,6 +30,7 @@ interface AddCardFormProps {
     submitLabel?: string;
     mode?: "add" | "edit";
     cardId?: string;
+    cards?: Flashcard[];
 }
 
 export function AddCardForm({
@@ -38,6 +40,7 @@ export function AddCardForm({
     submitLabel = "Add Card",
     mode = "add",
     cardId,
+    cards,
 }: AddCardFormProps) {
     // SQL cards share the same code-oriented form layout as DSA cards
     const isCodeCard = cardType === "leetcode" || cardType === "sql";
@@ -79,6 +82,134 @@ export function AddCardForm({
     const [scrapeSuccess, setScrapeSuccess] = useState(false);
     const [scrapeFailed, setScrapeFailed] = useState(false);
     const [editorKey, setEditorKey] = useState("editor-desc-init");
+
+    const [fetchedCards, setFetchedCards] = useState<Flashcard[]>([]);
+    const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+    const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
+    const [showDueCalendar, setShowDueCalendar] = useState(false);
+
+    useEffect(() => {
+        if (!cards || cards.length === 0) {
+            fetchAllCards()
+                .then(setFetchedCards)
+                .catch(err => console.error("Failed to load cards for calendar:", err));
+        }
+    }, [cards]);
+
+    const activeCards = cards && cards.length > 0 ? cards : fetchedCards;
+
+    // Group cards by due date (YYYY-MM-DD)
+    const cardsByDate = useMemo(() => {
+        const map = new Map<string, number>();
+        activeCards.forEach(card => {
+            let date: Date;
+            if (card.nextReview) {
+                date = new Date(card.nextReview);
+            } else {
+                date = new Date();
+                date.setDate(date.getDate() + (card.dueInDays || 0));
+            }
+            
+            if (isNaN(date.getTime())) return;
+            
+            const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            map.set(dateStr, (map.get(dateStr) || 0) + 1);
+        });
+        
+        return map;
+    }, [activeCards]);
+
+    const getDaysInMonth = (year: number, month: number) => {
+        return new Date(year, month + 1, 0).getDate();
+    };
+
+    const getFirstDayOfMonth = (year: number, month: number) => {
+        return new Date(year, month, 1).getDay();
+    };
+
+    const nextCalendarMonth = () => {
+        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
+    };
+
+    const prevCalendarMonth = () => {
+        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
+    };
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const dayNames = ["S", "M", "T", "W", "T", "F", "S"];
+
+    const renderCalendarDays = () => {
+        const year = calendarMonth.getFullYear();
+        const month = calendarMonth.getMonth();
+        const daysInMonth = getDaysInMonth(year, month);
+        const firstDay = getFirstDayOfMonth(year, month);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const days = [];
+
+        // Empty cells for padding before start of month
+        for (let i = 0; i < firstDay; i++) {
+            days.push(<div key={`empty-${i}`} className="w-8 h-8" />);
+        }
+
+        // Days of month
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dueCount = cardsByDate.get(dateStr) || 0;
+            const dayDate = new Date(year, month, d);
+            dayDate.setHours(0, 0, 0, 0);
+
+            const isPast = dayDate < today;
+            const isToday = dayDate.getTime() === today.getTime();
+            const isSelected = selectedCalendarDate && selectedCalendarDate.getTime() === dayDate.getTime();
+
+            // Workload coloring
+            let workloadClass = "text-foreground hover:bg-muted";
+            if (isPast) {
+                workloadClass = "text-muted-foreground/30 cursor-not-allowed";
+            } else if (dueCount > 0) {
+                if (dueCount > 20) {
+                    workloadClass = "bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/30";
+                } else if (dueCount > 10) {
+                    workloadClass = "bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 hover:bg-orange-500/30";
+                } else if (dueCount > 5) {
+                    workloadClass = "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/30";
+                } else {
+                    workloadClass = "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30";
+                }
+            }
+
+            if (isToday) {
+                workloadClass += " ring-1 ring-primary ring-offset-1 ring-offset-background";
+            }
+            if (isSelected) {
+                workloadClass += " ring-2 ring-cyan-500 ring-offset-1 ring-offset-background bg-cyan-500/10";
+            }
+
+            days.push(
+                <button
+                    key={`day-${d}`}
+                    type="button"
+                    disabled={isPast}
+                    onClick={() => {
+                        setSelectedCalendarDate(dayDate);
+                        const diffTime = dayDate.getTime() - today.getTime();
+                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                        setCustomDays(diffDays.toString());
+                    }}
+                    className={`w-8 h-8 rounded-lg flex flex-col items-center justify-center p-0 text-[10px] font-semibold transition-all relative cursor-pointer ${workloadClass}`}
+                >
+                    <span>{d}</span>
+                    {!isPast && dueCount > 0 && (
+                        <span className="text-[7px] font-extrabold leading-none mt-[-1px] opacity-90">{dueCount}</span>
+                    )}
+                </button>
+            );
+        }
+
+        return days;
+    };
 
     const handleLeetCodeScrape = async () => {
         if (!title.trim()) return;
@@ -494,7 +625,12 @@ export function AddCardForm({
                       ].map((opt) => (
                           <button
                               key={opt.value}
-                              onClick={() => setReviewInDays(opt.value)}
+                              type="button"
+                              onClick={() => {
+                                  setReviewInDays(opt.value);
+                                  setShowDueCalendar(false);
+                                  setSelectedCalendarDate(null);
+                              }}
                               className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all cursor-pointer ${reviewInDays === opt.value
                                   ? "bg-blue-500/10 text-blue-500 border-blue-500/40"
                                   : "border-border text-muted-foreground hover:border-foreground/30"
@@ -514,7 +650,82 @@ export function AddCardForm({
                               placeholder="Number of days"
                               className={`${inputCls} max-w-50`}
                           />
-                          <span className="text-sm text-muted-foreground">days</span>
+                          <span className="text-sm text-muted-foreground mr-1">days</span>
+                          
+                          <div className="relative shrink-0">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowDueCalendar(!showDueCalendar)}
+                              className={`rounded-full p-1.5 h-8 w-8 flex items-center justify-center shrink-0 ${showDueCalendar ? "border-cyan-500 text-cyan-500 bg-cyan-500/5" : ""}`}
+                              title="Show due workload calendar"
+                            >
+                              <CalendarIcon className="w-3.5 h-3.5" />
+                            </Button>
+                            <AnimatePresence>
+                              {showDueCalendar && (
+                                <>
+                                  <div 
+                                    className="fixed inset-0 z-40 cursor-default" 
+                                    onClick={() => setShowDueCalendar(false)} 
+                                  />
+                                  <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    className="absolute bottom-full right-0 mb-2 w-64 bg-card border border-border rounded-2xl shadow-xl p-3 z-50 flex flex-col gap-2 cursor-default text-left"
+                                  >
+                                    <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={prevCalendarMonth}
+                                        className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                      >
+                                        <ChevronLeft className="w-3.5 h-3.5" />
+                                      </button>
+                                      <span className="text-xs font-bold text-foreground">
+                                        {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={nextCalendarMonth}
+                                        className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                      >
+                                        <ChevronRight className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
+                                      {dayNames.map((dName, idx) => (
+                                        <div key={`dayname-${idx}`}>{dName}</div>
+                                      ))}
+                                    </div>
+
+                                    <div className="grid grid-cols-7 gap-1">
+                                      {renderCalendarDays()}
+                                    </div>
+
+                                    {selectedCalendarDate ? (() => {
+                                      const today = new Date();
+                                      today.setHours(0, 0, 0, 0);
+                                      const diffTime = selectedCalendarDate.getTime() - today.getTime();
+                                      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                                      return (
+                                        <div className="text-[10px] text-cyan-500 font-semibold text-center border-t border-border/50 pt-1.5">
+                                          Selected: {diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow (1 day away)" : `${diffDays} days away`}
+                                        </div>
+                                      );
+                                    })() : (
+                                      <div className="text-[9px] text-muted-foreground text-center border-t border-border/50 pt-1.5 font-medium">
+                                        Click a day to check days offset
+                                      </div>
+                                    )}
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
                       </div>
                   )}
               </div>

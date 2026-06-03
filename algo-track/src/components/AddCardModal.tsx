@@ -5,14 +5,15 @@ import { Button } from "@/components/ui/Button";
 import { X, Code, BookOpen, Database, GripVertical } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { AddCardForm } from "@/components/AddCardForm";
-import type { CardType } from "@/data";
+import type { CardType, Flashcard } from "@/data";
 
 interface AddCardModalProps {
     onClose: () => void;
     onAdded: () => void;
+    cards?: Flashcard[];
 }
 
-export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
+export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
     const dragControls = useDragControls();
     const backdropRef = useRef<HTMLDivElement>(null);
     const [step, setStep] = useState<"choose" | "form">("choose");
@@ -144,6 +145,7 @@ export function AddCardModal({ onClose, onAdded }: AddCardModalProps) {
                         <AddCardForm
                             cardType={cardType}
                             onSubmitted={handleSubmitted}
+                            cards={cards}
                         />
                     )}
                 </div>

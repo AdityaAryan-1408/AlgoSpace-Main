@@ -1054,6 +1054,7 @@ export default function HomePage() {
             <AddCardModal
               onClose={() => setShowAddCardModal(false)}
               onAdded={() => syncFromApi(false)}
+              cards={cards}
             />
           )}
         </AnimatePresence>

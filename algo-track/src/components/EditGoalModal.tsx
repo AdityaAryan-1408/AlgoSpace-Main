@@ -264,7 +264,7 @@ export function EditGoalModal({ goal, onClose, onUpdated }: Props) {
                         type="number"
                         value={item.remaining}
                         onChange={(e) => handleItemCountChange(idx, "remaining", e.target.value)}
-                        className="w-10 px-1 py-0.5 text-center bg-card border border-border rounded text-[10px] font-bold focus:outline-none"
+                        className="w-12 h-7 text-center bg-background/50 border border-border/60 rounded-lg text-xs font-bold text-foreground focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/30 transition-all no-spinner"
                         min="0"
                         max={item.total}
                       />
@@ -276,7 +276,7 @@ export function EditGoalModal({ goal, onClose, onUpdated }: Props) {
                         type="number"
                         value={item.total}
                         onChange={(e) => handleItemCountChange(idx, "total", e.target.value)}
-                        className="w-10 px-1 py-0.5 text-center bg-card border border-border rounded text-[10px] font-bold focus:outline-none"
+                        className="w-12 h-7 text-center bg-background/50 border border-border/60 rounded-lg text-xs font-bold text-foreground focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/30 transition-all no-spinner"
                         min="1"
                       />
                     </div>
@@ -307,7 +307,7 @@ export function EditGoalModal({ goal, onClose, onUpdated }: Props) {
                   placeholder="Add task title, e.g. Watch videos"
                   value={newItemTitle}
                   onChange={(e) => setNewItemTitle(e.target.value)}
-                  className="flex-1 px-3 py-1.5 bg-card border border-border rounded-xl text-xs focus:outline-none"
+                  className="flex-1 px-3 py-1.5 bg-background/50 border border-border/60 rounded-lg text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/30 transition-all"
                 />
               </div>
               <div className="flex gap-2 items-center justify-between">
@@ -317,7 +317,7 @@ export function EditGoalModal({ goal, onClose, onUpdated }: Props) {
                     type="number"
                     value={newItemTotal}
                     onChange={(e) => setNewItemTotal(e.target.value)}
-                    className="w-12 px-1.5 py-1 text-center bg-card border border-border rounded-xl text-xs font-semibold focus:outline-none"
+                    className="w-12 h-7 text-center bg-background/50 border border-border/60 rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/30 transition-all no-spinner"
                     min="1"
                   />
                   <input
@@ -325,7 +325,7 @@ export function EditGoalModal({ goal, onClose, onUpdated }: Props) {
                     value={newItemUnit}
                     onChange={(e) => setNewItemUnit(e.target.value)}
                     placeholder="unit"
-                    className="w-16 px-1.5 py-1 text-center bg-card border border-border rounded-xl text-xs focus:outline-none placeholder:text-muted-foreground/30"
+                    className="w-16 h-7 text-center bg-background/50 border border-border/60 rounded-lg text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/30 transition-all"
                   />
                 </div>
                 <Button
@@ -356,6 +356,16 @@ export function EditGoalModal({ goal, onClose, onUpdated }: Props) {
             </Button>
           </div>
         </form>
+        <style>{`
+          .no-spinner::-webkit-outer-spin-button,
+          .no-spinner::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+          }
+          .no-spinner {
+            -moz-appearance: textfield;
+          }
+        `}</style>
       </motion.div>
     </div>,
     document.body
