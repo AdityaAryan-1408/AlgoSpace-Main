@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Plus, Loader2, Github, X, ChevronLeft, ChevronRight, CalendarDays, Calendar as CalendarIcon } from "lucide-react";
 import { createCard, updateCard, fetchAllCards } from "@/lib/client-api";
@@ -87,6 +88,8 @@ export function AddCardForm({
     const [calendarMonth, setCalendarMonth] = useState(() => new Date());
     const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
     const [showDueCalendar, setShowDueCalendar] = useState(false);
+    const calendarBtnRef = useRef<HTMLButtonElement>(null);
+    const [calendarRect, setCalendarRect] = useState<DOMRect | null>(null);
 
     useEffect(() => {
         if (!cards || cards.length === 0) {
@@ -611,7 +614,7 @@ export function AddCardForm({
 
             {/* First Review Timing (Only for New Cards) */}
             {mode === "add" && (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 relative z-20">
                   <label className="text-sm font-medium text-foreground">
                       First Review In
                   </label>
@@ -652,80 +655,95 @@ export function AddCardForm({
                           />
                           <span className="text-sm text-muted-foreground mr-1">days</span>
                           
-                          <div className="relative shrink-0">
-                            <Button
+                          <Button
+                              ref={calendarBtnRef}
                               type="button"
                               size="sm"
                               variant="outline"
-                              onClick={() => setShowDueCalendar(!showDueCalendar)}
+                              onClick={() => {
+                                if (!showDueCalendar && calendarBtnRef.current) {
+                                  setCalendarRect(calendarBtnRef.current.getBoundingClientRect());
+                                }
+                                setShowDueCalendar(!showDueCalendar);
+                              }}
                               className={`rounded-full p-1.5 h-8 w-8 flex items-center justify-center shrink-0 ${showDueCalendar ? "border-cyan-500 text-cyan-500 bg-cyan-500/5" : ""}`}
                               title="Show due workload calendar"
                             >
                               <CalendarIcon className="w-3.5 h-3.5" />
-                            </Button>
+                          </Button>
+                          {showDueCalendar && createPortal(
                             <AnimatePresence>
-                              {showDueCalendar && (
-                                <>
-                                  <div 
-                                    className="fixed inset-0 z-40 cursor-default" 
-                                    onClick={() => setShowDueCalendar(false)} 
-                                  />
-                                  <motion.div
-                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    className="absolute bottom-full right-0 mb-2 w-64 bg-card border border-border rounded-2xl shadow-xl p-3 z-50 flex flex-col gap-2 cursor-default text-left"
-                                  >
-                                    <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={prevCalendarMonth}
-                                        className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                                      >
-                                        <ChevronLeft className="w-3.5 h-3.5" />
-                                      </button>
-                                      <span className="text-xs font-bold text-foreground">
-                                        {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={nextCalendarMonth}
-                                        className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                                      >
-                                        <ChevronRight className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-[9998] cursor-default" 
+                                  onClick={() => setShowDueCalendar(false)} 
+                                />
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  className="fixed z-[9999] w-64 bg-card border border-border rounded-2xl shadow-2xl p-3 flex flex-col gap-2 cursor-default text-left"
+                                  style={calendarRect ? (() => {
+                                    const CALENDAR_H = 340;
+                                    const spaceAbove = calendarRect.top;
+                                    const placeAbove = spaceAbove >= CALENDAR_H + 8;
+                                    return {
+                                      top: placeAbove ? undefined : `${calendarRect.bottom + 8}px`,
+                                      bottom: placeAbove ? `${window.innerHeight - calendarRect.top + 8}px` : undefined,
+                                      left: `${Math.max(8, calendarRect.left + calendarRect.width / 2 - 128)}px`,
+                                    };
+                                  })() : undefined}
+                                >
+                                  <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={prevCalendarMonth}
+                                      className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    >
+                                      <ChevronLeft className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="text-xs font-bold text-foreground">
+                                      {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={nextCalendarMonth}
+                                      className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    >
+                                      <ChevronRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
 
-                                    <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
-                                      {dayNames.map((dName, idx) => (
-                                        <div key={`dayname-${idx}`}>{dName}</div>
-                                      ))}
-                                    </div>
+                                  <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
+                                    {dayNames.map((dName, idx) => (
+                                      <div key={`dayname-${idx}`}>{dName}</div>
+                                    ))}
+                                  </div>
 
-                                    <div className="grid grid-cols-7 gap-1">
-                                      {renderCalendarDays()}
-                                    </div>
+                                  <div className="grid grid-cols-7 gap-1">
+                                    {renderCalendarDays()}
+                                  </div>
 
-                                    {selectedCalendarDate ? (() => {
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
-                                      const diffTime = selectedCalendarDate.getTime() - today.getTime();
-                                      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                                      return (
-                                        <div className="text-[10px] text-cyan-500 font-semibold text-center border-t border-border/50 pt-1.5">
-                                          Selected: {diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow (1 day away)" : `${diffDays} days away`}
-                                        </div>
-                                      );
-                                    })() : (
-                                      <div className="text-[9px] text-muted-foreground text-center border-t border-border/50 pt-1.5 font-medium">
-                                        Click a day to check days offset
+                                  {selectedCalendarDate ? (() => {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const diffTime = selectedCalendarDate.getTime() - today.getTime();
+                                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                                    return (
+                                      <div className="text-[10px] text-cyan-500 font-semibold text-center border-t border-border/50 pt-1.5">
+                                        Selected: {diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow (1 day away)" : `${diffDays} days away`}
                                       </div>
-                                    )}
-                                  </motion.div>
-                                </>
-                              )}
-                            </AnimatePresence>
-                          </div>
+                                    );
+                                  })() : (
+                                    <div className="text-[9px] text-muted-foreground text-center border-t border-border/50 pt-1.5 font-medium">
+                                      Click a day to check days offset
+                                    </div>
+                                  )}
+                                </motion.div>
+                              </>
+                            </AnimatePresence>,
+                            document.body
+                          )}
                       </div>
                   )}
               </div>

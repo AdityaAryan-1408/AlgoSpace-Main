@@ -1218,7 +1218,7 @@ export function ReviewSession({
                         <CalendarDays className="w-3 h-3" />
                         Custom
                       </Button>
-                      <div className="relative">
+                      <div className={`relative ${showDueCalendar ? "z-50" : ""}`}>
                         <Button
                           size="sm"
                           variant="outline"
