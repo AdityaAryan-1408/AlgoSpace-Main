@@ -1,0 +1,313 @@
+ ================================================================================
+                    ALGOSPACE: THE ULTIMATE TECHNICAL STUDY HUB
+             Complete System Architecture & Feature Pitch Blueprint
+================================================================================
+
+AlgoSpace is a premium, high-performance, spaced-repetition study ecosystem engineered
+specifically for software engineers, competitive programmers, and technical interview candidates. 
+Unlike standard flashcard apps (like Anki) or static study platforms (like LeetCode), 
+AlgoSpace bridges the gap between active recall, spatial coding intuition, AI-driven feedback, 
+and low-friction developer workflows.
+
+This document details every single system feature, architectural concept, study tool, 
+and integrated utility built into the AlgoSpace platform. Use this blueprint to present, 
+pitch, and showcase the immense depth and completeness of the product.
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS:
+--------------------------------------------------------------------------------
+1. CORE CONCEPTS & SYSTEM ARCHITECTURE
+2. SPACED REPETITION QUEUE & ADVANCED STUDY FLOW (PAUSING & RESHUFFLING)
+3. ZERO-FRICTION CAPTURE (LEETCODE BROWSER EXTENSION & SCRAPER)
+4. AI-POWERED STUDY COACH & REVIEWING UTILITIES
+5. CODE EVOLUTION DIFF & HABIT CHECKING SYSTEM
+6. RICH WORKSPACE & INTUITIVE INTERACTIVE GRAPHICS (WHITEBOARDS & NOTES)
+7. FLEXIBLE GOALS TRACKER & ACCOUNTABILITY CORE
+8. EXHAUSTIVE DIRECTORY OF THE 23 AUXILIARY TRAINING HUB MODES
+9. SPECIALIZED MODULES: FOR BEGINNERS (MENTAL MODELS) & VETERANS (CAREER GROW)
+10. SMTP EMAIL NOTIFICATIONS & CONFLICT-FREE SYNC UTILITIES
+
+================================================================================
+1. CORE CONCEPTS & SYSTEM ARCHITECTURE
+================================================================================
+
+AlgoSpace is designed around two main structural pillars: absolute developer-centric utility
+and zero-friction muscle memory retention.
+
+* TWIN-APP SYSTEM ARCHITECTURE
+  The platform operates under a shared backend, split-client ecosystem:
+  - Local App (Passcode-Protected, Offline-First PWA):
+    A high-entropy local PWA secured by an AuthBarrier and a glassmorphic Lock Screen. 
+    It is optimized for high-speed personal review with immediate local device access. 
+    All server queries inject an environment-secured "x-app-password" header.
+  - Public Clone (OAuth-Enabled SaaS App):
+    A cloud-connected mirror of the platform using NextAuth / Supabase Auth (Google, 
+    GitHub, and Email OAuth). This allows peers, friends, or interviewers to use the 
+    exact same codebase and infrastructure, isolating their data under secure multi-tenancy.
+  
+* MULTI-TENANT DATABASE LAYER & ROW-LEVEL SECURITY (RLS)
+  Powered by Supabase (PostgreSQL), all tables (cards, reviews, goals, chat_threads) 
+  are protected using Row-Level Security. Data isolation is maintained strictly through
+  user_id mappings. The passcode-locked Local App references a static "Admin Profile UUID,"
+  while public users are assigned dynamic PostgreSQL users bound to their OAuth accounts.
+
+* CHANGE-TRACKING VECTOR & OFFLINE DETERMINISTIC SYNC
+  Inside the local client, an offline-first cache operates using device IndexedDB. 
+  Mutations are recorded using a `sync_status` flag ('synced' | 'pending_insert' | 
+  'pending_update' | 'pending_delete') and a `last_modified_at` epoch timestamp. 
+  When the user re-connects or triggers a manual sync, a deterministic conflict resolution 
+  protocol replays local modifications to the cloud backend.
+
+================================================================================
+2. SPACED REPETITION QUEUE & ADVANCED STUDY FLOW (PAUSING & RESHUFFLING)
+================================================================================
+
+Spaced repetition only works if users can control their review load. AlgoSpace introduces
+fine-grained administrative actions to stop backlog anxiety.
+
+* GLOBAL & SELECTIVE TOPIC PAUSING CONTROLS ("GlobalPauseModal")
+  When life gets busy, or a user needs to specialize on a specific domain, they can activate
+  customizable review pause gates:
+  - Global Freeze: Halts all card scheduled intervals instantly without resetting historical 
+    review intervals or streak data.
+  - Selective Tag/Topic Pausing: Allows pausing specific sub-folders or cards based on tags 
+    (e.g., pause all "Dynamic Programming" cards because the target company doesn't ask them, 
+    while keeping "Linked Lists" active).
+  - Customizable Reschedule Selection: Easily push cards back or advance their due dates 
+    without clunky calendar datepickers, using streamlined quick-reschedule triggers.
+
+* RESHUFFLING & QUEUE REDISTRIBUTION UTILITIES ("shuffle_all")
+  - Fisher-Yates "Shuffle & Spread" Staggering (7 cards/day): 
+    If a user accumulates a massive backlog (e.g., 200 overdue cards), they can trigger 
+    a total reshuffle. The algorithm shuffles all active cards randomly and spreads them 
+    out evenly at a standard pace (default: 7 cards/day). This lets users work through 
+    accumulated debt calmly without feeling overwhelmed by a single-day queue block.
+  - Dynamic Queue Shuffling during Sessions: 
+    When starting a practice block, users can choose the "🎲 Random" mode inside the review modal. 
+    It shuffles and serves a customizable card count from the due pool, eliminating 
+    positional recall bias (remembering solutions simply because they appeared next to a similar problem).
+
+================================================================================
+3. ZERO-FRICTION CAPTURE (LEETCODE BROWSER EXTENSION & SCRAPER)
+================================================================================
+
+Copy-pasting problem titles and descriptions destroys learning habits. AlgoSpace uses a 
+bespoke browser extension companion.
+
+* MUTATIONOBSERVER AUTOMATION & SCROLL CAPTURE (Chrome & Firefox manifest-ready)
+  The AlgoSpace background content script injects seamlessly into leetcode.com/problems/*.
+  It uses a lightweight MutationObserver that observes DOM state changes. 
+  As soon as the user presses submit and LeetCode shows a green "Accepted ✓" banner, 
+  the extension triggers.
+
+* CLOUDFLARE BYPASSING CLIENT-SIDE DOM SCRAPING
+  Instead of hitting server-side GraphQL gateways (which are routinely throttled or blocked 
+  by Cloudflare security checks), the extension scrapes directly in the client's authenticated window.
+  It extracts:
+  - Exact Problem Title & Number (e.g., "875. Koko Eating Bananas")
+  - Direct Canonical URL (stripped of query params)
+  - Difficulty Category (easy, medium, hard) parsed via class targets
+  - Algorithm/Data Structure Tags (e.g., "Binary Search", "Monotonic Stack")
+
+* PRE-FILLED ONE-CLICK IMPORT FLOW
+  The extension displays an elegant CSS-injected, auto-dismissing card popup: "Problem Accepted. 
+  Log to AlgoSpace?" Clicking "Save" deep-links the user to the web application's `/add` route.
+  The route automatically pre-fills all card fields (including auto-detecting SQL queries vs. DSA 
+  problems by checking for 'Database' tags), letting the user create a structured study card 
+  in less than 2 seconds.
+
+================================================================================
+4. AI-POWERED STUDY COACH & REVIEWING UTILITIES
+================================================================================
+
+Reviewing code shouldn't be a passive "read the answer" process. AlgoSpace acts as an 
+interactive AI-driven coding mentor.
+
+* SOCRATIC HELPER ("CoachChat.tsx")
+  Powered by LLM APIs (e.g., Groq Llama/DeepSeek), users can chat with an AI coach during 
+  a review. The coach is programmed to follow Socratic pedagogy: it will not write the solution 
+  for you. Instead, it reviews your current syntax, spots logical edge cases, and guides 
+  you with subtle hints.
+
+* THE FEYNMAN AUDIO RECORDING & WHISPER TECHNIQUE ("FeynmanRecorder.tsx")
+  To replicate a real-world tech interview:
+  - The user explains their algorithm approach vocally by holding down an on-screen record button.
+  - The app captures clean microphone audio, streams it to a fast transcription service (Whisper), 
+    and presents the transcript.
+  - The AI grades the transcription on vocal structure, algorithmic accuracy, and Big-O articulation, 
+    teaching developers to "talk and code" under pressure.
+
+* VAGUE INTERVIEWER SIMULATOR ("VagueInterviewer.tsx")
+  In real interviews, problems are rarely defined perfectly. This simulator locks the exact 
+  problem description and leaves the user with an ambiguous prompt (e.g., "We need to quickly 
+  identify duplicate transactions"). The user must converse with the AI interviewer, 
+  asking clarifying questions to discover constraints (e.g., memory limits, maximum array size, 
+  input types) before the code editor unlocks.
+
+* AI-GENERATED PERSONAL ANTI-PATTERNS ENGINE ("AntiPatterns.tsx")
+  The AI monitors code submitted across reviews. Over time, it maps custom user bad habits 
+  (e.g., neglecting array boundary checks, poor memory allocation, inefficient pointer moves). 
+  It then automatically creates custom practice cards: "You tend to forget null checks on Tree nodes. 
+  Find the missing check in this simulated code block."
+
+================================================================================
+5. CODE EVOLUTION DIFF & HABIT CHECKING SYSTEM
+================================================================================
+
+AlgoSpace preserves history so users can visually inspect their progress.
+
+* SIDE-BY-SIDE VISUAL GIT-STYLE DIFFS ("CodeEvolution.tsx")
+  Every time a user finishes a review card, their code is stored in the database. 
+  On the card dashboard, users can view a side-by-side split git diff comparing:
+  - Their initial, raw, naive solution (e.g., verbose nested loops).
+  - Their latest, highly polished, optimized execution (e.g., clean O(N) single-pointer sweeps).
+  This offers a powerful psychological boost by showing clear, measurable improvement over time.
+
+* AUTOMATIC REGRESSION ALERTS & HABIT CHECKING
+  If a user submits a review that uses an inferior time/space complexity than their previous 
+  submission, the AI coach flags it: "Warning: Your last solution achieved O(N) time. Your latest 
+  submission has regressed to O(N log N). Let's review the difference."
+
+================================================================================
+6. RICH WORKSPACE & INTUITIVE INTERACTIVE GRAPHICS (WHITEBOARDS & NOTES)
+================================================================================
+
+Technical recall requires spatial visual structures. The workspace is built for developer convenience.
+
+* EXTENDED MARKDOWN COMPOSER & DRAWER ("RichNotesEditor.tsx", "NotesDrawer.tsx")
+  Every card features an integrated rich-text Markdown workspace. It supports fully rendered 
+  headers, inline checklists, external links, syntax-highlighted code blocks, and toggleable drawers.
+  This allows users to store standard templates, optimized solutions, and visual cues.
+
+* INTEGRATED CANVAS DRAWING SYSTEM ("WhiteboardCanvas.tsx")
+  When reviewing graph or tree questions, users can open an overlay Excalidraw-style canvas. 
+  Before typing code, they can sketch nodes, trace array indices, and manually redraw pointers. 
+  This visual canvas is automatically auto-saved with the question record, allowing the user 
+  to access and edit past visual sketches during subsequent reviews.
+
+================================================================================
+7. FLEXIBLE GOALS TRACKER & ACCOUNTABILITY CORE
+================================================================================
+
+Streaks and metrics drive consistent daily study habits.
+
+* FLEXIBLE STRUCTURED GOALS ENGINE ("GoalsPlannerHub.tsx", "GoalsScreen.tsx")
+  Instead of simple "solve a card" goals, users can design multi-tiered objectives:
+  - Daily/Weekly/Monthly targets (e.g., "Complete 5 Arrays, 3 Trees, 1 Speedrun").
+  - Tracks specific practice types: conceptual reviews, code submissions, patterns, 
+    or speedruns.
+  - Interactive Goal Rings: Premium SVG animation dials that track completion rates 
+    for different categories.
+
+* MASTERY CONTRIBUTION HEATMAPS ("MasteryHeatmap.tsx")
+  Inspired by the GitHub contribution calendar, AlgoSpace renders a dynamic grid showing daily 
+  review volume. It colors cells based on activity levels, creating a visually rewarding 
+  representation of the user's hard work.
+
+* ADJUSTABLE MIDNIGHT RESET TIMERS (Late-Night Coding Protection)
+  Devs are night owls. The default midnight reset often ruins streaks for those coding at 1 AM. 
+  Users can adjust the day reset time (e.g., 3:00 AM), ensuring their streak stays intact 
+  even during late-night study sessions.
+
+================================================================================
+8. EXHAUSTIVE DIRECTORY OF THE 23 AUXILIARY TRAINING HUB MODES
+================================================================================
+
+AlgoSpace is packed with modular micro-games and training routines that target specific 
+technical interview skills:
+
+1. The Feynman Technique Mode (Audio Explanations): Vocally explain concepts; transcribes 
+   via Whisper and grades articulation and Big-O explanations.
+2. Constraint Shifters: Mutates mastered cards with new constraints (e.g., "Mastered DFS? 
+   Now do it with O(1) auxiliary space").
+3. Dry-Run / Mental Execution Flashcards: Traces code outputs from obscure arrays mentally, 
+   testing quick execution logic without compiling.
+4. Built-in Whiteboard / Canvas: Persistent canvas for drawing trees and nodes, auto-saved 
+   with each card.
+5. "Vague Interviewer" Simulator: Chat-based requirements gathering interface where details 
+   must be extracted via conversation.
+6. Atomic Big-O Drills: 3-second rapid recall flashcards focused solely on time/space 
+   complexity bounds.
+7. "Spot the Bug" Reverse Engineering Drills: Locate and fix logic errors or bottlenecks 
+   in 90% correct code templates under tight time limits.
+8. Rapid Pattern Identification Quizzes: 5-second quizzes to match problem prompts with 
+   patterns (e.g., Two Pointers, Monotonic Stack).
+9. Separate CS and DSA Dashboards: Tabbed interface to switch between theoretical CS cards 
+   and hands-on DSA problems.
+10. Evolution Diff & Habit Checking: Visual side-by-side git diff history comparing your 
+    very first code submission to your latest run.
+11. Company "Cram Mode" Rescheduler: Temporarily reprioritizes your review queue to feature 
+    patterns favored by a chosen company (e.g., Meta in 7 days).
+12. Code Golf & Idiomatic Polish Score: Scores code readability and elegance, recommending 
+    modern language idioms (e.g., Python comprehensions).
+13. Automatic Similar Question Detection: Displays similar problem cards (from your decks 
+    or online platforms) post-solve to reinforce pattern muscle memory.
+14. Stress Drill Mode (Distraction Simulator): A timed review with flashing alerts, ticking 
+    countdowns, and AI interrupts mimicking real high-pressure interviews.
+15. Implementation "Speedruns" (Muscle Memory Drills): Speed coding challenges for boilerplate 
+    code (BFS, Trie inserts) with WPM tracking under 60 seconds.
+16. AI-Generated "Personal Anti-Patterns": Auto-generated cards based on your repeated 
+    logic failures, forcing you to find your own typical bugs.
+17. RPG-Style "Knowledge Graph" Visualization: Satisfying interactive glowing tech tree 
+    that shows concept progression and unlocks (e.g., Two Pointers unlocks Sliding Window).
+18. The "Obfuscation" Refactoring Challenge: Scrambles past successful code variable names 
+    to single letters and strips comments, challenging you to refactor it back.
+19. Cross-Language Fluency Mode: Solves in Python first, then challenges you to translate 
+    the solution to Go or TS, checking for idiomatic language constructs.
+20. Offline-First Companion App (Capacitor + EAS): Light mobile client utilizing IndexedDB 
+    caches and sync capabilities.
+21. Global Sidebar Navigation (Hybrid UI): High-discoverability permanent sidebar 
+    working in tandem with a custom global Command Palette.
+22. "Rubber Duck" Logic Gate: Locks the code editor until you write a coherent plain-English 
+    plan and get AI approval.
+23. Live Complexity Sandbox (Visualizing Big-O): Runs code with N=10 to N=100,000, 
+    plotting execution times live on a graph and visually crashing on O(N^2) loops.
+
+================================================================================
+9. SPECIALIZED MODULES: FOR BEGINNERS & VETERANS
+================================================================================
+
+AlgoSpace is highly versatile, providing specialized toolsets for both beginners building 
+mental models and veterans polishing high-level career concepts.
+
+* FOR BEGINNERS (Mental Model Builders)
+  - Visual Memory Heap (Step-Debugger): Animated node manipulation showing pointers detaching 
+    and linking in real-time as the user steps through algorithms.
+  - "Explain Like I'm 5" (ELI5) Analogy Engine: Converts academic jargon (e.g., "hash collisions") 
+    into intuitive analogies (e.g., "organizing a library").
+  - Pseudo-Code / Logic-First Mode: Bypasses compilation errors, letting beginners focus 
+    on pure logic while the AI handles syntax and semicolon checks.
+
+* FOR VETERANS (Career Progression Grinders)
+  - Pull Request (PR) "Code Review" Mode: Evaluates hypothetical PRs written by junior devs, 
+    catching race conditions, N+1 query bottlenecks, or SQL injection risks.
+  - System Design & Architecture Flashcards: High-level system tracks focused on load balancers, 
+    Redis vs. Postgres trade-offs, and microservice architectures.
+  - "War Story" Outage Incident Simulator: Throws users into a production crisis dashboard 
+    with CPU spikes and log leaks, challenging them to diagnose root causes.
+  - Tooling & CLI Mastery Decks: Speed drills for daily tools: advanced Git rebase, Vim motions, 
+    regex filters, and Docker.
+
+================================================================================
+10. SMTP EMAIL NOTIFICATIONS & CONFLICT-FREE SYNC UTILITIES
+================================================================================
+
+The application features bulletproof integration pipelines that maintain user engagement.
+
+* BACKGROUND CRON WORKERS & EMAIL DISPATCH
+  Using Render / GitHub Actions schedulers, a background runner hits `/api/cron/weekly-summary` 
+  daily. It uses an environment-configured SMTP mailer (e.g., Gmail App Passwords) 
+  to automatically send update emails ("You have 15 cards due today", "Keep your 45-day streak alive!").
+  This API includes a secure header validation key (`x-cron-secret`) to prevent public spamming.
+
+* DETERMINISTIC CHANGE SYNCING
+  AlgoSpace resolves sync issues through a direct, transaction-safe approach. 
+  IndexedDB tracking flags local modifications. During sync, online edits are uploaded 
+  to Supabase, and new cloud changes are pulled down. The cloud remains the ultimate authority, 
+  ensuring data integrity across all devices.
+
+================================================================================
+           AlgoSpace merges spaced repetition with an advanced, 
+          AI-driven coding sandbox. It is the ultimate platform for 
+         anyone preparing for modern, competitive technical interviews.
+================================================================================

@@ -16,7 +16,7 @@ import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { useConfirmModal } from "@/components/ConfirmModal";
@@ -116,11 +116,130 @@ export function ReviewSession({
     );
     const [showCustomDate, setShowCustomDate] = useState(false);
     const [customDaysInput, setCustomDaysInput] = useState("");
+    const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+    const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
+    const [showDueCalendar, setShowDueCalendar] = useState(false);
     const cardStartTime = useRef(Date.now());
     const sessionStartTime = useRef(Date.now());
     const resultsRef = useRef<ReviewResult[]>([]);
     const completedRef = useRef(false);
     const [notesDrawerOpen, setNotesDrawerOpen] = useState(false);
+
+    // Group cards by due date (YYYY-MM-DD)
+    const cardsByDate = useMemo(() => {
+        const map = new Map<string, number>();
+        const cardsToUse = allCards || cards || [];
+        
+        cardsToUse.forEach(card => {
+            let date: Date;
+            if (card.nextReview) {
+                date = new Date(card.nextReview);
+            } else {
+                date = new Date();
+                date.setDate(date.getDate() + (card.dueInDays || 0));
+            }
+            
+            if (isNaN(date.getTime())) return;
+            
+            const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            map.set(dateStr, (map.get(dateStr) || 0) + 1);
+        });
+        
+        return map;
+    }, [allCards, cards]);
+
+    const getDaysInMonth = (year: number, month: number) => {
+        return new Date(year, month + 1, 0).getDate();
+    };
+
+    const getFirstDayOfMonth = (year: number, month: number) => {
+        return new Date(year, month, 1).getDay();
+    };
+
+    const nextCalendarMonth = () => {
+        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
+    };
+
+    const prevCalendarMonth = () => {
+        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
+    };
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const dayNames = ["S", "M", "T", "W", "T", "F", "S"];
+
+    const renderCalendarDays = () => {
+        const year = calendarMonth.getFullYear();
+        const month = calendarMonth.getMonth();
+        const daysInMonth = getDaysInMonth(year, month);
+        const firstDay = getFirstDayOfMonth(year, month);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const days = [];
+
+        // Empty cells for padding before start of month
+        for (let i = 0; i < firstDay; i++) {
+            days.push(<div key={`empty-${i}`} className="w-8 h-8" />);
+        }
+
+        // Days of month
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dueCount = cardsByDate.get(dateStr) || 0;
+            const dayDate = new Date(year, month, d);
+            dayDate.setHours(0, 0, 0, 0);
+
+            const isPast = dayDate < today;
+            const isToday = dayDate.getTime() === today.getTime();
+            const isSelected = selectedCalendarDate && selectedCalendarDate.getTime() === dayDate.getTime();
+
+            // Workload coloring
+            let workloadClass = "text-foreground hover:bg-muted";
+            if (isPast) {
+                workloadClass = "text-muted-foreground/30 cursor-not-allowed";
+            } else if (dueCount > 0) {
+                if (dueCount > 20) {
+                    workloadClass = "bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/30";
+                } else if (dueCount > 10) {
+                    workloadClass = "bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 hover:bg-orange-500/30";
+                } else if (dueCount > 5) {
+                    workloadClass = "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/30";
+                } else {
+                    workloadClass = "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30";
+                }
+            }
+
+            if (isToday) {
+                workloadClass += " ring-1 ring-primary ring-offset-1 ring-offset-background";
+            }
+            if (isSelected) {
+                workloadClass += " ring-2 ring-cyan-500 ring-offset-1 ring-offset-background bg-cyan-500/10";
+            }
+
+            days.push(
+                <button
+                    key={`day-${d}`}
+                    type="button"
+                    disabled={isPast}
+                    onClick={() => {
+                        setSelectedCalendarDate(dayDate);
+                        const diffTime = dayDate.getTime() - today.getTime();
+                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                        setCustomDaysInput(diffDays.toString());
+                        setShowCustomDate(true);
+                    }}
+                    className={`w-8 h-8 rounded-lg flex flex-col items-center justify-center p-0 text-[10px] font-semibold transition-all relative cursor-pointer ${workloadClass}`}
+                >
+                    <span>{d}</span>
+                    {!isPast && dueCount > 0 && (
+                        <span className="text-[7px] font-extrabold leading-none mt-[-1px] opacity-90">{dueCount}</span>
+                    )}
+                </button>
+            );
+        }
+
+        return days;
+    };
 
     // States for Concept Quizzer
     const [showConceptQuiz, setShowConceptQuiz] = useState(false);
@@ -296,6 +415,8 @@ export function ReviewSession({
             setSuggestedSubtopics([]);
             setIsQuizLoading(false);
             setQuizError("");
+            setSelectedCalendarDate(null);
+            setShowDueCalendar(false);
             cardStartTime.current = Date.now();
         } else {
             finishSession(newResults);
@@ -921,7 +1042,7 @@ export function ReviewSession({
                 animate={{ opacity: 1, y: 0, x: "-50%" }}
                 exit={{ opacity: 0, y: 80, x: "-50%" }}
                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-xl bg-card/85 dark:bg-card/75 backdrop-blur-xl border border-border/80 shadow-[0_15px_35px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 z-40 transition-all relative overflow-hidden"
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-xl bg-card/85 dark:bg-card/75 backdrop-blur-xl border border-border/80 shadow-[0_15px_35px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 z-40 transition-all relative"
               >
                 {!showAnswer ? (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
@@ -1097,6 +1218,80 @@ export function ReviewSession({
                         <CalendarDays className="w-3 h-3" />
                         Custom
                       </Button>
+                      <div className="relative">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowDueCalendar(!showDueCalendar)}
+                          disabled={isSubmitting}
+                          className={`rounded-full p-1.5 h-7 w-7 flex items-center justify-center shrink-0 ${showDueCalendar ? "border-cyan-500 text-cyan-500 bg-cyan-500/5" : ""}`}
+                          title="Show due workload calendar"
+                        >
+                          <CalendarIcon className="w-3.5 h-3.5" />
+                        </Button>
+                        <AnimatePresence>
+                          {showDueCalendar && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-40 cursor-default" 
+                                onClick={() => setShowDueCalendar(false)} 
+                              />
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-card border border-border rounded-2xl shadow-xl p-3 z-50 flex flex-col gap-2 cursor-default text-left"
+                              >
+                                <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={prevCalendarMonth}
+                                    className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                  >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                  </button>
+                                  <span className="text-xs font-bold text-foreground">
+                                    {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={nextCalendarMonth}
+                                    className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                  >
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
+                                  {dayNames.map((dName, idx) => (
+                                    <div key={`dayname-${idx}`}>{dName}</div>
+                                  ))}
+                                </div>
+
+                                <div className="grid grid-cols-7 gap-1">
+                                  {renderCalendarDays()}
+                                </div>
+
+                                {selectedCalendarDate ? (() => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const diffTime = selectedCalendarDate.getTime() - today.getTime();
+                                  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                                  return (
+                                    <div className="text-[10px] text-cyan-500 font-semibold text-center border-t border-border/50 pt-1.5">
+                                      Selected: {diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow (1 day away)" : `${diffDays} days away`}
+                                    </div>
+                                  );
+                                })() : (
+                                  <div className="text-[9px] text-muted-foreground text-center border-t border-border/50 pt-1.5 font-medium">
+                                    Click a day to check days offset
+                                  </div>
+                                )}
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       {canPauseCard(currentCard) && !isCardPaused(currentCard) && (
                         <Button
                           variant="ghost"
@@ -1156,7 +1351,7 @@ export function ReviewSession({
                 )}
 
                 {isSubmitting && (
-                  <div className="absolute inset-0 bg-background/60 backdrop-blur-md flex flex-col items-center justify-center gap-2 z-50 animate-in fade-in duration-200">
+                  <div className="absolute inset-0 bg-background/60 backdrop-blur-md flex flex-col items-center justify-center gap-2 z-50 rounded-2xl animate-in fade-in duration-200">
                     <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
                     <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Saving Review...</span>
                   </div>
