@@ -9,7 +9,7 @@ interface Props {
     onFiltered: (cards: Flashcard[]) => void;
 }
 
-type StatusFilter = "all" | "due" | "upcoming";
+type StatusFilter = "all" | "due" | "upcoming" | "reference";
 
 export function SearchFilter({ cards, onFiltered }: Props) {
     const [query, setQuery] = useState("");
@@ -47,9 +47,11 @@ export function SearchFilter({ cards, onFiltered }: Props) {
 
         // Status
         if (status === "due") {
-            result = result.filter((c) => c.dueInDays <= 0);
+            result = result.filter((c) => c.dueInDays <= 0 && c.metadata?.reference_only !== true);
         } else if (status === "upcoming") {
-            result = result.filter((c) => c.dueInDays > 0);
+            result = result.filter((c) => c.dueInDays > 0 && c.metadata?.reference_only !== true);
+        } else if (status === "reference") {
+            result = result.filter((c) => c.metadata?.reference_only === true);
         }
 
         // Tag
@@ -146,6 +148,7 @@ export function SearchFilter({ cards, onFiltered }: Props) {
                                     { key: "all", label: "All" },
                                     { key: "due", label: "Due Now" },
                                     { key: "upcoming", label: "Upcoming" },
+                                    { key: "reference", label: "Reference" },
                                 ] as const
                             ).map((s) => (
                                 <button

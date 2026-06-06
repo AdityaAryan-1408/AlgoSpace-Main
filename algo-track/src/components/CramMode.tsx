@@ -35,7 +35,7 @@ export function CramMode({ cards, onStartReview, onExit }: CramModeProps) {
     const [analysis, setAnalysis] = useState<CramAnalysis | null>(null);
     const [error, setError] = useState("");
 
-    const dsaCards = useMemo(() => cards.filter(c => c.type === "leetcode"), [cards]);
+    const dsaCards = useMemo(() => cards.filter(c => c.type === "leetcode" && c.metadata?.reference_only !== true), [cards]);
     const allTags = useMemo(() => {
         const tags = new Set<string>();
         dsaCards.forEach(c => c.tags.forEach(t => tags.add(t)));

@@ -22,6 +22,7 @@ export interface AddCardFormDefaults {
     timeComplexity?: string;
     spaceComplexity?: string;
     relatedProblems?: string;
+    metadata?: Record<string, unknown>;
 }
 
 interface AddCardFormProps {
@@ -76,6 +77,7 @@ export function AddCardForm({
     const [tagsInput, setTagsInput] = useState(defaults?.tags ?? "");
     const [reviewInDays, setReviewInDays] = useState(0);
     const [customDays, setCustomDays] = useState("");
+    const [isReferenceOnly, setIsReferenceOnly] = useState(defaults?.metadata?.reference_only === true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [syncStatus, setSyncStatus] = useState<"" | "syncing" | "synced" | "failed">("");
@@ -312,6 +314,10 @@ export function AddCardForm({
                         : undefined,
                 url:
                     isCodeCard && url.trim() ? url.trim() : undefined,
+                metadata: {
+                    ...(defaults?.metadata || {}),
+                    reference_only: isReferenceOnly ? true : undefined,
+                },
             };
 
             if (mode === "edit" && cardId) {
@@ -320,7 +326,7 @@ export function AddCardForm({
                 await createCard({
                     type: cardType,
                     ...payload,
-                    reviewInDays: finalDays > 0 ? finalDays : undefined,
+                    reviewInDays: isReferenceOnly ? undefined : (finalDays > 0 ? finalDays : undefined),
                 });
             }
 
@@ -612,8 +618,27 @@ export function AddCardForm({
                 </>
             )}
 
+            {/* Reference Card Toggle */}
+            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-muted/20 hover:bg-muted/30 transition-all select-none">
+                <input
+                    type="checkbox"
+                    id="isReferenceOnly"
+                    checked={isReferenceOnly}
+                    onChange={(e) => setIsReferenceOnly(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                />
+                <div className="flex flex-col text-left">
+                    <label htmlFor="isReferenceOnly" className="text-sm font-semibold text-foreground cursor-pointer">
+                        Keep as Reference Card
+                    </label>
+                    <span className="text-xs text-muted-foreground mt-0.5">
+                        Exclude this card from the daily review queue (it remains accessible and reviewable by topic)
+                    </span>
+                </div>
+            </div>
+
             {/* First Review Timing (Only for New Cards) */}
-            {mode === "add" && (
+            {mode === "add" && !isReferenceOnly && (
               <div className="flex flex-col gap-1.5 relative z-20">
                   <label className="text-sm font-medium text-foreground">
                       First Review In

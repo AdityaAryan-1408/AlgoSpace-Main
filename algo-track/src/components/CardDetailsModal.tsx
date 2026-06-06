@@ -3,14 +3,14 @@ import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 
 import type { Flashcard } from "@/data";
-import { updateCard, deleteCard, pauseCardReview, resumeCardReview } from "@/lib/client-api";
+import { updateCard, deleteCard, pauseCardReview, resumeCardReview, fetchAllCards } from "@/lib/client-api";
 import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical } from "lucide-react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 import { useConfirmModal } from "@/components/ConfirmModal";
@@ -19,12 +19,14 @@ import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
 
 interface CardDetailsModalProps {
   card: Flashcard | null;
+  allCards?: Flashcard[];
   onClose: () => void;
   onSaved: () => void;
 }
 
 export function CardDetailsModal({
   card,
+  allCards: propAllCards,
   onClose,
   onSaved,
 }: CardDetailsModalProps) {
@@ -42,6 +44,130 @@ export function CardDetailsModal({
   const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeOptions, setShowResumeOptions] = useState(false);
+  const [modalCalendarMonth, setModalCalendarMonth] = useState(() => new Date());
+  const [showModalCalendar, setShowModalCalendar] = useState(false);
+  const modalCalendarBtnRef = useRef<HTMLButtonElement>(null);
+  const [modalCalendarRect, setModalCalendarRect] = useState<DOMRect | null>(null);
+  const [fetchedCards, setFetchedCards] = useState<Flashcard[]>([]);
+
+  useEffect(() => {
+    if (!propAllCards || propAllCards.length === 0) {
+      fetchAllCards().then(setFetchedCards).catch(console.error);
+    }
+  }, [propAllCards]);
+
+  const allCards = propAllCards && propAllCards.length > 0 ? propAllCards : fetchedCards;
+
+  const isReference = card?.metadata?.reference_only === true;
+
+  const handleAddToQueue = async (days: number) => {
+    if (!card) return;
+    setIsResuming(true);
+    try {
+      const { reference_only, ...restMetadata } = card.metadata || {};
+      const nextDate = new Date();
+      nextDate.setHours(0, 0, 0, 0);
+      nextDate.setDate(nextDate.getDate() + days);
+
+      await updateCard(card.id, {
+        metadata: restMetadata,
+        nextReview: nextDate.toISOString(),
+        dueInDays: days
+      });
+      onSaved();
+    } catch (err) {
+      console.error("Failed to add card to review queue:", err);
+    } finally {
+      setIsResuming(false);
+      setShowResumeOptions(false);
+    }
+  };
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dayNames = ["S", "M", "T", "W", "T", "F", "S"];
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const nextModalCalendarMonth = () => setModalCalendarMonth(new Date(modalCalendarMonth.getFullYear(), modalCalendarMonth.getMonth() + 1, 1));
+  const prevModalCalendarMonth = () => setModalCalendarMonth(new Date(modalCalendarMonth.getFullYear(), modalCalendarMonth.getMonth() - 1, 1));
+
+  const renderModalCalendarDays = () => {
+    const year = modalCalendarMonth.getFullYear();
+    const month = modalCalendarMonth.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const cardsByDate = new Map<string, number>();
+    allCards.forEach(c => {
+      let d: Date;
+      if (c.nextReview) {
+        d = new Date(c.nextReview);
+      } else {
+        d = new Date();
+        d.setDate(d.getDate() + (c.dueInDays || 0));
+      }
+      if (isNaN(d.getTime())) return;
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      cardsByDate.set(dStr, (cardsByDate.get(dStr) || 0) + 1);
+    });
+
+    const days = [];
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="w-8 h-8" />);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dueCount = cardsByDate.get(dateStr) || 0;
+      const dayDate = new Date(year, month, d);
+      dayDate.setHours(0, 0, 0, 0);
+
+      const isPast = dayDate < today;
+      const isToday = dayDate.getTime() === today.getTime();
+
+      let workloadClass = "text-foreground hover:bg-muted";
+      if (isPast) {
+        workloadClass = "text-muted-foreground/30 cursor-not-allowed";
+      } else if (dueCount > 0) {
+        if (dueCount > 20) workloadClass = "bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/30";
+        else if (dueCount > 10) workloadClass = "bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 hover:bg-orange-500/30";
+        else if (dueCount > 5) workloadClass = "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/30";
+        else workloadClass = "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30";
+      }
+
+      if (isToday) {
+        workloadClass += " ring-1 ring-primary ring-offset-1 ring-offset-background";
+      }
+
+      days.push(
+        <button
+          key={`day-${d}`}
+          type="button"
+          disabled={isPast}
+          onClick={async () => {
+            setShowModalCalendar(false);
+            const diffTime = dayDate.getTime() - today.getTime();
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            if (isReference) {
+              await handleAddToQueue(diffDays);
+            } else {
+              await handleResume(diffDays);
+            }
+          }}
+          className={`w-8 h-8 rounded-lg flex flex-col items-center justify-center p-0 text-[10px] font-semibold transition-all relative cursor-pointer ${workloadClass}`}
+        >
+          <span>{d}</span>
+          {!isPast && dueCount > 0 && (
+            <span className="text-[7px] font-extrabold leading-none mt-[-1px] opacity-90">{dueCount}</span>
+          )}
+        </button>
+      );
+    }
+    return days;
+  };
 
   useEffect(() => {
     if (card) {
@@ -296,6 +422,7 @@ export function CardDetailsModal({
                 spaceComplexity: card.spaceComplexity || undefined,
                 relatedProblems: card.relatedProblems?.map(p => p.url ? `${p.title} | ${p.url}` : p.title).join("\n"),
                 url: card.url || undefined,
+                metadata: card.metadata,
               }}
             />
           </div>
@@ -528,7 +655,12 @@ export function CardDetailsModal({
                   Last reviewed:{" "}
                   <strong className="text-foreground">{card.lastReview}</strong>
                 </span>
-                {isCardPaused(card) ? (
+                {isReference ? (
+                  <span className="flex items-center gap-1 text-cyan-500">
+                    <BookOpen className="w-3 h-3" />
+                    <strong>Reference Card</strong>
+                  </span>
+                ) : isCardPaused(card) ? (
                   <span className="flex items-center gap-1 text-amber-500">
                     <Pause className="w-3 h-3" />
                     <strong>Reviews paused</strong>
@@ -542,7 +674,21 @@ export function CardDetailsModal({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isCardPaused(card) ? (
+              {isReference ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowResumeOptions(!showResumeOptions)}
+                  disabled={isResuming}
+                  className="text-cyan-500 hover:text-cyan-600 hover:bg-cyan-500/10 gap-1.5 rounded-full px-4"
+                >
+                  {isResuming ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  {isResuming ? "Processing..." : "Add to Review Queue"}
+                </Button>
+              ) : isCardPaused(card) ? (
                 <Button
                   variant="ghost"
                   onClick={() => setShowResumeOptions(!showResumeOptions)}
@@ -599,22 +745,110 @@ export function CardDetailsModal({
             </div>
           </div>
 
-          {/* Resume options picker */}
-          {showResumeOptions && isCardPaused(card) && (
-            <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
-              <span className="text-xs font-medium text-muted-foreground mr-2">Resume in:</span>
-              {[1, 3, 7, 14].map((d) => (
+          {/* Resume / Add to Queue options picker */}
+          {showResumeOptions && (
+            <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-muted/30 border border-border mt-3 select-none flex-wrap relative">
+              <span className="text-xs font-semibold text-muted-foreground mr-2">
+                {isReference ? "Add to review queue in:" : "Resume in:"}
+              </span>
+              {[
+                { label: "Now", value: 0 },
+                { label: "1 Day", value: 1 },
+                { label: "3 Days", value: 3 },
+                { label: "7 Days", value: 7 },
+              ].map((opt) => (
                 <Button
-                  key={d}
+                  key={opt.value}
                   size="sm"
                   variant="outline"
-                  onClick={() => handleResume(d)}
-                  disabled={isResuming}
+                  onClick={async () => {
+                    if (isReference) {
+                      await handleAddToQueue(opt.value);
+                    } else {
+                      await handleResume(opt.value);
+                    }
+                  }}
+                  disabled={isResuming || isSaving}
                   className="rounded-full text-xs"
                 >
-                  {d === 1 ? "Tomorrow" : `${d} Days`}
+                  {opt.label}
                 </Button>
               ))}
+
+              {/* Custom Date Picker */}
+              <div className="relative inline-block">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  ref={modalCalendarBtnRef}
+                  onClick={() => {
+                    if (modalCalendarBtnRef.current) {
+                      setModalCalendarRect(modalCalendarBtnRef.current.getBoundingClientRect());
+                    }
+                    setShowModalCalendar(!showModalCalendar);
+                  }}
+                  disabled={isResuming || isSaving}
+                  className="rounded-full text-xs gap-1"
+                >
+                  <CalendarIcon className="w-3 h-3" />
+                  Custom Date
+                </Button>
+                {showModalCalendar && createPortal(
+                  <>
+                    <div 
+                      className="fixed inset-0 z-[9998] cursor-default" 
+                      onClick={() => setShowModalCalendar(false)} 
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="fixed z-[9999] w-64 bg-card border border-border rounded-2xl shadow-2xl p-3 flex flex-col gap-2 cursor-default text-left"
+                      style={modalCalendarRect ? (() => {
+                        const CALENDAR_H = 340;
+                        const spaceAbove = modalCalendarRect.top;
+                        const placeAbove = spaceAbove >= CALENDAR_H + 8;
+                        return {
+                          top: placeAbove ? undefined : `${modalCalendarRect.bottom + 8}px`,
+                          bottom: placeAbove ? `${window.innerHeight - modalCalendarRect.top + 8}px` : undefined,
+                          left: `${Math.max(8, modalCalendarRect.left + modalCalendarRect.width / 2 - 128)}px`,
+                        };
+                      })() : undefined}
+                    >
+                      <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+                        <button
+                          type="button"
+                          onClick={prevModalCalendarMonth}
+                          className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-xs font-bold text-foreground">
+                          {monthNames[modalCalendarMonth.getMonth()]} {modalCalendarMonth.getFullYear()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={nextModalCalendarMonth}
+                          className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
+                        {dayNames.map((dName, idx) => (
+                          <div key={`dayname-${idx}`}>{dName}</div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-7 gap-1">
+                        {renderModalCalendarDays()}
+                      </div>
+                    </motion.div>
+                  </>,
+                  document.body
+                )}
+              </div>
             </div>
           )}
         </div>

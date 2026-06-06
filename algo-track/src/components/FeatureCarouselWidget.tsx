@@ -304,7 +304,7 @@ function AlgoVisTile() {
 
 function QuickStatsTile({ cards, analytics, onShowCardsList }: { cards: Flashcard[]; analytics: any; onShowCardsList?: (title: string, cardsList: Flashcard[]) => void }) {
   const { masteredCards, strugglingCards } = useMemo(() => {
-    const active = cards.filter(c => !c.metadata?.review_paused && !c.metadata?.globally_paused);
+    const active = cards.filter(c => !c.metadata?.review_paused && !c.metadata?.globally_paused && !c.metadata?.reference_only);
     const mCards = active.filter(c => c.dueInDays >= 14);
     const sCards = active.filter(c => c.lastRating === 'AGAIN' || c.lastRating === 'HARD');
     return { masteredCards: mCards, strugglingCards: sCards };

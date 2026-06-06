@@ -596,14 +596,24 @@ export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartRe
                     <div className="flex items-center justify-between pt-3 border-t mt-1">
                       <HealthRing interval={getIntervalDays(card)} />
                       <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                         {isCardPaused(card) ? (
+                         {card.metadata?.reference_only === true ? (
+                           <BookOpen className="w-3.5 h-3.5 text-cyan-500" />
+                         ) : isCardPaused(card) ? (
                            <Pause className="w-3.5 h-3.5" />
                          ) : card.dueInDays <= 0 ? (
                            <Clock className="w-3.5 h-3.5 text-medium" />
                          ) : (
                            <CheckCircle2 className="w-3.5 h-3.5 text-easy" />
                          )}
-                         {isCardPaused(card) ? "Paused" : card.dueInDays <= 0 ? "Due Now" : `${card.dueInDays}d`}
+                         {card.metadata?.reference_only === true ? (
+                           <span className="text-cyan-500 font-bold">Reference</span>
+                         ) : isCardPaused(card) ? (
+                           "Paused"
+                         ) : card.dueInDays <= 0 ? (
+                           "Due Now"
+                         ) : (
+                           `${card.dueInDays}d`
+                         )}
                       </div>
                     </div>
                   </motion.div>
@@ -699,7 +709,12 @@ export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartRe
                         </td>
                         <td className="px-4 py-4 align-middle">
                           <div className="flex flex-col gap-1">
-                            {isCardPaused(card) ? (
+                            {card.metadata?.reference_only === true ? (
+                              <div className="flex items-center gap-1.5 text-cyan-500">
+                                <BookOpen className="w-4 h-4" />
+                                <span className="font-semibold text-sm">Reference Card</span>
+                              </div>
+                            ) : isCardPaused(card) ? (
                               <div className="flex items-center gap-1.5 text-muted-foreground">
                                 <Pause className="w-4 h-4" />
                                 <span className="font-medium text-sm">Paused</span>
@@ -772,6 +787,7 @@ export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartRe
         {selectedCard && (
           <CardDetailsModal
             card={selectedCard}
+            allCards={cards}
             onClose={() => setSelectedCard(null)}
             onSaved={() => {
               setSelectedCard(null);

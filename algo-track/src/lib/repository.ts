@@ -296,7 +296,9 @@ export async function addCardForUser(
   const supabase = getSupabaseAdmin();
   const now = new Date();
   const reviewDate = new Date(now);
-  if (input.reviewInDays != null && input.reviewInDays > 0) {
+  if (input.metadata?.reference_only === true) {
+    reviewDate.setTime(new Date("9999-12-31T23:59:59.999Z").getTime());
+  } else if (input.reviewInDays != null && input.reviewInDays > 0) {
     reviewDate.setUTCDate(reviewDate.getUTCDate() + input.reviewInDays);
   }
   const finalTags = upsertComplexityTags(
@@ -372,7 +374,7 @@ export async function submitReview(
 
   const { data: card, error: cardError } = await supabase
     .from("cards")
-    .select("easiness_factor, interval_days, repetition_count")
+    .select("easiness_factor, interval_days, repetition_count, metadata")
     .eq("id", cardId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -417,15 +419,17 @@ export async function submitReview(
     throw new Error(reviewError.message);
   }
 
+  const isReference = (card.metadata as Record<string, unknown> | null)?.reference_only === true;
+
   const { error: cardUpdateError } = await supabase
     .from("cards")
     .update({
       easiness_factor: srs.easinessFactor,
-      interval_days: srs.intervalDays,
+      interval_days: isReference ? 0 : srs.intervalDays,
       repetition_count: srs.repetitionCount,
       last_rating: rating,
       last_reviewed_at: now.toISOString(),
-      next_review_at: srs.nextReviewAt.toISOString(),
+      next_review_at: isReference ? "9999-12-31T23:59:59.999Z" : srs.nextReviewAt.toISOString(),
       updated_at: now.toISOString(),
     })
     .eq("id", cardId)
