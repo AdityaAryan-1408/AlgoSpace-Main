@@ -10,12 +10,15 @@ import type { StoredAiReview } from "@/components/CodePractice";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Layout, Sparkles } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 import { useConfirmModal } from "@/components/ConfirmModal";
 import { createPortal } from "react-dom";
 import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
+import { isSystemDesignCard } from "@/lib/card-utils";
+import { SystemDesignCanvas } from "@/components/SystemDesignCanvas";
+import { SystemDesignAssistant } from "@/components/SystemDesignAssistant";
 
 const WindowsMaximizeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
@@ -157,6 +160,9 @@ export function CardDetailsModal({
   };
   const [isPausing, setIsPausing] = useState(false);
   const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
+  const [systemDesignTab, setSystemDesignTab] = useState<"richNotes" | "canvas" | "assistant">("richNotes");
+  const [canvasData, setCanvasData] = useState<string>("");
+  const [editorKey, setEditorKey] = useState("editor-details-desc");
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeOptions, setShowResumeOptions] = useState(false);
   const [modalCalendarMonth, setModalCalendarMonth] = useState(() => new Date());
@@ -291,6 +297,7 @@ export function CardDetailsModal({
       setRichNotes(card.richNotes);
       setReviewNote((card.metadata?.reviewNote as string) || "");
       setAiReview(getStoredAiReview(card.id));
+      setCanvasData((card.metadata?.systemDesignCanvas as string) || "");
     }
   }, [card]);
 
@@ -319,11 +326,16 @@ export function CardDetailsModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const isSys = isSystemDesignCard(card.type, tags);
       await updateCard(card.id, { 
         notes, 
         richNotes,
         tags,
-        metadata: { ...card.metadata, reviewNote }
+        metadata: { 
+          ...card.metadata, 
+          reviewNote,
+          ...(isSys ? { systemDesignCanvas: canvasData } : {})
+        }
       });
       onSaved();
     } catch (err) {
@@ -616,6 +628,7 @@ export function CardDetailsModal({
                 difficulty: card.difficulty,
                 tags: card.tags?.join(", "),
                 notes: card.notes,
+                richNotes: card.richNotes,
                 solutions: card.solutions || (card.solution ? [{ name: "Solution", content: card.solution }] : undefined),
                 timeComplexity: card.timeComplexity || undefined,
                 spaceComplexity: card.spaceComplexity || undefined,
@@ -644,13 +657,88 @@ export function CardDetailsModal({
               <FileText className="w-4 h-4 text-muted-foreground" />
               Rich Notes
             </h3>
-            <RichNotesEditor
-              initialContent={card.richNotes}
-              fallbackMarkdown={card.notes}
-              onChange={(content) => {
-                setRichNotes(content);
-              }}
-            />
+            {isSystemDesignCard(card.type, tags) ? (
+              <div className="flex flex-col gap-3">
+                {/* Tab switcher headers */}
+                <div className="flex border-b border-border gap-1 shrink-0 pb-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={systemDesignTab === "richNotes" ? "secondary" : "ghost"}
+                    onClick={() => setSystemDesignTab("richNotes")}
+                    className="h-8 px-3 text-xs gap-1.5 rounded-lg cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Rich Notes
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={systemDesignTab === "canvas" ? "secondary" : "ghost"}
+                    onClick={() => setSystemDesignTab("canvas")}
+                    className="h-8 px-3 text-xs gap-1.5 rounded-lg cursor-pointer"
+                  >
+                    <Layout className="w-3.5 h-3.5" />
+                    Canvas Diagram
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={systemDesignTab === "assistant" ? "secondary" : "ghost"}
+                    onClick={() => setSystemDesignTab("assistant")}
+                    className="h-8 px-3 text-xs gap-1.5 rounded-lg text-purple-400 hover:text-purple-300 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI Assistant
+                  </Button>
+                </div>
+
+                {/* Tab Content */}
+                {systemDesignTab === "richNotes" && (
+                  <RichNotesEditor
+                    key={`rich-notes-${editorKey}`}
+                    initialContent={richNotes}
+                    fallbackMarkdown={notes}
+                    onChange={(content) => {
+                      setRichNotes(content);
+                    }}
+                    placeholder="Add architectural design specifications here..."
+                  />
+                )}
+
+                {systemDesignTab === "canvas" && (
+                  <div className="h-[480px]">
+                    <SystemDesignCanvas
+                      value={canvasData}
+                      onChange={(val) => setCanvasData(val)}
+                    />
+                  </div>
+                )}
+
+                {systemDesignTab === "assistant" && (
+                  <SystemDesignAssistant
+                    currentNotes={richNotes || ""}
+                    currentCanvas={canvasData}
+                    onNotesGenerated={(txt) => {
+                      setRichNotes(txt);
+                      setEditorKey(`editor-notes-${Date.now()}`);
+                    }}
+                    onDiagramGenerated={(diag) => {
+                      setCanvasData(diag);
+                    }}
+                    onSelectTab={(tab) => setSystemDesignTab(tab)}
+                  />
+                )}
+              </div>
+            ) : (
+              <RichNotesEditor
+                initialContent={card.richNotes}
+                fallbackMarkdown={card.notes}
+                onChange={(content) => {
+                  setRichNotes(content);
+                }}
+              />
+            )}
           </section>
 
           <section className="flex flex-col gap-3">

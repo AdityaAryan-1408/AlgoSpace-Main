@@ -1383,11 +1383,18 @@ export function ReviewSession({
           <NotesPanel
             isOpen={notesDrawerOpen}
             onToggle={() => setNotesDrawerOpen(prev => !prev)}
-            cardId={currentCard.id}
-            cardTitle={currentCard.title}
-            richNotes={currentCard.richNotes}
-            fallbackMarkdown={currentCard.notes}
-            hasNotes={!!(currentCard.richNotes || currentCard.notes.trim())}
+            card={currentCard}
+            onSaved={async () => {
+              try {
+                const res = await fetch(`/api/cards/${currentCard.id}`);
+                const data = await res.json();
+                if (data.card) {
+                  cards[currentIndex] = data.card;
+                }
+              } catch (err) {
+                console.error("Failed to refresh card inside ReviewSession:", err);
+              }
+            }}
           />
         )}
       </div>

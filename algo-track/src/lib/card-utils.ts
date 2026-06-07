@@ -34,3 +34,15 @@ export function pauseThreshold(card: Flashcard): number {
     if (card.difficulty === "hard") return 7;
     return 3;
 }
+
+/**
+ * Checks if a card is a System Design card.
+ * A card is considered System Design if it has type === "cs" and tags contains "System Design" (case-insensitive).
+ */
+export function isSystemDesignCard(type: string, tags: string[] | string | undefined | null): boolean {
+    if (type !== "cs" || !tags) return false;
+    const tagsList = Array.isArray(tags)
+        ? tags
+        : tags.split(",").map((t) => t.trim());
+    return tagsList.some((tag) => tag.toLowerCase() === "system design");
+}

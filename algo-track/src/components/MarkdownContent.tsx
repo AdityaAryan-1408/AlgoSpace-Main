@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Check, Copy } from "lucide-react";
+import { MermaidRenderer } from "@/components/MermaidRenderer";
 
 interface MarkdownContentProps {
   content: string;
@@ -236,6 +237,11 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
           <div key={`md-${index}`} className="flex flex-col gap-2">
             {renderMarkdownBlocks(segment.content)}
           </div>
+        ) : segment.language === "mermaid" ? (
+          <MermaidRenderer
+            key={`mermaid-${index}`}
+            content={segment.content}
+          />
         ) : (
           <CodeBlock
             key={`code-${index}`}

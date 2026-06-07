@@ -3,11 +3,14 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
-import { Plus, Loader2, Github, X, ChevronLeft, ChevronRight, CalendarDays, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Loader2, Github, X, ChevronLeft, ChevronRight, CalendarDays, Calendar as CalendarIcon, FileText, Layout, Sparkles } from "lucide-react";
 import { createCard, updateCard, fetchAllCards } from "@/lib/client-api";
 import type { Difficulty, CardType, Flashcard } from "@/data";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { motion, AnimatePresence } from "motion/react";
+import { isSystemDesignCard } from "@/lib/card-utils";
+import { SystemDesignCanvas } from "@/components/SystemDesignCanvas";
+import { SystemDesignAssistant } from "@/components/SystemDesignAssistant";
 
 export interface AddCardFormDefaults {
     type?: CardType;
@@ -23,6 +26,7 @@ export interface AddCardFormDefaults {
     spaceComplexity?: string;
     relatedProblems?: string;
     metadata?: Record<string, unknown>;
+    richNotes?: string;
 }
 
 interface AddCardFormProps {
@@ -54,7 +58,9 @@ export function AddCardForm({
     const [platform, setPlatform] = useState("LeetCode");
     const [url, setUrl] = useState(defaults?.url ?? "");
     const [notes, setNotes] = useState(defaults?.notes ?? "");
-    const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
+    const [richNotes, setRichNotes] = useState<string | undefined>(defaults?.richNotes);
+    const [systemDesignTab, setSystemDesignTab] = useState<"richNotes" | "canvas" | "assistant">("richNotes");
+    const [canvasData, setCanvasData] = useState<string>(defaults?.metadata?.systemDesignCanvas as string || "");
     const [solutions, setSolutions] = useState<{ id: string; name: string; content: string }[]>(
         defaults?.solutions?.length 
             ? defaults.solutions.map((s, i) => ({ id: `sol-${Date.now()}-${i}`, name: s.name, content: s.content }))
@@ -317,6 +323,7 @@ export function AddCardForm({
                 metadata: {
                     ...(defaults?.metadata || {}),
                     reference_only: isReferenceOnly ? true : undefined,
+                    ...(isSystemDesignCard(cardType, tags) ? { systemDesignCanvas: canvasData } : {}),
                 },
             };
 
@@ -502,12 +509,90 @@ export function AddCardForm({
 
             <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">Notes</label>
-                <RichNotesEditor
-                    onChange={(content) => {
-                        setRichNotes(content);
-                    }}
-                    placeholder="Type '/' for commands. Add notes, diagrams, code blocks..."
-                />
+                {isSystemDesignCard(cardType, tagsInput) ? (
+                    <div className="flex flex-col gap-3">
+                        {/* Tab Switcher Headers */}
+                        <div className="flex border-b border-border gap-1 shrink-0 pb-1">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={systemDesignTab === "richNotes" ? "secondary" : "ghost"}
+                                onClick={() => setSystemDesignTab("richNotes")}
+                                className="h-8 px-3 text-xs gap-1.5 rounded-lg cursor-pointer"
+                            >
+                                <FileText className="w-3.5 h-3.5" />
+                                Rich Notes
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={systemDesignTab === "canvas" ? "secondary" : "ghost"}
+                                onClick={() => setSystemDesignTab("canvas")}
+                                className="h-8 px-3 text-xs gap-1.5 rounded-lg cursor-pointer"
+                            >
+                                <Layout className="w-3.5 h-3.5" />
+                                Canvas Diagram
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={systemDesignTab === "assistant" ? "secondary" : "ghost"}
+                                onClick={() => setSystemDesignTab("assistant")}
+                                className="h-8 px-3 text-xs gap-1.5 rounded-lg text-purple-400 hover:text-purple-300 cursor-pointer"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                AI Assistant
+                            </Button>
+                        </div>
+
+                        {/* Tab Contents */}
+                        {systemDesignTab === "richNotes" && (
+                            <RichNotesEditor
+                                key={`rich-notes-${editorKey}`}
+                                initialContent={richNotes}
+                                fallbackMarkdown={notes}
+                                onChange={(content) => {
+                                    setRichNotes(content);
+                                }}
+                                placeholder="Add architectural design specifications here..."
+                            />
+                        )}
+
+                        {systemDesignTab === "canvas" && (
+                            <div className="h-[450px]">
+                                <SystemDesignCanvas
+                                    value={canvasData}
+                                    onChange={(val) => setCanvasData(val)}
+                                />
+                            </div>
+                        )}
+
+                        {systemDesignTab === "assistant" && (
+                            <SystemDesignAssistant
+                                currentNotes={richNotes || ""}
+                                currentCanvas={canvasData}
+                                onNotesGenerated={(txt) => {
+                                    setRichNotes(txt);
+                                    setEditorKey(`editor-notes-${Date.now()}`);
+                                }}
+                                onDiagramGenerated={(diag) => {
+                                    setCanvasData(diag);
+                                }}
+                                onSelectTab={(tab) => setSystemDesignTab(tab)}
+                            />
+                        )}
+                    </div>
+                ) : (
+                    <RichNotesEditor
+                        key={`rich-notes-${editorKey}`}
+                        initialContent={richNotes}
+                        fallbackMarkdown={notes}
+                        onChange={(content) => {
+                            setRichNotes(content);
+                        }}
+                        placeholder="Type '/' for commands. Add notes, diagrams, code blocks..."
+                    />
+                )}
             </div>
 
             {isCodeCard && (

@@ -2,20 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FileText, Check, Loader2, PenLine } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FileText, Check, Loader2, PenLine, Layout, Sparkles } from "lucide-react";
 import { RichNotesEditor } from "./RichNotesEditor";
 import { WhiteboardCanvas } from "./WhiteboardCanvas";
 import { updateCard } from "@/lib/client-api";
+import { Button } from "@/components/ui/Button";
+import { isSystemDesignCard } from "@/lib/card-utils";
+import { SystemDesignCanvas } from "@/components/SystemDesignCanvas";
+import { SystemDesignAssistant } from "@/components/SystemDesignAssistant";
+import type { Flashcard } from "@/data";
 
 interface NotesPanelProps {
   isOpen: boolean;
   onToggle: () => void;
-  cardId: string;
-  cardTitle: string;
-  richNotes?: string;
-  fallbackMarkdown?: string;
-  /** Whether this card has existing notes (rich or plain) */
-  hasNotes: boolean;
+  card: Flashcard;
+  onSaved?: () => void;
 }
 
 const MIN_WIDTH = 340;
@@ -25,16 +26,21 @@ const DEFAULT_WIDTH = 420;
 export function NotesPanel({
   isOpen,
   onToggle,
-  cardId,
-  cardTitle,
-  richNotes,
-  fallbackMarkdown,
-  hasNotes,
+  card,
+  onSaved,
 }: NotesPanelProps) {
+  const cardId = card.id;
+  const cardTitle = card.title;
+  const fallbackMarkdown = card.notes;
+  const hasNotes = !!(card.richNotes || card.notes?.trim());
+  const [richNotes, setRichNotes] = useState<string | undefined>(card.richNotes);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isDragging, setIsDragging] = useState(false);
+  const [systemDesignTab, setSystemDesignTab] = useState<"richNotes" | "canvas" | "assistant">("richNotes");
+  const [canvasData, setCanvasData] = useState<string>("");
+  const [editorKey, setEditorKey] = useState("editor-drawer-notes");
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentCardId = useRef(cardId);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -45,7 +51,10 @@ export function NotesPanel({
   useEffect(() => {
     currentCardId.current = cardId;
     setSaveStatus("idle");
-  }, [cardId]);
+    setCanvasData((card.metadata?.systemDesignCanvas as string) || "");
+    setRichNotes(card.richNotes);
+    setEditorKey(`editor-drawer-${cardId}-${Date.now()}`);
+  }, [cardId, card]);
 
   // Close on Escape
   useEffect(() => {
@@ -90,6 +99,7 @@ export function NotesPanel({
   }, [isDragging]);
 
   const handleChange = useCallback((content: string) => {
+    setRichNotes(content);
     if (saveTimeout.current) {
       clearTimeout(saveTimeout.current);
     }
@@ -98,13 +108,38 @@ export function NotesPanel({
       try {
         await updateCard(currentCardId.current, { richNotes: content });
         setSaveStatus("saved");
+        if (onSaved) onSaved();
         setTimeout(() => setSaveStatus("idle"), 2000);
       } catch (err) {
         console.error("Failed to save notes:", err);
         setSaveStatus("idle");
       }
     }, 1500);
-  }, []);
+  }, [onSaved]);
+
+  const handleCanvasChange = useCallback((newCanvasData: string) => {
+    setCanvasData(newCanvasData);
+    if (saveTimeout.current) {
+      clearTimeout(saveTimeout.current);
+    }
+    setSaveStatus("saving");
+    saveTimeout.current = setTimeout(async () => {
+      try {
+        await updateCard(currentCardId.current, {
+          metadata: {
+            ...card.metadata,
+            systemDesignCanvas: newCanvasData
+          }
+        });
+        setSaveStatus("saved");
+        if (onSaved) onSaved();
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (err) {
+        console.error("Failed to save canvas:", err);
+        setSaveStatus("idle");
+      }
+    }, 1500);
+  }, [card, onSaved]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -187,14 +222,89 @@ export function NotesPanel({
 
         {/* Scrollable content: notes + whiteboard */}
         <div className="flex-1 overflow-y-auto">
-          {/* Rich Notes Editor */}
+          {/* Notes / Diagram switcher */}
           <div className="p-3">
-            <RichNotesEditor
-              key={cardId}
-              initialContent={richNotes}
-              fallbackMarkdown={fallbackMarkdown}
-              onChange={handleChange}
-            />
+            {isSystemDesignCard(card.type, card.tags) ? (
+              <div className="flex flex-col gap-3">
+                {/* Tab switcher headers */}
+                <div className="flex border-b border-border gap-1 shrink-0 pb-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={systemDesignTab === "richNotes" ? "secondary" : "ghost"}
+                    onClick={() => setSystemDesignTab("richNotes")}
+                    className="h-8 px-2.5 text-[11px] gap-1 rounded-lg cursor-pointer"
+                  >
+                    <FileText className="w-3 h-3" />
+                    Notes
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={systemDesignTab === "canvas" ? "secondary" : "ghost"}
+                    onClick={() => setSystemDesignTab("canvas")}
+                    className="h-8 px-2.5 text-[11px] gap-1 rounded-lg cursor-pointer"
+                  >
+                    <Layout className="w-3 h-3" />
+                    Canvas
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={systemDesignTab === "assistant" ? "secondary" : "ghost"}
+                    onClick={() => setSystemDesignTab("assistant")}
+                    className="h-8 px-2.5 text-[11px] gap-1 rounded-lg text-purple-400 hover:text-purple-300 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    AI Assistant
+                  </Button>
+                </div>
+
+                {/* Tab Content */}
+                {systemDesignTab === "richNotes" && (
+                  <RichNotesEditor
+                    key={`rich-notes-${editorKey}`}
+                    initialContent={richNotes}
+                    fallbackMarkdown={fallbackMarkdown}
+                    onChange={handleChange}
+                    placeholder="Add architectural design specifications here..."
+                  />
+                )}
+
+                {systemDesignTab === "canvas" && (
+                  <div className="h-[420px]">
+                    <SystemDesignCanvas
+                      value={canvasData}
+                      onChange={handleCanvasChange}
+                    />
+                  </div>
+                )}
+
+                {systemDesignTab === "assistant" && (
+                  <SystemDesignAssistant
+                    currentNotes={richNotes || ""}
+                    currentCanvas={canvasData}
+                    onNotesGenerated={(txt) => {
+                      setRichNotes(txt);
+                      setEditorKey(`editor-drawer-notes-${Date.now()}`);
+                      handleChange(txt);
+                    }}
+                    onDiagramGenerated={(diag) => {
+                      setCanvasData(diag);
+                      handleCanvasChange(diag);
+                    }}
+                    onSelectTab={(tab) => setSystemDesignTab(tab)}
+                  />
+                )}
+              </div>
+            ) : (
+              <RichNotesEditor
+                key={cardId}
+                initialContent={richNotes}
+                fallbackMarkdown={fallbackMarkdown}
+                onChange={handleChange}
+              />
+            )}
           </div>
 
           {/* Whiteboard toggle */}
