@@ -1,6 +1,96 @@
 import { NextRequest } from "next/server";
 import { handleApiError, jsonOk, withUser } from "@/lib/api";
 
+async function callGemini(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  action: string
+) {
+  const isJson = action !== "generate_text";
+  
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: userPrompt,
+              },
+            ],
+          },
+        ],
+        systemInstruction: {
+          parts: [
+            {
+              text: systemPrompt,
+            },
+          ],
+        },
+        generationConfig: {
+          temperature: action === "generate_text" ? 0.6 : 0.2,
+          ...(isJson ? { responseMimeType: "application/json" } : {}),
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error("Empty response from Gemini API");
+  }
+  return text;
+}
+
+async function callGroq(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  action: string
+) {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: action === "generate_text" ? 0.6 : 0.2,
+      max_tokens: 2048,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Groq API error: ${response.status} - ${errText}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) {
+    throw new Error("Empty response from Groq API");
+  }
+  return text;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await withUser(request);
@@ -9,11 +99,6 @@ export async function POST(request: NextRequest) {
     const { prompt, currentNotes, currentCanvas, action } = body;
     if (!prompt || !action) {
       throw new Error("Missing prompt or action");
-    }
-
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new Error("GROQ_API_KEY is not configured on the server");
     }
 
     let systemPrompt = "";
@@ -76,33 +161,35 @@ ${JSON.stringify(currentCanvas || { nodes: [], edges: [] }, null, 2)}`;
       throw new Error("Invalid action type");
     }
 
-    const messages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ];
+    let aiContent = "";
+    let usedProvider = "Gemini";
 
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages,
-        temperature: action === "generate_text" ? 0.6 : 0.2,
-        max_tokens: 2048,
-      }),
-    });
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
 
-    if (!groqRes.ok) {
-      const errText = await groqRes.text();
-      console.error("Designer API Groq Error:", errText);
-      throw new Error("AI provider failed to generate content");
+    if (geminiKey && geminiKey.trim()) {
+      try {
+        console.log("Attempting system design generation using Gemini...");
+        aiContent = await callGemini(geminiKey, systemPrompt, userPrompt, action);
+        usedProvider = "Gemini";
+      } catch (geminiError) {
+        console.error("Gemini failed, trying fallback to Groq:", geminiError);
+        if (groqKey && groqKey.trim()) {
+          aiContent = await callGroq(groqKey, systemPrompt, userPrompt, action);
+          usedProvider = "Groq (Fallback)";
+        } else {
+          throw new Error("Gemini failed and GROQ_API_KEY is not configured for fallback.");
+        }
+      }
+    } else if (groqKey && groqKey.trim()) {
+      console.log("GEMINI_API_KEY not configured, using Groq directly...");
+      aiContent = await callGroq(groqKey, systemPrompt, userPrompt, action);
+      usedProvider = "Groq";
+    } else {
+      throw new Error("Neither GEMINI_API_KEY nor GROQ_API_KEY is configured on the server.");
     }
 
-    const groqData = await groqRes.json();
-    const aiContent = groqData.choices?.[0]?.message?.content || "";
+    console.log(`System design generated successfully using ${usedProvider}.`);
 
     if (action === "generate_text") {
       return jsonOk({ text: aiContent });

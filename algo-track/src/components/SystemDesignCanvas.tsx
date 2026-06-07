@@ -15,7 +15,10 @@ import {
   Plus,
   RefreshCw,
   Zap,
-  Loader2
+  Loader2,
+  Move,
+  ZoomIn,
+  ZoomOut
 } from "lucide-react";
 
 export interface CanvasNode {
@@ -39,6 +42,8 @@ export interface CanvasEdge {
 export interface CanvasData {
   nodes: CanvasNode[];
   edges: CanvasEdge[];
+  panOffset?: { x: number; y: number };
+  zoom?: number;
 }
 
 interface SystemDesignCanvasProps {
@@ -81,6 +86,19 @@ export function SystemDesignCanvas({
   const dragStartDimensions = useRef({ width: 0, height: 0, x: 0, y: 0 });
   const dragStartAngle = useRef<number>(0);
 
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+
+  const getLocalCoords = useCallback((clientX: number, clientY: number) => {
+    const rect = svgRef.current ? svgRef.current.getBoundingClientRect() : { left: 0, top: 0 };
+    return {
+      x: (clientX - rect.left - panOffset.x) / zoom,
+      y: (clientY - rect.top - panOffset.y) / zoom
+    };
+  }, [panOffset, zoom]);
+
   // Load initial value
   useEffect(() => {
     if (value) {
@@ -89,6 +107,12 @@ export function SystemDesignCanvas({
         if (parsed.nodes && parsed.edges) {
           setNodes(parsed.nodes);
           setEdges(parsed.edges);
+          if (parsed.panOffset) {
+            setPanOffset(parsed.panOffset);
+          }
+          if (parsed.zoom) {
+            setZoom(parsed.zoom);
+          }
         }
       } catch {
         // invalid JSON or empty
@@ -97,33 +121,64 @@ export function SystemDesignCanvas({
   }, [value]);
 
   // Dispatch change and save state
-  const saveState = useCallback((newNodes: CanvasNode[], newEdges: CanvasEdge[], pushToUndo = true) => {
-    const data: CanvasData = { nodes: newNodes, edges: newEdges };
+  const saveState = useCallback((newNodes: CanvasNode[], newEdges: CanvasEdge[], pushToUndo = true, customPan = panOffset, customZoom = zoom) => {
+    const data: CanvasData = { nodes: newNodes, edges: newEdges, panOffset: customPan, zoom: customZoom };
     
     if (pushToUndo) {
-      setUndoStack((prev) => [...prev, { nodes, edges }]);
+      setUndoStack((prev) => [...prev, { nodes, edges, panOffset, zoom }]);
       setRedoStack([]); // Clear redo
     }
 
     setNodes(newNodes);
     setEdges(newEdges);
     onChange(JSON.stringify(data));
-  }, [nodes, edges, onChange]);
+  }, [nodes, edges, panOffset, zoom, onChange]);
 
   const handleUndo = () => {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
     setUndoStack((prev) => prev.slice(0, -1));
-    setRedoStack((prev) => [...prev, { nodes, edges }]);
-    saveState(previous.nodes, previous.edges, false);
+    setRedoStack((prev) => [...prev, { nodes, edges, panOffset, zoom }]);
+    if (previous.panOffset) setPanOffset(previous.panOffset);
+    if (previous.zoom) setZoom(previous.zoom);
+    saveState(previous.nodes, previous.edges, false, previous.panOffset, previous.zoom || 1);
   };
 
   const handleRedo = () => {
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
     setRedoStack((prev) => prev.slice(0, -1));
-    setUndoStack((prev) => [...prev, { nodes, edges }]);
-    saveState(next.nodes, next.edges, false);
+    setUndoStack((prev) => [...prev, { nodes, edges, panOffset, zoom }]);
+    if (next.panOffset) setPanOffset(next.panOffset);
+    if (next.zoom) setZoom(next.zoom);
+    saveState(next.nodes, next.edges, false, next.panOffset, next.zoom || 1);
+  };
+
+  const handleZoomButton = (zoomIn: boolean) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const rect = svg.getBoundingClientRect();
+    const mx = rect.width / 2;
+    const my = rect.height / 2;
+
+    const lx = (mx - panOffset.x) / zoom;
+    const ly = (my - panOffset.y) / zoom;
+
+    const zoomFactor = 1.15;
+    let nextZoom = zoom;
+    if (zoomIn) {
+      nextZoom = Math.min(2, zoom * zoomFactor);
+    } else {
+      nextZoom = Math.max(0.5, zoom / zoomFactor);
+    }
+
+    const newPanX = mx - lx * nextZoom;
+    const newPanY = my - ly * nextZoom;
+
+    setZoom(nextZoom);
+    setPanOffset({ x: newPanX, y: newPanY });
+    saveState(nodes, edges, false, { x: newPanX, y: newPanY }, nextZoom);
   };
 
   const handleClear = () => {
@@ -196,9 +251,9 @@ export function SystemDesignCanvas({
     const svg = svgRef.current;
     if (!svg) return;
 
-    const rect = svg.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const coords = getLocalCoords(e.clientX, e.clientY);
+    const x = coords.x;
+    const y = coords.y;
 
     if (mode !== "select" && mode !== "connect") {
       addShape(mode, x, y);
@@ -257,9 +312,10 @@ export function SystemDesignCanvas({
 
     const node = nodes.find((n) => n.id === nodeId);
     if (node) {
+      const coords = getLocalCoords(e.clientX, e.clientY);
       dragStartOffset.current = {
-        x: e.clientX - node.x,
-        y: e.clientY - node.y
+        x: coords.x - node.x,
+        y: coords.y - node.y
       };
     }
   };
@@ -289,9 +345,9 @@ export function SystemDesignCanvas({
     if (node) {
       const cx = node.x + node.width / 2;
       const cy = node.y + node.height / 2;
-      const rect = svgRef.current!.getBoundingClientRect();
-      const mx = e.clientX - rect.left - cx;
-      const my = e.clientY - rect.top - cy;
+      const coords = getLocalCoords(e.clientX, e.clientY);
+      const mx = coords.x - cx;
+      const my = coords.y - cy;
       const currentAngle = node.rotation || 0;
       dragStartAngle.current = Math.atan2(my, mx) * (180 / Math.PI) - currentAngle;
     }
@@ -311,8 +367,10 @@ export function SystemDesignCanvas({
         const startH = dragStartDimensions.current.height;
         const rotation = node.rotation || 0;
         const rad = -rotation * Math.PI / 180;
-        const localDx = dx * Math.cos(rad) - dy * Math.sin(rad);
-        const localDy = dx * Math.sin(rad) + dy * Math.cos(rad);
+        
+        // Scale delta by zoom
+        const localDx = (dx * Math.cos(rad) - dy * Math.sin(rad)) / zoom;
+        const localDy = (dx * Math.sin(rad) + dy * Math.cos(rad)) / zoom;
 
         // Snap resizing to 10px, minimum 60x40
         const nextWidth = Math.max(60, Math.round((startW + localDx) / 10) * 10);
@@ -323,6 +381,14 @@ export function SystemDesignCanvas({
       return;
     }
 
+    if (isPanning.current) {
+      e.preventDefault();
+      const newPanX = e.clientX - panStart.current.x;
+      const newPanY = e.clientY - panStart.current.y;
+      setPanOffset({ x: newPanX, y: newPanY });
+      return;
+    }
+
     if (isRotatingNode.current) {
       e.preventDefault();
       const nodeId = isRotatingNode.current;
@@ -330,9 +396,9 @@ export function SystemDesignCanvas({
       if (node) {
         const cx = node.x + node.width / 2;
         const cy = node.y + node.height / 2;
-        const rect = svgRef.current!.getBoundingClientRect();
-        const mx = e.clientX - rect.left - cx;
-        const my = e.clientY - rect.top - cy;
+        const coords = getLocalCoords(e.clientX, e.clientY);
+        const mx = coords.x - cx;
+        const my = coords.y - cy;
         const angle = Math.atan2(my, mx) * (180 / Math.PI);
         let nextRotation = Math.round(angle - dragStartAngle.current);
         
@@ -349,27 +415,74 @@ export function SystemDesignCanvas({
     if (isDraggingNode.current) {
       e.preventDefault();
       const nodeId = isDraggingNode.current;
-      const dx = e.clientX - dragStartOffset.current.x;
-      const dy = e.clientY - dragStartOffset.current.y;
+      const coords = getLocalCoords(e.clientX, e.clientY);
 
-      const svg = svgRef.current;
-      const rect = svg ? svg.getBoundingClientRect() : { width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT };
-
-      // Snap coordinates to 10px and bound inside SVG container
-      const nextX = Math.max(0, Math.min(rect.width - 60, Math.round(dx / 10) * 10));
-      const nextY = Math.max(0, Math.min(rect.height - 40, Math.round(dy / 10) * 10));
+      // Snap coordinates to 10px and drag freely without layout box bounding limits (infinite canvas)
+      const nextX = Math.round((coords.x - dragStartOffset.current.x) / 10) * 10;
+      const nextY = Math.round((coords.y - dragStartOffset.current.y) / 10) * 10;
 
       setNodes(nodes.map((n) => n.id === nodeId ? { ...n, x: nextX, y: nextY } : n));
     }
   };
 
-  const handleSvgPointerUp = () => {
+  const handleSvgPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (readOnly) return;
+    const isBackground = e.target === e.currentTarget || (e.target as SVGElement)?.tagName === "rect" && (e.target as SVGElement).getAttribute("fill")?.includes("dot-grid");
+    
+    if (mode === "select" && isBackground) {
+      isPanning.current = true;
+      panStart.current = {
+        x: e.clientX - panOffset.x,
+        y: e.clientY - panOffset.y
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+  };
+
+  const handleSvgPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (readOnly) return;
+    if (isPanning.current) {
+      isPanning.current = false;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+      saveState(nodes, edges, false, panOffset, zoom);
+      return;
+    }
     if (isDraggingNode.current || isResizingNode.current || isRotatingNode.current) {
       isDraggingNode.current = null;
       isResizingNode.current = null;
       isRotatingNode.current = null;
       saveState(nodes, edges, true); // Save the finalized state
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      // Find local coordinates under the mouse before zooming
+      const lx = (mx - panOffset.x) / zoom;
+      const ly = (my - panOffset.y) / zoom;
+
+      const zoomFactor = 1.08;
+      let nextZoom = zoom;
+      if (e.deltaY < 0) {
+        nextZoom = Math.min(2, zoom * zoomFactor);
+      } else {
+        nextZoom = Math.max(0.5, zoom / zoomFactor);
+      }
+
+      // Calculate new panOffset so that (lx, ly) maps to the same (mx, my) under nextZoom
+      const newPanX = mx - lx * nextZoom;
+      const newPanY = my - ly * nextZoom;
+
+      setZoom(nextZoom);
+      setPanOffset({ x: newPanX, y: newPanY });
+      saveState(nodes, edges, false, { x: newPanX, y: newPanY }, nextZoom);
     }
   };
 
@@ -704,6 +817,44 @@ export function SystemDesignCanvas({
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={panOffset.x === 0 && panOffset.y === 0 && zoom === 1}
+              onClick={() => {
+                setPanOffset({ x: 0, y: 0 });
+                setZoom(1);
+                saveState(nodes, edges, false, { x: 0, y: 0 }, 1);
+              }}
+              className="w-8 h-8 rounded-lg text-slate-400 hover:text-cyan-400 disabled:opacity-30"
+              title="Reset View Position & Zoom"
+            >
+              <Move className="w-3.5 h-3.5" />
+            </Button>
+            <div className="w-px h-5 bg-border mx-1" />
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={zoom <= 0.5}
+              onClick={() => handleZoomButton(false)}
+              className="w-8 h-8 rounded-lg text-slate-400 hover:text-cyan-400 disabled:opacity-30"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </Button>
+            <span className="text-[10px] text-slate-400 font-bold min-w-[36px] text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={zoom >= 2}
+              onClick={() => handleZoomButton(true)}
+              className="w-8 h-8 rounded-lg text-slate-400 hover:text-cyan-400 disabled:opacity-30"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
       )}
@@ -717,12 +868,21 @@ export function SystemDesignCanvas({
           ref={svgRef}
           className="w-full h-full min-h-[400px]"
           onClick={handleSvgClick}
+          onPointerDown={handleSvgPointerDown}
           onPointerMove={handleSvgPointerMove}
           onPointerUp={handleSvgPointerUp}
+          onWheel={handleWheel}
+          style={{ touchAction: "none" }}
         >
           <defs>
             {/* Grid Pattern */}
-            <pattern id="dot-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <pattern 
+              id="dot-grid" 
+              width="20" 
+              height="20" 
+              patternUnits="userSpaceOnUse"
+              patternTransform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}
+            >
               <circle cx="2" cy="2" r="1.2" fill="rgba(255, 255, 255, 0.08)" />
             </pattern>
             {/* Arrowhead Marker */}
@@ -752,6 +912,9 @@ export function SystemDesignCanvas({
 
           {/* Grid Fill */}
           <rect width="100%" height="100%" fill="url(#dot-grid)" />
+
+          {/* Viewport Translated Group for panning & zoom */}
+          <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
 
           {/* Draw connecting lines (Edges) */}
           {edges.map((edge) => {
@@ -929,6 +1092,7 @@ export function SystemDesignCanvas({
               </g>
             );
           })}
+          </g>
         </svg>
 
         {/* Inline Label Editing Inputs */}
@@ -942,8 +1106,8 @@ export function SystemDesignCanvas({
                 const node = nodes.find(n => n.id === editingNodeId);
                 if (node) {
                   return {
-                    left: `${Math.max(10, Math.min(containerWidth - 270, node.x))}px`,
-                    top: `${Math.max(10, Math.min(containerHeight - 120, node.y + node.height + 8))}px`
+                    left: `${Math.max(10, Math.min(containerWidth - 270, (node.x * zoom) + panOffset.x))}px`,
+                    top: `${Math.max(10, Math.min(containerHeight - 120, ((node.y + node.height) * zoom) + panOffset.y + 8))}px`
                   };
                 }
               } else if (editingEdgeId) {
@@ -954,8 +1118,8 @@ export function SystemDesignCanvas({
                   const midX = (fromNode.x + fromNode.width/2 + toNode.x + toNode.width/2) / 2;
                   const midY = (fromNode.y + fromNode.height/2 + toNode.y + toNode.height/2) / 2;
                   return {
-                    left: `${Math.max(10, Math.min(containerWidth - 270, midX - 128))}px`,
-                    top: `${Math.max(10, Math.min(containerHeight - 120, midY + 16))}px`
+                    left: `${Math.max(10, Math.min(containerWidth - 270, (midX * zoom) + panOffset.x - 128))}px`,
+                    top: `${Math.max(10, Math.min(containerHeight - 120, (midY * zoom) + panOffset.y + 16))}px`
                   };
                 }
               }
