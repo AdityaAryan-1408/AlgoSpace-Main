@@ -10,12 +10,25 @@ import type { StoredAiReview } from "@/components/CodePractice";
 import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 import { useConfirmModal } from "@/components/ConfirmModal";
 import { createPortal } from "react-dom";
 import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
+
+const WindowsMaximizeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+    <rect x="3" y="3" width="10" height="10" />
+  </svg>
+);
+
+const WindowsRestoreIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+    <path d="M5.5 5.5V3.5h7v7h-2" />
+    <rect x="3.5" y="5.5" width="7" height="7" />
+  </svg>
+);
 
 interface CardDetailsModalProps {
   card: Flashcard | null;
@@ -39,7 +52,109 @@ export function CardDetailsModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const [aiReview, setAiReview] = useState<StoredAiReview | null>(null);
+  const [dimensions, setDimensions] = useState<{
+    width: number;
+    height: number;
+    left: number;
+    top: number;
+  } | null>(null);
+
+  // Initialize dimensions on mount to center the modal
+  const resetToDefault = () => {
+    setIsMaximized(false);
+    const defaultWidth = Math.min(window.innerWidth - 32, 768); // max-w-3xl equivalent (768px)
+    const defaultHeight = Math.min(window.innerHeight - 32, window.innerHeight * 0.85);
+    const left = (window.innerWidth - defaultWidth) / 2;
+    const top = (window.innerHeight - defaultHeight) / 2;
+
+    setDimensions({
+      width: defaultWidth,
+      height: defaultHeight,
+      left,
+      top,
+    });
+  };
+
+  useEffect(() => {
+    resetToDefault();
+  }, []);
+
+  const startDragOrResize = (
+    e: React.PointerEvent,
+    action: "drag" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se"
+  ) => {
+    if (isMaximized) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startLeft = dimensions?.left ?? 0;
+    const startTop = dimensions?.top ?? 0;
+    const startWidth = dimensions?.width ?? 0;
+    const startHeight = dimensions?.height ?? 0;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      let nextLeft = startLeft;
+      let nextTop = startTop;
+      let nextWidth = startWidth;
+      let nextHeight = startHeight;
+
+      const minW = 400;
+      const minH = 300;
+
+      if (action === "drag") {
+        nextLeft = startLeft + dx;
+        nextTop = startTop + dy;
+      } else {
+        // Resize calculations
+        if (action.includes("n")) {
+          const newHeight = startHeight - dy;
+          if (newHeight >= minH) {
+            nextHeight = newHeight;
+            nextTop = startTop + dy;
+          }
+        }
+        if (action.includes("s")) {
+          const newHeight = startHeight + dy;
+          if (newHeight >= minH) {
+            nextHeight = newHeight;
+          }
+        }
+        if (action.includes("e")) {
+          const newWidth = startWidth + dx;
+          if (newWidth >= minW) {
+            nextWidth = newWidth;
+          }
+        }
+        if (action.includes("w")) {
+          const newWidth = startWidth - dx;
+          if (newWidth >= minW) {
+            nextWidth = newWidth;
+            nextLeft = startLeft + dx;
+          }
+        }
+      }
+
+      setDimensions({
+        width: nextWidth,
+        height: nextHeight,
+        left: nextLeft,
+        top: nextTop,
+      });
+    };
+
+    const handlePointerUp = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+  };
   const [isPausing, setIsPausing] = useState(false);
   const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
   const [isResuming, setIsResuming] = useState(false);
@@ -271,47 +386,122 @@ export function CardDetailsModal({
       onClick={onClose}
     >
       <motion.div
-        drag
-        dragControls={dragControls}
-        dragListener={false}
-        dragConstraints={backdropRef}
-        dragElastic={0}
-        dragMomentum={false}
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-3xl bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-border"
+        className={isMaximized
+          ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none"
+          : !dimensions
+            ? "w-full max-w-3xl bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-border"
+            : "bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-border"
+        }
+        style={isMaximized
+          ? { transform: "none" }
+          : dimensions
+            ? {
+                width: `${dimensions.width}px`,
+                height: `${dimensions.height}px`,
+                left: `${dimensions.left}px`,
+                top: `${dimensions.top}px`,
+                position: "absolute" as const,
+                transform: "none",
+              }
+            : undefined
+        }
       >
-        {/* Header */}
-        <div className="p-6 border-b border-border flex flex-col gap-4 bg-muted/10">
+        {/* 8 Resize Handles */}
+        {!isMaximized && dimensions && (
+          <>
+            {/* N */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "n")}
+              className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-50"
+            />
+            {/* S */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "s")}
+              className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize z-50"
+            />
+            {/* E */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "e")}
+              className="absolute top-0 bottom-0 right-0 w-1.5 cursor-ew-resize z-50"
+            />
+            {/* W */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "w")}
+              className="absolute top-0 bottom-0 left-0 w-1.5 cursor-ew-resize z-50"
+            />
+            {/* NW */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "nw")}
+              className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize z-50"
+            />
+            {/* NE */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "ne")}
+              className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize z-50"
+            />
+            {/* SW */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "sw")}
+              className="absolute bottom-0 left-0 w-3 h-3 cursor-nesw-resize z-50"
+            />
+            {/* SE */}
+            <div
+              onPointerDown={(e) => startDragOrResize(e, "se")}
+              className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize z-50"
+            />
+          </>
+        )}
+        {/* Header - Entire bar is draggable */}
+        <div 
+          onPointerDown={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest("button") || target.closest("input") || target.closest("select") || target.closest("textarea")) {
+              return;
+            }
+            startDragOrResize(e, "drag");
+          }}
+          className="p-6 border-b border-border flex flex-col gap-4 bg-muted/10 cursor-move select-none shrink-0"
+        >
           <div className="flex items-start justify-between gap-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge
-                  variant={card.difficulty}
-                  className="capitalize bg-transparent border-current text-current"
+            <div className="flex items-start gap-3">
+              {!isMaximized && (
+                <div
+                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab active:cursor-grabbing mt-1.5"
+                  title="Drag to move"
                 >
-                  {card.difficulty}
-                </Badge>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                  {card.type === "leetcode" ? "DSA" : card.type === "sql" ? "SQL" : "CS Core"}
-                </span>
-                {card.timeComplexity && (
-                  <Badge variant="tag" className="bg-transparent border-tag/30 text-tag">
-                    Time: {card.timeComplexity}
+                  <GripVertical className="w-5 h-5" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge
+                    variant={card.difficulty}
+                    className="capitalize bg-transparent border-current text-current"
+                  >
+                    {card.difficulty}
                   </Badge>
-                )}
-                {card.spaceComplexity && (
-                  <Badge variant="tag" className="bg-transparent border-tag/30 text-tag">
-                    Space: {card.spaceComplexity}
-                  </Badge>
-                )}
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    {card.type === "leetcode" ? "DSA" : card.type === "sql" ? "SQL" : "CS Core"}
+                  </span>
+                  {card.timeComplexity && (
+                    <Badge variant="tag" className="bg-transparent border-tag/30 text-tag">
+                      Time: {card.timeComplexity}
+                    </Badge>
+                  )}
+                  {card.spaceComplexity && (
+                    <Badge variant="tag" className="bg-transparent border-tag/30 text-tag">
+                      Space: {card.spaceComplexity}
+                    </Badge>
+                  )}
+                </div>
+                <h2 className="text-2xl font-bold text-foreground leading-tight">
+                  {card.title}
+                </h2>
               </div>
-              <h2 className="text-2xl font-bold text-foreground leading-tight">
-                {card.title}
-              </h2>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -339,11 +529,20 @@ export function CardDetailsModal({
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-full shrink-0 hover:bg-muted cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
-                title="Drag to move"
-                onPointerDown={(e) => dragControls.start(e)}
+                onClick={resetToDefault}
+                className="rounded-full shrink-0 hover:bg-muted"
+                title="Reset to default size"
               >
-                <GripVertical className="w-5 h-5" />
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMaximized(!isMaximized)}
+                className="rounded-full shrink-0 hover:bg-muted"
+                title={isMaximized ? "Restore size" : "Maximize window"}
+              >
+                {isMaximized ? <WindowsRestoreIcon /> : <WindowsMaximizeIcon />}
               </Button>
               <Button
                 variant="ghost"

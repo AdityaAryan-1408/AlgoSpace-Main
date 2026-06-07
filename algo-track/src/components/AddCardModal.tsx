@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
-import { X, Code, BookOpen, Database, GripVertical } from "lucide-react";
-import { motion, useDragControls } from "motion/react";
+import { X, Code, BookOpen, Database, GripVertical, RotateCcw } from "lucide-react";
+import { motion } from "motion/react";
 import { AddCardForm } from "@/components/AddCardForm";
 import type { CardType, Flashcard } from "@/data";
 
@@ -13,11 +13,125 @@ interface AddCardModalProps {
     cards?: Flashcard[];
 }
 
+const WindowsMaximizeIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+        <rect x="3" y="3" width="10" height="10" />
+    </svg>
+);
+
+const WindowsRestoreIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+        <path d="M5.5 5.5V3.5h7v7h-2" />
+        <rect x="3.5" y="5.5" width="7" height="7" />
+    </svg>
+);
+
 export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
-    const dragControls = useDragControls();
     const backdropRef = useRef<HTMLDivElement>(null);
     const [step, setStep] = useState<"choose" | "form">("choose");
     const [cardType, setCardType] = useState<CardType>("leetcode");
+    const [isMaximized, setIsMaximized] = useState(false);
+    const [dimensions, setDimensions] = useState<{
+        width: number;
+        height: number;
+        left: number;
+        top: number;
+    } | null>(null);
+
+    // Initialize dimensions on mount to center the modal
+    const resetToDefault = () => {
+        setIsMaximized(false);
+        const defaultWidth = Math.min(window.innerWidth - 32, 672); // max-w-2xl equivalent (672px)
+        const defaultHeight = Math.min(window.innerHeight - 32, window.innerHeight * 0.85);
+        const left = (window.innerWidth - defaultWidth) / 2;
+        const top = (window.innerHeight - defaultHeight) / 2;
+
+        setDimensions({
+            width: defaultWidth,
+            height: defaultHeight,
+            left,
+            top,
+        });
+    };
+
+    useEffect(() => {
+        resetToDefault();
+    }, []);
+
+    const startDragOrResize = (
+        e: React.PointerEvent,
+        action: "drag" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se"
+    ) => {
+        if (isMaximized || step === "choose") return;
+        e.preventDefault();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = dimensions?.left ?? 0;
+        const startTop = dimensions?.top ?? 0;
+        const startWidth = dimensions?.width ?? 0;
+        const startHeight = dimensions?.height ?? 0;
+
+        const handlePointerMove = (moveEvent: PointerEvent) => {
+            const dx = moveEvent.clientX - startX;
+            const dy = moveEvent.clientY - startY;
+
+            let nextLeft = startLeft;
+            let nextTop = startTop;
+            let nextWidth = startWidth;
+            let nextHeight = startHeight;
+
+            const minW = 400;
+            const minH = 300;
+
+            if (action === "drag") {
+                nextLeft = startLeft + dx;
+                nextTop = startTop + dy;
+            } else {
+                // Resize calculations
+                if (action.includes("n")) {
+                    const newHeight = startHeight - dy;
+                    if (newHeight >= minH) {
+                        nextHeight = newHeight;
+                        nextTop = startTop + dy;
+                    }
+                }
+                if (action.includes("s")) {
+                    const newHeight = startHeight + dy;
+                    if (newHeight >= minH) {
+                        nextHeight = newHeight;
+                    }
+                }
+                if (action.includes("e")) {
+                    const newWidth = startWidth + dx;
+                    if (newWidth >= minW) {
+                        nextWidth = newWidth;
+                    }
+                }
+                if (action.includes("w")) {
+                    const newWidth = startWidth - dx;
+                    if (newWidth >= minW) {
+                        nextWidth = newWidth;
+                        nextLeft = startLeft + dx;
+                    }
+                }
+            }
+
+            setDimensions({
+                width: nextWidth,
+                height: nextHeight,
+                left: nextLeft,
+                top: nextTop,
+            });
+        };
+
+        const handlePointerUp = () => {
+            document.removeEventListener("pointermove", handlePointerMove);
+            document.removeEventListener("pointerup", handlePointerUp);
+        };
+
+        document.addEventListener("pointermove", handlePointerMove);
+        document.addEventListener("pointerup", handlePointerUp);
+    };
 
     const handleTypeSelect = (type: CardType) => {
         setCardType(type);
@@ -29,57 +143,151 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
         onClose();
     };
 
+    const modalClass = isMaximized
+        ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none"
+        : (dimensions && step === "form")
+            ? "bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col border border-border"
+            : "w-full max-w-2xl bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] border border-border";
+
+    const modalStyle = isMaximized
+        ? { transform: "none" }
+        : (dimensions && step === "form")
+            ? {
+                width: `${dimensions.width}px`,
+                height: `${dimensions.height}px`,
+                left: `${dimensions.left}px`,
+                top: `${dimensions.top}px`,
+                position: "absolute" as const,
+                transform: "none",
+            }
+            : undefined;
+
     return (
         <div
             ref={backdropRef}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
         >
             <motion.div
-                drag
-                dragControls={dragControls}
-                dragListener={false}
-                dragConstraints={backdropRef}
-                dragElastic={0}
-                dragMomentum={false}
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-2xl bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] border border-border"
+                className={modalClass}
+                style={modalStyle}
             >
-                {/* Header */}
-                <div className="p-6 border-b border-border flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-bold text-foreground">
-                            {step === "choose"
-                                ? "Add New Card"
-                                : cardType === "leetcode"
-                                    ? "New DSA Problem"
-                                    : cardType === "sql"
-                                        ? "New SQL Query"
-                                        : "New Core Concept"}
-                        </h2>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            {step === "choose"
-                                ? "Choose the type of card to add"
-                                : "Fill in the details below"}
-                        </p>
+                {/* 8 Resize Handles - only active in form step */}
+                {!isMaximized && dimensions && step === "form" && (
+                    <>
+                        {/* N */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "n")}
+                            className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-50"
+                        />
+                        {/* S */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "s")}
+                            className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize z-50"
+                        />
+                        {/* E */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "e")}
+                            className="absolute top-0 bottom-0 right-0 w-1.5 cursor-ew-resize z-50"
+                        />
+                        {/* W */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "w")}
+                            className="absolute top-0 bottom-0 left-0 w-1.5 cursor-ew-resize z-50"
+                        />
+                        {/* NW */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "nw")}
+                            className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize z-50"
+                        />
+                        {/* NE */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "ne")}
+                            className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize z-50"
+                        />
+                        {/* SW */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "sw")}
+                            className="absolute bottom-0 left-0 w-3 h-3 cursor-nesw-resize z-50"
+                        />
+                        {/* SE */}
+                        <div
+                            onPointerDown={(e) => startDragOrResize(e, "se")}
+                            className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize z-50"
+                        />
+                    </>
+                )}
+
+                {/* Header - Entire bar is draggable only in form step */}
+                <div
+                    onPointerDown={(e) => {
+                        if (step === "choose") return;
+                        const target = e.target as HTMLElement;
+                        if (target.closest("button") || target.closest("input") || target.closest("select") || target.closest("textarea")) {
+                            return;
+                        }
+                        startDragOrResize(e, "drag");
+                    }}
+                    className={`p-6 border-b border-border flex items-center justify-between select-none shrink-0 ${step === "form" ? "cursor-move" : ""}`}
+                >
+                    <div className="flex items-center gap-3">
+                        {!isMaximized && step === "form" && (
+                            <div
+                                className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab active:cursor-grabbing"
+                                title="Drag to move"
+                            >
+                                <GripVertical className="w-5 h-5" />
+                            </div>
+                        )}
+                        <div>
+                            <h2 className="text-xl font-bold text-foreground">
+                                {step === "choose"
+                                    ? "Add New Card"
+                                    : cardType === "leetcode"
+                                        ? "New DSA Problem"
+                                        : cardType === "sql"
+                                            ? "New SQL Query"
+                                            : "New Core Concept"}
+                            </h2>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                {step === "choose"
+                                    ? "Choose the type of card to add"
+                                    : "Fill in the details below"}
+                            </p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full shrink-0 hover:bg-muted cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
-                            title="Drag to move"
-                            onPointerDown={(e) => dragControls.start(e)}
-                        >
-                            <GripVertical className="w-5 h-5" />
-                        </Button>
+                        {step === "form" && (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={resetToDefault}
+                                    className="rounded-full shrink-0 hover:bg-muted"
+                                    title="Reset to default size"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsMaximized(!isMaximized)}
+                                    className="rounded-full shrink-0 hover:bg-muted"
+                                    title={isMaximized ? "Restore size" : "Maximize window"}
+                                >
+                                    {isMaximized ? <WindowsRestoreIcon /> : <WindowsMaximizeIcon />}
+                                </Button>
+                            </>
+                        )}
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={onClose}
-                            className="rounded-full shrink-0"
+                            className="rounded-full shrink-0 hover:bg-muted"
+                            title="Close"
                         >
                             <X className="w-5 h-5" />
                         </Button>
@@ -152,7 +360,7 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
 
                 {/* Back button (only shown when in form step, before the form's own submit) */}
                 {step === "form" && (
-                    <div className="px-6 pb-4">
+                    <div className="px-6 pb-4 shrink-0">
                         <Button
                             variant="ghost"
                             onClick={() => setStep("choose")}
