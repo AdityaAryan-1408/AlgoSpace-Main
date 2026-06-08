@@ -706,7 +706,7 @@ export function CardDetailsModal({
                 )}
 
                 {systemDesignTab === "canvas" && (
-                  <div className="h-[480px]">
+                  <div className="h-[600px]">
                     <SystemDesignCanvas
                       value={canvasData}
                       onChange={(val) => setCanvasData(val)}

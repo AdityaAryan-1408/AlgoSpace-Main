@@ -18,18 +18,21 @@ import {
   Loader2,
   Move,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Columns
 } from "lucide-react";
 
 export interface CanvasNode {
   id: string;
-  type: "service" | "client" | "database" | "router" | "text";
+  type: "service" | "client" | "database" | "router" | "text" | "class";
   label: string;
   x: number;
   y: number;
   width: number;
   height: number;
   rotation?: number;
+  attributes?: string;
+  isAbstract?: boolean;
 }
 
 export interface CanvasEdge {
@@ -64,7 +67,7 @@ export function SystemDesignCanvas({
   const [edges, setEdges] = useState<CanvasEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"select" | "connect" | "service" | "client" | "database" | "router" | "text">("select");
+  const [mode, setMode] = useState<"select" | "connect" | "service" | "client" | "database" | "router" | "text" | "class">("select");
   
   // Connection drag state
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
@@ -73,6 +76,8 @@ export function SystemDesignCanvas({
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [editInputValue, setEditInputValue] = useState("");
+  const [editClassAttributes, setEditClassAttributes] = useState("");
+  const [editClassIsAbstract, setEditClassIsAbstract] = useState(false);
 
   // Undo / Redo stacks
   const [undoStack, setUndoStack] = useState<CanvasData[]>([]);
@@ -196,6 +201,7 @@ export function SystemDesignCanvas({
     let label = "New Shape";
     let width = 140;
     let height = 60;
+    let extraFields: Partial<CanvasNode> = {};
 
     switch (type) {
       case "service":
@@ -223,6 +229,15 @@ export function SystemDesignCanvas({
         width = 140;
         height = 40;
         break;
+      case "class":
+        label = "User";
+        width = 150;
+        height = 110;
+        extraFields = {
+          attributes: "- id: int\n- name: string\n+ getName(): string",
+          isAbstract: false
+        };
+        break;
     }
 
     const newNode: CanvasNode = {
@@ -232,7 +247,8 @@ export function SystemDesignCanvas({
       x: Math.round(x / 10) * 10,
       y: Math.round(y / 10) * 10,
       width,
-      height
+      height,
+      ...extraFields
     };
 
     saveState([...nodes, newNode], edges);
@@ -243,6 +259,10 @@ export function SystemDesignCanvas({
     // Immediately edit label
     setEditingNodeId(id);
     setEditInputValue(label);
+    if (type === "class") {
+      setEditClassAttributes(extraFields.attributes || "");
+      setEditClassIsAbstract(extraFields.isAbstract || false);
+    }
   };
 
   // SVG click handling (create shape or deselect)
@@ -457,34 +477,52 @@ export function SystemDesignCanvas({
     }
   };
 
-  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    if (e.ctrlKey) {
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // Prevent default page scrolling when inside the grid
       e.preventDefault();
-      const rect = e.currentTarget.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
 
-      // Find local coordinates under the mouse before zooming
-      const lx = (mx - panOffset.x) / zoom;
-      const ly = (my - panOffset.y) / zoom;
+      if (e.ctrlKey) {
+        const rect = svg.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
 
-      const zoomFactor = 1.08;
-      let nextZoom = zoom;
-      if (e.deltaY < 0) {
-        nextZoom = Math.min(2, zoom * zoomFactor);
+        // Find local coordinates under the mouse before zooming
+        const lx = (mx - panOffset.x) / zoom;
+        const ly = (my - panOffset.y) / zoom;
+
+        const zoomFactor = 1.05;
+        let nextZoom = zoom;
+        if (e.deltaY < 0) {
+          nextZoom = Math.min(2.5, zoom * zoomFactor);
+        } else {
+          nextZoom = Math.max(0.4, zoom / zoomFactor);
+        }
+
+        // Calculate new panOffset so that (lx, ly) maps to the same (mx, my) under nextZoom
+        const newPanX = mx - lx * nextZoom;
+        const newPanY = my - ly * nextZoom;
+
+        setZoom(nextZoom);
+        setPanOffset({ x: newPanX, y: newPanY });
+        saveState(nodes, edges, false, { x: newPanX, y: newPanY }, nextZoom);
       } else {
-        nextZoom = Math.max(0.5, zoom / zoomFactor);
+        // Pan grid in direction of wheel scroll
+        const nextPanX = panOffset.x - e.deltaX;
+        const nextPanY = panOffset.y - e.deltaY;
+        setPanOffset({ x: nextPanX, y: nextPanY });
+        saveState(nodes, edges, false, { x: nextPanX, y: nextPanY }, zoom);
       }
+    };
 
-      // Calculate new panOffset so that (lx, ly) maps to the same (mx, my) under nextZoom
-      const newPanX = mx - lx * nextZoom;
-      const newPanY = my - ly * nextZoom;
-
-      setZoom(nextZoom);
-      setPanOffset({ x: newPanX, y: newPanY });
-      saveState(nodes, edges, false, { x: newPanX, y: newPanY }, nextZoom);
-    }
-  };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      svg.removeEventListener("wheel", onWheel);
+    };
+  }, [panOffset, zoom, nodes, edges, saveState]);
 
   const handleNodeClick = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
@@ -519,6 +557,10 @@ export function SystemDesignCanvas({
     if (node) {
       setEditingNodeId(nodeId);
       setEditInputValue(node.label);
+      if (node.type === "class") {
+        setEditClassAttributes(node.attributes || "");
+        setEditClassIsAbstract(node.isAbstract || false);
+      }
     }
   };
 
@@ -541,7 +583,23 @@ export function SystemDesignCanvas({
   // Label Edit Submits
   const handleEditSubmit = () => {
     if (editingNodeId) {
-      saveState(nodes.map((n) => n.id === editingNodeId ? { ...n, label: editInputValue.trim() } : n), edges);
+      saveState(
+        nodes.map((n) => {
+          if (n.id === editingNodeId) {
+            if (n.type === "class") {
+              return {
+                ...n,
+                label: editInputValue.trim(),
+                attributes: editClassAttributes,
+                isAbstract: editClassIsAbstract
+              };
+            }
+            return { ...n, label: editInputValue.trim() };
+          }
+          return n;
+        }),
+        edges
+      );
       setEditingNodeId(null);
     } else if (editingEdgeId) {
       saveState(nodes, edges.map((e) => e.id === editingEdgeId ? { ...e, label: editInputValue.trim() } : e));
@@ -661,6 +719,83 @@ export function SystemDesignCanvas({
           />
         );
 
+      case "class":
+        const isAbs = node.isAbstract === true;
+        const cLines = node.attributes ? node.attributes.split("\n") : [];
+        const headerH = isAbs ? 32 : 24;
+        
+        return (
+          <g>
+            <rect
+              x={node.x}
+              y={node.y}
+              width={node.width}
+              height={node.height}
+              rx="4"
+              fill="rgba(168, 85, 247, 0.08)"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+            {/* Class name header */}
+            {isAbs && (
+              <text
+                x={node.x + node.width / 2}
+                y={node.y + 12}
+                fill="#a855f7"
+                fontSize="8"
+                fontWeight="semibold"
+                fontFamily="monospace"
+                textAnchor="middle"
+                pointerEvents="none"
+              >
+                &lt;&lt;abstract&gt;&gt;
+              </text>
+            )}
+            <text
+              x={node.x + node.width / 2}
+              y={node.y + (isAbs ? 26 : 16)}
+              fill="#f8fafc"
+              fontSize="11"
+              fontWeight="bold"
+              fontStyle={isAbs ? "italic" : "normal"}
+              fontFamily="monospace"
+              textAnchor="middle"
+              pointerEvents="none"
+            >
+              {node.label}
+            </text>
+            
+            <line
+              x1={node.x}
+              y1={node.y + headerH}
+              x2={node.x + node.width}
+              y2={node.y + headerH}
+              stroke={strokeColor}
+              strokeWidth={1}
+            />
+            
+            {/* Attribute lines */}
+            {cLines.map((line, idx) => {
+              const lineY = node.y + headerH + 12 + idx * 14;
+              if (lineY > node.y + node.height - 4) return null; // clip
+              return (
+                <text
+                  key={idx}
+                  x={node.x + 8}
+                  y={lineY}
+                  fill="#94a3b8"
+                  fontSize="9.5"
+                  fontFamily="monospace"
+                  textAnchor="start"
+                  pointerEvents="none"
+                >
+                  {line}
+                </text>
+              );
+            })}
+          </g>
+        );
+
       case "text":
         return (
           <rect
@@ -692,6 +827,9 @@ export function SystemDesignCanvas({
         );
     }
   };
+
+  const editingNode = nodes.find((n) => n.id === editingNodeId);
+  const isEditingClass = editingNode?.type === "class";
 
   return (
     <div className="flex flex-col gap-3 h-full select-none">
@@ -743,6 +881,16 @@ export function SystemDesignCanvas({
             >
               <Square className="w-3.5 h-3.5" />
               Service
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "class" ? "secondary" : "ghost"}
+              onClick={() => setMode("class")}
+              className="h-8 px-2 text-xs gap-1 text-purple-400"
+              title="Add UML Class Box"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              Class
             </Button>
             <Button
               size="sm"
@@ -871,7 +1019,6 @@ export function SystemDesignCanvas({
           onPointerDown={handleSvgPointerDown}
           onPointerMove={handleSvgPointerMove}
           onPointerUp={handleSvgPointerUp}
-          onWheel={handleWheel}
           style={{ touchAction: "none" }}
         >
           <defs>
@@ -1010,18 +1157,20 @@ export function SystemDesignCanvas({
                 {renderShape(node)}
 
                 {/* Shape Label */}
-                <text
-                  x={node.x + node.width / 2}
-                  y={textY}
-                  fill={node.type === "text" ? "#94a3b8" : "#f8fafc"}
-                  fontSize="11"
-                  fontWeight={node.type === "text" ? "normal" : "semibold"}
-                  fontFamily={node.type === "text" ? "sans-serif" : "monospace"}
-                  textAnchor="middle"
-                  pointerEvents="none"
-                >
-                  {node.label}
-                </text>
+                {node.type !== "class" && (
+                  <text
+                    x={node.x + node.width / 2}
+                    y={textY}
+                    fill={node.type === "text" ? "#94a3b8" : "#f8fafc"}
+                    fontSize="11"
+                    fontWeight={node.type === "text" ? "normal" : "semibold"}
+                    fontFamily={node.type === "text" ? "sans-serif" : "monospace"}
+                    textAnchor="middle"
+                    pointerEvents="none"
+                  >
+                    {node.label}
+                  </text>
+                )}
 
                 {/* Selection outline and resize/rotate handles */}
                 {isSelected && !readOnly && (
@@ -1098,16 +1247,18 @@ export function SystemDesignCanvas({
         {/* Inline Label Editing Inputs */}
         {(editingNodeId || editingEdgeId) && (
           <div 
-            className="absolute bg-card border border-border p-3 rounded-xl shadow-2xl flex flex-col gap-2 z-30 w-64 animate-in zoom-in-95 duration-100"
+            className="absolute bg-card border border-border p-3 rounded-xl shadow-2xl flex flex-col gap-2.5 z-30 w-64 animate-in zoom-in-95 duration-100"
             style={(() => {
               const containerWidth = svgRef.current?.clientWidth || DEFAULT_CANVAS_WIDTH;
               const containerHeight = svgRef.current?.clientHeight || DEFAULT_CANVAS_HEIGHT;
               if (editingNodeId) {
                 const node = nodes.find(n => n.id === editingNodeId);
                 if (node) {
+                  const isClass = node.type === "class";
+                  const popupHeight = isClass ? 260 : 100;
                   return {
                     left: `${Math.max(10, Math.min(containerWidth - 270, (node.x * zoom) + panOffset.x))}px`,
-                    top: `${Math.max(10, Math.min(containerHeight - 120, ((node.y + node.height) * zoom) + panOffset.y + 8))}px`
+                    top: `${Math.max(10, Math.min(containerHeight - popupHeight, ((node.y + node.height) * zoom) + panOffset.y + 8))}px`
                   };
                 }
               } else if (editingEdgeId) {
@@ -1126,25 +1277,82 @@ export function SystemDesignCanvas({
               return { left: "10px", top: "10px" };
             })()}
           >
-            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
-              {editingNodeId ? "Edit Component Label" : "Edit Connection Label"}
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block text-left">
+              {editingNodeId 
+                ? (isEditingClass ? "Edit UML Class" : "Edit Component Label") 
+                : "Edit Connection Label"}
             </span>
-            <div className="flex gap-1">
-              <input
-                type="text"
-                autoFocus
-                value={editInputValue}
-                onChange={(e) => setEditInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleEditSubmit();
-                  if (e.key === "Escape") { setEditingNodeId(null); setEditingEdgeId(null); }
-                }}
-                className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <Button size="sm" onClick={handleEditSubmit} className="h-7 px-2 text-xs">
-                Save
-              </Button>
-            </div>
+
+            {isEditingClass ? (
+              <div className="flex flex-col gap-2.5 text-left">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-muted-foreground font-bold uppercase">Class Name</label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editInputValue}
+                    onChange={(e) => setEditInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) handleEditSubmit();
+                      if (e.key === "Escape") { setEditingNodeId(null); }
+                    }}
+                    className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-muted-foreground font-bold uppercase">Attributes & Methods</label>
+                  <textarea
+                    value={editClassAttributes}
+                    onChange={(e) => setEditClassAttributes(e.target.value)}
+                    rows={4}
+                    placeholder="e.g. - id: int&#10;+ getName(): string"
+                    className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                  />
+                </div>
+                
+                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editClassIsAbstract}
+                    onChange={(e) => setEditClassIsAbstract(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="font-medium">Abstract Class</span>
+                </label>
+                
+                <div className="flex justify-end gap-1.5 pt-1">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => setEditingNodeId(null)} 
+                    className="h-7 px-2.5 text-xs font-semibold"
+                  >
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleEditSubmit} className="h-7 px-2.5 text-xs font-semibold">
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  autoFocus
+                  value={editInputValue}
+                  onChange={(e) => setEditInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleEditSubmit();
+                    if (e.key === "Escape") { setEditingNodeId(null); setEditingEdgeId(null); }
+                  }}
+                  className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <Button size="sm" onClick={handleEditSubmit} className="h-7 px-2 text-xs">
+                  Save
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

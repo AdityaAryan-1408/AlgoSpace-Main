@@ -121,7 +121,17 @@ ${currentNotes ? `Here are the existing notes to build upon: \n${currentNotes}` 
 The JSON schema MUST exactly match:
 {
   "nodes": [
-    { "id": "string", "type": "service" | "client" | "database" | "router" | "text", "label": "string", "x": number, "y": number, "width": number, "height": number }
+    { 
+      "id": "string", 
+      "type": "service" | "client" | "database" | "router" | "text" | "class", 
+      "label": "string", 
+      "x": number, 
+      "y": number, 
+      "width": number, 
+      "height": number,
+      "attributes": "string" (optional, only for type "class", multiline attributes/methods separated by \n),
+      "isAbstract": boolean (optional, only for type "class")
+    }
   ],
   "edges": [
     { "id": "string", "from": "string", "to": "string", "label": "string" }
@@ -137,7 +147,8 @@ PLACEMENT RULES:
   - service: width 140, height 60
   - database: width 120, height 80
   - text: width 150, height 40
-- All nodes must have clean, concise uppercase or PascalCase labels (e.g. "API Gateway", "User DB", "Redis Cache", "React App").
+  - class: width 150, height 110
+- All nodes must have clean, concise uppercase or PascalCase labels (e.g. "API Gateway", "User DB", "Redis Cache", "React App", "ProductService").
 - Edges must link valid node ids. Use unique ids for edges like "e1", "e2".
 - Label edges with the protocol/data sent (e.g. "HTTP POST", "SQL Query", "gRPC", "TCP/IP").`;
 
@@ -147,13 +158,23 @@ PLACEMENT RULES:
 The JSON schema MUST exactly match:
 {
   "nodes": [
-    { "id": "string", "type": "service" | "client" | "database" | "router" | "text", "label": "string", "x": number, "y": number, "width": number, "height": number }
+    { 
+      "id": "string", 
+      "type": "service" | "client" | "database" | "router" | "text" | "class", 
+      "label": "string", 
+      "x": number, 
+      "y": number, 
+      "width": number, 
+      "height": number,
+      "attributes": "string" (optional, only for type "class", multiline attributes/methods separated by \n),
+      "isAbstract": boolean (optional, only for type "class")
+    }
   ],
   "edges": [
     { "id": "string", "from": "string", "to": "string", "label": "string" }
   ]
 }
-Improve the layout, add missing standard components (like caches, replica databases, queue/message brokers, or rate limiters), and space them out nicely so they look beautiful and professional. Return ONLY the JSON. No explanations.`;
+Improve the layout, add missing standard components (like caches, replica databases, queue/message brokers, rate limiters, or domain/entities classes), and space them out nicely so they look beautiful and professional. Return ONLY the JSON. No explanations.`;
 
       userPrompt = `Optimize and expand this current diagram layout:
 ${JSON.stringify(currentCanvas || { nodes: [], edges: [] }, null, 2)}`;

@@ -272,7 +272,7 @@ export function NotesPanel({
                 )}
 
                 {systemDesignTab === "canvas" && (
-                  <div className="h-[420px]">
+                  <div className="h-[500px]">
                     <SystemDesignCanvas
                       value={canvasData}
                       onChange={handleCanvasChange}

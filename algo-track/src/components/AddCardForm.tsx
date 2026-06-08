@@ -559,7 +559,7 @@ export function AddCardForm({
                         )}
 
                         {systemDesignTab === "canvas" && (
-                            <div className="h-[450px]">
+                            <div className="h-[580px]">
                                 <SystemDesignCanvas
                                     value={canvasData}
                                     onChange={(val) => setCanvasData(val)}
