@@ -84,8 +84,8 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
             const minH = 300;
 
             if (action === "drag") {
-                nextLeft = startLeft + dx;
-                nextTop = startTop + dy;
+                nextLeft = Math.max(-nextWidth + 100, Math.min(window.innerWidth - 100, startLeft + dx));
+                nextTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
             } else {
                 // Resize calculations
                 if (action.includes("n")) {

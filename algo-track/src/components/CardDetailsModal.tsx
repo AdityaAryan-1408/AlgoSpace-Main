@@ -110,8 +110,8 @@ export function CardDetailsModal({
       const minH = 300;
 
       if (action === "drag") {
-        nextLeft = startLeft + dx;
-        nextTop = startTop + dy;
+        nextLeft = Math.max(-nextWidth + 100, Math.min(window.innerWidth - 100, startLeft + dx));
+        nextTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
       } else {
         // Resize calculations
         if (action.includes("n")) {
@@ -395,7 +395,6 @@ export function CardDetailsModal({
     <div
       ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
