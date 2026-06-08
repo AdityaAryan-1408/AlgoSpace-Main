@@ -1171,7 +1171,19 @@ export function SystemDesignCanvas({
                     textAnchor="middle"
                     pointerEvents="none"
                   >
-                    {node.label}
+                    {node.label.split("\n").map((line, idx, arr) => {
+                      const lineHeight = 14;
+                      const offset = (idx - (arr.length - 1) / 2) * lineHeight;
+                      return (
+                        <tspan
+                          key={idx}
+                          x={node.x + node.width / 2}
+                          dy={idx === 0 ? offset : lineHeight}
+                        >
+                          {line}
+                        </tspan>
+                      );
+                    })}
                   </text>
                 )}
 
@@ -1339,21 +1351,44 @@ export function SystemDesignCanvas({
                 </div>
               </div>
             ) : (
-              <div className="flex gap-1">
-                <input
-                  type="text"
-                  autoFocus
-                  value={editInputValue}
-                  onChange={(e) => setEditInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleEditSubmit();
-                    if (e.key === "Escape") { setEditingNodeId(null); setEditingEdgeId(null); }
-                  }}
-                  className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <Button size="sm" onClick={handleEditSubmit} className="h-7 px-2 text-xs">
-                  Save
-                </Button>
+              <div className="flex flex-col gap-2">
+                {editingNodeId ? (
+                  <textarea
+                    autoFocus
+                    value={editInputValue}
+                    onChange={(e) => setEditInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") { setEditingNodeId(null); }
+                    }}
+                    rows={3}
+                    className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary font-sans resize-none"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editInputValue}
+                    onChange={(e) => setEditInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleEditSubmit();
+                      if (e.key === "Escape") { setEditingEdgeId(null); }
+                    }}
+                    className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                )}
+                <div className="flex justify-end gap-1.5 pt-1">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => { setEditingNodeId(null); setEditingEdgeId(null); }} 
+                    className="h-7 px-2.5 text-xs font-semibold"
+                  >
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleEditSubmit} className="h-7 px-2.5 text-xs font-semibold">
+                    Save
+                  </Button>
+                </div>
               </div>
             )}
           </div>
