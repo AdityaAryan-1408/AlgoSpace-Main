@@ -39,10 +39,13 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
     } | null>(null);
 
     // Initialize dimensions on mount to center the modal
-    const resetToDefault = () => {
+    const resetToDefault = (targetStep?: "choose" | "form") => {
         setIsMaximized(false);
+        const activeStep = (targetStep === "choose" || targetStep === "form") ? targetStep : step;
         const defaultWidth = Math.min(window.innerWidth - 32, 672); // max-w-2xl equivalent (672px)
-        const defaultHeight = Math.min(window.innerHeight - 32, window.innerHeight * 0.85);
+        const defaultHeight = activeStep === "choose"
+            ? Math.min(window.innerHeight - 32, 380)
+            : Math.min(window.innerHeight - 32, window.innerHeight * 0.85);
         const left = (window.innerWidth - defaultWidth) / 2;
         const top = (window.innerHeight - defaultHeight) / 2;
 
@@ -55,14 +58,14 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
     };
 
     useEffect(() => {
-        resetToDefault();
+        resetToDefault("choose");
     }, []);
 
     const startDragOrResize = (
         e: React.PointerEvent,
         action: "drag" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se"
     ) => {
-        if (isMaximized || step === "choose") return;
+        if (isMaximized) return;
         e.preventDefault();
         const startX = e.clientX;
         const startY = e.clientY;
@@ -136,6 +139,7 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
     const handleTypeSelect = (type: CardType) => {
         setCardType(type);
         setStep("form");
+        resetToDefault("form");
     };
 
     const handleSubmitted = () => {
@@ -145,13 +149,13 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
 
     const modalClass = isMaximized
         ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none"
-        : (dimensions && step === "form")
+        : dimensions
             ? "bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col border border-border"
             : "w-full max-w-2xl bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] border border-border";
 
     const modalStyle = isMaximized
         ? { transform: "none" }
-        : (dimensions && step === "form")
+        : dimensions
             ? {
                 width: `${dimensions.width}px`,
                 height: `${dimensions.height}px`,
@@ -175,8 +179,8 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
                 className={modalClass}
                 style={modalStyle}
             >
-                {/* 8 Resize Handles - only active in form step */}
-                {!isMaximized && dimensions && step === "form" && (
+                {/* 8 Resize Handles */}
+                {!isMaximized && dimensions && (
                     <>
                         {/* N */}
                         <div
@@ -221,20 +225,19 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
                     </>
                 )}
 
-                {/* Header - Entire bar is draggable only in form step */}
+                {/* Header - Entire bar is draggable */}
                 <div
                     onPointerDown={(e) => {
-                        if (step === "choose") return;
                         const target = e.target as HTMLElement;
                         if (target.closest("button") || target.closest("input") || target.closest("select") || target.closest("textarea")) {
                             return;
                         }
                         startDragOrResize(e, "drag");
                     }}
-                    className={`p-6 border-b border-border flex items-center justify-between select-none shrink-0 ${step === "form" ? "cursor-move" : ""}`}
+                    className="p-6 border-b border-border flex items-center justify-between select-none shrink-0 cursor-move"
                 >
                     <div className="flex items-center gap-3">
-                        {!isMaximized && step === "form" && (
+                        {!isMaximized && (
                             <div
                                 className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab active:cursor-grabbing"
                                 title="Drag to move"
@@ -260,28 +263,24 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        {step === "form" && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={resetToDefault}
-                                    className="rounded-full shrink-0 hover:bg-muted"
-                                    title="Reset to default size"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setIsMaximized(!isMaximized)}
-                                    className="rounded-full shrink-0 hover:bg-muted"
-                                    title={isMaximized ? "Restore size" : "Maximize window"}
-                                >
-                                    {isMaximized ? <WindowsRestoreIcon /> : <WindowsMaximizeIcon />}
-                                </Button>
-                            </>
-                        )}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => resetToDefault()}
+                            className="rounded-full shrink-0 hover:bg-muted"
+                            title="Reset to default size"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsMaximized(!isMaximized)}
+                            className="rounded-full shrink-0 hover:bg-muted"
+                            title={isMaximized ? "Restore size" : "Maximize window"}
+                        >
+                            {isMaximized ? <WindowsRestoreIcon /> : <WindowsMaximizeIcon />}
+                        </Button>
                         <Button
                             variant="ghost"
                             size="icon"
@@ -363,7 +362,10 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
                     <div className="px-6 pb-4 shrink-0">
                         <Button
                             variant="ghost"
-                            onClick={() => setStep("choose")}
+                            onClick={() => {
+                                setStep("choose");
+                                resetToDefault("choose");
+                            }}
                             className="font-semibold"
                         >
                             ← Back
