@@ -282,6 +282,7 @@ export function SystemDesignCanvas({
       setSelectedEdgeId(null);
       setEditingNodeId(null);
       setEditingEdgeId(null);
+      setConnectSourceId(null);
     }
   };
 
@@ -322,7 +323,6 @@ export function SystemDesignCanvas({
     e.stopPropagation();
     
     if (mode === "connect") {
-      setConnectSourceId(nodeId);
       return;
     }
 
@@ -541,6 +541,9 @@ export function SystemDesignCanvas({
         setSelectedNodeId(null);
         setConnectSourceId(null);
         setMode("select");
+      } else if (connectSourceId === nodeId) {
+        // Toggle off if clicking the same node again
+        setConnectSourceId(null);
       } else {
         setConnectSourceId(nodeId);
       }
