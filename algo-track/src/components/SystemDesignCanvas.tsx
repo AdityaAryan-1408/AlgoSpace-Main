@@ -33,6 +33,7 @@ export interface CanvasNode {
   rotation?: number;
   attributes?: string;
   isAbstract?: boolean;
+  stereotype?: string;
 }
 
 export interface CanvasEdge {
@@ -40,6 +41,9 @@ export interface CanvasEdge {
   from: string;
   to: string;
   label: string;
+  curvature?: number;
+  fromPort?: "top" | "bottom" | "left" | "right";
+  toPort?: "top" | "bottom" | "left" | "right";
 }
 
 export interface CanvasData {
@@ -78,6 +82,9 @@ export function SystemDesignCanvas({
   const [editInputValue, setEditInputValue] = useState("");
   const [editClassAttributes, setEditClassAttributes] = useState("");
   const [editClassIsAbstract, setEditClassIsAbstract] = useState(false);
+  const [editClassStereotype, setEditClassStereotype] = useState("");
+  const [editEdgeFromPort, setEditEdgeFromPort] = useState("auto");
+  const [editEdgeToPort, setEditEdgeToPort] = useState("auto");
 
   // Undo / Redo stacks
   const [undoStack, setUndoStack] = useState<CanvasData[]>([]);
@@ -90,6 +97,7 @@ export function SystemDesignCanvas({
   const isRotatingNode = useRef<string | null>(null);
   const dragStartDimensions = useRef({ width: 0, height: 0, x: 0, y: 0 });
   const dragStartAngle = useRef<number>(0);
+  const isDraggingEdgeBend = useRef<string | null>(null);
 
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -235,7 +243,8 @@ export function SystemDesignCanvas({
         height = 110;
         extraFields = {
           attributes: "- id: int\n- name: string\n+ getName(): string",
-          isAbstract: false
+          isAbstract: false,
+          stereotype: "abstract"
         };
         break;
     }
@@ -244,8 +253,8 @@ export function SystemDesignCanvas({
       id,
       type,
       label,
-      x: Math.round(x / 10) * 10,
-      y: Math.round(y / 10) * 10,
+      x: Math.round(x / 5) * 5,
+      y: Math.round(y / 5) * 5,
       width,
       height,
       ...extraFields
@@ -262,6 +271,7 @@ export function SystemDesignCanvas({
     if (type === "class") {
       setEditClassAttributes(extraFields.attributes || "");
       setEditClassIsAbstract(extraFields.isAbstract || false);
+      setEditClassStereotype(extraFields.stereotype || "abstract");
     }
   };
 
@@ -376,6 +386,34 @@ export function SystemDesignCanvas({
   const handleSvgPointerMove = (e: React.PointerEvent) => {
     if (readOnly) return;
 
+    if (isDraggingEdgeBend.current) {
+      e.preventDefault();
+      const edgeId = isDraggingEdgeBend.current;
+      const edge = edges.find((ed) => ed.id === edgeId);
+      if (edge) {
+        const fromNode = nodes.find((n) => n.id === edge.from);
+        const toNode = nodes.find((n) => n.id === edge.to);
+        if (fromNode && toNode) {
+          const pts = getLinePoints(fromNode, toNode, edge.fromPort, edge.toPort);
+          const isHorizontal = checkEdgeIsHorizontal(edge, fromNode, toNode);
+          const coords = getLocalCoords(e.clientX, e.clientY);
+
+          if (isHorizontal) {
+            // Slide segment horizontally (X)
+            const mx = (pts.x1 + pts.x2) / 2;
+            const nextCurvature = Math.round((coords.x - mx) / 5) * 5;
+            setEdges(edges.map((ed) => ed.id === edgeId ? { ...ed, curvature: nextCurvature } : ed));
+          } else {
+            // Slide segment vertically (Y)
+            const my = (pts.y1 + pts.y2) / 2;
+            const nextCurvature = Math.round((coords.y - my) / 5) * 5;
+            setEdges(edges.map((ed) => ed.id === edgeId ? { ...ed, curvature: nextCurvature } : ed));
+          }
+        }
+      }
+      return;
+    }
+
     if (isResizingNode.current) {
       e.preventDefault();
       const nodeId = isResizingNode.current;
@@ -392,9 +430,9 @@ export function SystemDesignCanvas({
         const localDx = (dx * Math.cos(rad) - dy * Math.sin(rad)) / zoom;
         const localDy = (dx * Math.sin(rad) + dy * Math.cos(rad)) / zoom;
 
-        // Snap resizing to 10px, minimum 60x40
-        const nextWidth = Math.max(60, Math.round((startW + localDx) / 10) * 10);
-        const nextHeight = Math.max(40, Math.round((startH + localDy) / 10) * 10);
+        // Snap resizing to 5px, minimum 60x40
+        const nextWidth = Math.max(60, Math.round((startW + localDx) / 5) * 5);
+        const nextHeight = Math.max(40, Math.round((startH + localDy) / 5) * 5);
 
         setNodes(nodes.map((n) => n.id === nodeId ? { ...n, width: nextWidth, height: nextHeight } : n));
       }
@@ -437,9 +475,9 @@ export function SystemDesignCanvas({
       const nodeId = isDraggingNode.current;
       const coords = getLocalCoords(e.clientX, e.clientY);
 
-      // Snap coordinates to 10px and drag freely without layout box bounding limits (infinite canvas)
-      const nextX = Math.round((coords.x - dragStartOffset.current.x) / 10) * 10;
-      const nextY = Math.round((coords.y - dragStartOffset.current.y) / 10) * 10;
+      // Snap coordinates to 5px and drag freely without layout box bounding limits (infinite canvas)
+      const nextX = Math.round((coords.x - dragStartOffset.current.x) / 5) * 5;
+      const nextY = Math.round((coords.y - dragStartOffset.current.y) / 5) * 5;
 
       setNodes(nodes.map((n) => n.id === nodeId ? { ...n, x: nextX, y: nextY } : n));
     }
@@ -467,6 +505,11 @@ export function SystemDesignCanvas({
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch (err) {}
       saveState(nodes, edges, false, panOffset, zoom);
+      return;
+    }
+    if (isDraggingEdgeBend.current) {
+      isDraggingEdgeBend.current = null;
+      saveState(nodes, edges, true);
       return;
     }
     if (isDraggingNode.current || isResizingNode.current || isRotatingNode.current) {
@@ -563,6 +606,7 @@ export function SystemDesignCanvas({
       if (node.type === "class") {
         setEditClassAttributes(node.attributes || "");
         setEditClassIsAbstract(node.isAbstract || false);
+        setEditClassStereotype(node.stereotype || "abstract");
       }
     }
   };
@@ -580,6 +624,8 @@ export function SystemDesignCanvas({
     if (edge) {
       setEditingEdgeId(edgeId);
       setEditInputValue(edge.label);
+      setEditEdgeFromPort(edge.fromPort || "auto");
+      setEditEdgeToPort(edge.toPort || "auto");
     }
   };
 
@@ -594,7 +640,8 @@ export function SystemDesignCanvas({
                 ...n,
                 label: editInputValue.trim(),
                 attributes: editClassAttributes,
-                isAbstract: editClassIsAbstract
+                isAbstract: editClassIsAbstract,
+                stereotype: editClassStereotype.trim()
               };
             }
             return { ...n, label: editInputValue.trim() };
@@ -605,13 +652,164 @@ export function SystemDesignCanvas({
       );
       setEditingNodeId(null);
     } else if (editingEdgeId) {
-      saveState(nodes, edges.map((e) => e.id === editingEdgeId ? { ...e, label: editInputValue.trim() } : e));
+      saveState(
+        nodes,
+        edges.map((e) =>
+          e.id === editingEdgeId
+            ? {
+                ...e,
+                label: editInputValue.trim(),
+                fromPort: editEdgeFromPort === "auto" ? undefined : (editEdgeFromPort as any),
+                toPort: editEdgeToPort === "auto" ? undefined : (editEdgeToPort as any)
+              }
+            : e
+        )
+      );
       setEditingEdgeId(null);
     }
   };
 
-  // Helper to draw connecting line with back-offs so arrow sits at shape borders
-  const getLinePoints = (n1: CanvasNode, n2: CanvasNode) => {
+  // Helper to determine if the connection between two nodes should be mostly horizontal (Left/Right faces) or vertical (Top/Bottom faces)
+  const checkIsHorizontal = (n1: CanvasNode, n2: CanvasNode) => {
+    // Check horizontal and vertical overlaps of bounding boxes
+    const xOverlap = Math.max(0, Math.min(n1.x + n1.width, n2.x + n2.width) - Math.max(n1.x, n2.x)) > 0;
+    const yOverlap = Math.max(0, Math.min(n1.y + n1.height, n2.y + n2.height) - Math.max(n1.y, n2.y)) > 0;
+
+    if (xOverlap && !yOverlap) {
+      return false; // Nodes are stacked vertically, connect top/bottom faces
+    }
+    if (yOverlap && !xOverlap) {
+      return true; // Nodes are placed horizontally, connect left/right faces
+    }
+
+    // Diagonal: compare the distance between centers
+    const cx1 = n1.x + n1.width / 2;
+    const cy1 = n1.y + n1.height / 2;
+    const cx2 = n2.x + n2.width / 2;
+    const cy2 = n2.y + n2.height / 2;
+    return Math.abs(cx2 - cx1) >= Math.abs(cy2 - cy1);
+  };
+
+  // Helper to check if a specific edge connects horizontally (left/right) or vertically (top/bottom) based on custom ports
+  const checkEdgeIsHorizontal = (edge: CanvasEdge, fromNode: CanvasNode, toNode: CanvasNode) => {
+    const cx1 = fromNode.x + fromNode.width / 2;
+    const cy1 = fromNode.y + fromNode.height / 2;
+    const cx2 = toNode.x + toNode.width / 2;
+    const cy2 = toNode.y + toNode.height / 2;
+    const dx = cx2 - cx1;
+
+    const isHorizontalStart = edge.fromPort 
+      ? (edge.fromPort === "left" || edge.fromPort === "right")
+      : checkIsHorizontal(fromNode, toNode);
+
+    const getPortDir = (port: string | undefined, isH: boolean, diff: number) => {
+      if (port) return port;
+      return isH ? (diff >= 0 ? "right" : "left") : (diff >= 0 ? "bottom" : "top");
+    };
+
+    const startDir = getPortDir(edge.fromPort, isHorizontalStart, dx);
+    return startDir === "left" || startDir === "right";
+  };
+
+  // Helper to draw rounded orthogonal connection paths (Manhattan routing)
+  const getOrthogonalPath = (
+    x1: number, y1: number, 
+    x2: number, y2: number, 
+    curvatureOffset: number, 
+    startDir: string, 
+    endDir: string
+  ) => {
+    const isStartH = startDir === "left" || startDir === "right";
+    const isEndH = endDir === "left" || endDir === "right";
+
+    if (isStartH && isEndH) {
+      // HVH: Horizontal - Vertical - Horizontal
+      const xm = (x1 + x2) / 2 + curvatureOffset;
+
+      const segment1 = Math.abs(xm - x1);
+      const segment2 = Math.abs(y2 - y1);
+      const segment3 = Math.abs(x2 - xm);
+      // Clamp corner radius to avoid overlap on small distances
+      const r = Math.min(10, segment1 / 2, segment2 / 2, segment3 / 2);
+
+      if (r <= 0) {
+        return `M ${x1} ${y1} L ${xm} ${y1} L ${xm} ${y2} L ${x2} ${y2}`;
+      }
+
+      const signX1 = xm > x1 ? 1 : -1;
+      const signY = y2 > y1 ? 1 : -1;
+      const signX2 = x2 > xm ? 1 : -1;
+
+      return `M ${x1} ${y1} ` +
+             `L ${xm - r * signX1} ${y1} ` +
+             `Q ${xm} ${y1} ${xm} ${y1 + r * signY} ` +
+             `L ${xm} ${y2 - r * signY} ` +
+             `Q ${xm} ${y2} ${xm + r * signX2} ${y2} ` +
+             `L ${x2} ${y2}`;
+    } else if (!isStartH && !isEndH) {
+      // VHV: Vertical - Horizontal - Vertical
+      const ym = (y1 + y2) / 2 + curvatureOffset;
+
+      const segment1 = Math.abs(ym - y1);
+      const segment2 = Math.abs(x2 - x1);
+      const segment3 = Math.abs(y2 - ym);
+      const r = Math.min(10, segment1 / 2, segment2 / 2, segment3 / 2);
+
+      if (r <= 0) {
+        return `M ${x1} ${y1} L ${x1} ${ym} L ${x2} ${ym} L ${x2} ${y2}`;
+      }
+
+      const signY1 = ym > y1 ? 1 : -1;
+      const signX = x2 > x1 ? 1 : -1;
+      const signY2 = y2 > ym ? 1 : -1;
+
+      return `M ${x1} ${y1} ` +
+             `L ${x1} ${ym - r * signY1} ` +
+             `Q ${x1} ${ym} ${x1 + r * signX} ${ym} ` +
+             `L ${x2 - r * signX} ${ym} ` +
+             `Q ${x2} ${ym} ${x2} ${ym + r * signY2} ` +
+             `L ${x2} ${y2}`;
+    } else if (isStartH && !isEndH) {
+      // HV: Horizontal to Vertical. Corner at (x2, y1)
+      const xc = x2 + curvatureOffset;
+      const segment1 = Math.abs(xc - x1);
+      const segment2 = Math.abs(y2 - y1);
+      const r = Math.min(10, segment1 / 2, segment2 / 2);
+
+      if (r <= 0) {
+        return `M ${x1} ${y1} L ${xc} ${y1} L ${xc} ${y2}`;
+      }
+
+      const signX = xc > x1 ? 1 : -1;
+      const signY = y2 > y1 ? 1 : -1;
+
+      return `M ${x1} ${y1} ` +
+             `L ${xc - r * signX} ${y1} ` +
+             `Q ${xc} ${y1} ${xc} ${y1 + r * signY} ` +
+             `L ${xc} ${y2}`;
+    } else {
+      // VH: Vertical to Horizontal. Corner at (x1, y2)
+      const yc = y2 + curvatureOffset;
+      const segment1 = Math.abs(yc - y1);
+      const segment2 = Math.abs(x2 - x1);
+      const r = Math.min(10, segment1 / 2, segment2 / 2);
+
+      if (r <= 0) {
+        return `M ${x1} ${y1} L ${x1} ${yc} L ${x2} ${yc}`;
+      }
+
+      const signY = yc > y1 ? 1 : -1;
+      const signX = x2 > x1 ? 1 : -1;
+
+      return `M ${x1} ${y1} ` +
+             `L ${x1} ${yc - r * signY} ` +
+             `Q ${x1} ${yc} ${x1 + r * signX} ${yc} ` +
+             `L ${x2} ${yc}`;
+    }
+  };
+
+  // Helper to draw connecting line by anchoring to the centers of the closest bounding faces
+  const getLinePoints = (n1: CanvasNode, n2: CanvasNode, fromPort?: string, toPort?: string) => {
     const cx1 = n1.x + n1.width / 2;
     const cy1 = n1.y + n1.height / 2;
     const cx2 = n2.x + n2.width / 2;
@@ -619,20 +817,91 @@ export function SystemDesignCanvas({
 
     const dx = cx2 - cx1;
     const dy = cy2 - cy1;
-    const len = Math.sqrt(dx * dx + dy * dy);
 
-    if (len === 0) return { x1: cx1, y1: cy1, x2: cx2, y2: cy2 };
+    // Determine exit direction
+    let isHorizontalStart = Math.abs(dx) >= Math.abs(dy);
+    if (fromPort) {
+      isHorizontalStart = fromPort === "left" || fromPort === "right";
+    } else {
+      isHorizontalStart = checkIsHorizontal(n1, n2);
+    }
 
-    // Back off factors based on shape dimensions
-    const backOffSource = Math.min(n1.width, n1.height) / 2 + 5;
-    const backOffTarget = Math.min(n2.width, n2.height) / 2 + 10;
+    let isHorizontalEnd = Math.abs(dx) >= Math.abs(dy);
+    if (toPort) {
+      isHorizontalEnd = toPort === "left" || toPort === "right";
+    } else {
+      isHorizontalEnd = checkIsHorizontal(n1, n2);
+    }
 
-    return {
-      x1: cx1 + (dx / len) * backOffSource,
-      y1: cy1 + (dy / len) * backOffSource,
-      x2: cx2 - (dx / len) * backOffTarget,
-      y2: cy2 - (dy / len) * backOffTarget
+    let x1 = cx1;
+    let y1 = cy1;
+    let x2 = cx2;
+    let y2 = cy2;
+
+    // Start point
+    if (fromPort === "top") {
+      x1 = cx1; y1 = n1.y;
+    } else if (fromPort === "bottom") {
+      x1 = cx1; y1 = n1.y + n1.height;
+    } else if (fromPort === "left") {
+      x1 = n1.x; y1 = cy1;
+    } else if (fromPort === "right") {
+      x1 = n1.x + n1.width; y1 = cy1;
+    } else {
+      // Auto
+      if (isHorizontalStart) {
+        x1 = dx >= 0 ? n1.x + n1.width : n1.x;
+        y1 = cy1;
+      } else {
+        x1 = cx1;
+        y1 = dy >= 0 ? n1.y + n1.height : n1.y;
+      }
+    }
+
+    // End point
+    if (toPort === "top") {
+      x2 = cx2; y2 = n2.y;
+    } else if (toPort === "bottom") {
+      x2 = cx2; y2 = n2.y + n2.height;
+    } else if (toPort === "left") {
+      x2 = n2.x; y2 = cy2;
+    } else if (toPort === "right") {
+      x2 = n2.x + n2.width; y2 = cy2;
+    } else {
+      // Auto
+      if (isHorizontalEnd) {
+        x2 = dx >= 0 ? n2.x : n2.x + n2.width;
+        y2 = cy2;
+      } else {
+        x2 = cx2;
+        y2 = dy >= 0 ? n2.y : n2.y + n2.height;
+      }
+    }
+
+    // Back off factors
+    const paddingSource = 1;
+    const paddingTarget = 7;
+
+    const getPortDir = (port: string | undefined, isH: boolean, diff: number) => {
+      if (port) return port;
+      if (isH) return diff >= 0 ? "right" : "left";
+      return diff >= 0 ? "bottom" : "top";
     };
+
+    const startDir = getPortDir(fromPort, isHorizontalStart, dx);
+    const endDir = getPortDir(toPort, isHorizontalEnd, dx);
+
+    if (startDir === "left") x1 -= paddingSource;
+    else if (startDir === "right") x1 += paddingSource;
+    else if (startDir === "top") y1 -= paddingSource;
+    else if (startDir === "bottom") y1 += paddingSource;
+
+    if (endDir === "left") x2 += paddingTarget;
+    else if (endDir === "right") x2 -= paddingTarget;
+    else if (endDir === "top") y2 += paddingTarget;
+    else if (endDir === "bottom") y2 -= paddingTarget;
+
+    return { x1, y1, x2, y2 };
   };
 
   // Predefined Shape renderers
@@ -726,6 +995,7 @@ export function SystemDesignCanvas({
         const isAbs = node.isAbstract === true;
         const cLines = node.attributes ? node.attributes.split("\n") : [];
         const headerH = isAbs ? 32 : 24;
+        const isItalicName = isAbs && (node.stereotype || "abstract").toLowerCase() === "abstract";
         
         return (
           <g>
@@ -751,7 +1021,7 @@ export function SystemDesignCanvas({
                 textAnchor="middle"
                 pointerEvents="none"
               >
-                &lt;&lt;abstract&gt;&gt;
+                &lt;&lt;{node.stereotype || "abstract"}&gt;&gt;
               </text>
             )}
             <text
@@ -760,7 +1030,7 @@ export function SystemDesignCanvas({
               fill="#f8fafc"
               fontSize="11"
               fontWeight="bold"
-              fontStyle={isAbs ? "italic" : "normal"}
+              fontStyle={isItalicName ? "italic" : "normal"}
               fontFamily="monospace"
               textAnchor="middle"
               pointerEvents="none"
@@ -1072,31 +1342,56 @@ export function SystemDesignCanvas({
             const toNode = nodes.find((n) => n.id === edge.to);
             if (!fromNode || !toNode) return null;
 
-            const pts = getLinePoints(fromNode, toNode);
+            const pts = getLinePoints(fromNode, toNode, edge.fromPort, edge.toPort);
             const isSelected = selectedEdgeId === edge.id;
             
-            // Middle point for edge label
-            const midX = (pts.x1 + pts.x2) / 2;
-            const midY = (pts.y1 + pts.y2) / 2;
+            const dx = pts.x2 - pts.x1;
+            const dy = pts.y2 - pts.y1;
+            const len = Math.sqrt(dx * dx + dy * dy);
+
+            const isHorizontalStart = edge.fromPort 
+              ? (edge.fromPort === "left" || edge.fromPort === "right")
+              : checkIsHorizontal(fromNode, toNode);
+            const isHorizontalEnd = edge.toPort
+              ? (edge.toPort === "left" || edge.toPort === "right")
+              : checkIsHorizontal(fromNode, toNode);
+
+            const getPortDir = (port: string | undefined, isH: boolean, diff: number) => {
+              if (port) return port;
+              return isH ? (diff >= 0 ? "right" : "left") : (diff >= 0 ? "bottom" : "top");
+            };
+
+            const startDir = getPortDir(edge.fromPort, isHorizontalStart, dx);
+            const endDir = getPortDir(edge.toPort, isHorizontalEnd, dx);
+            const isHorizontal = checkEdgeIsHorizontal(edge, fromNode, toNode);
+
+            const curv = edge.curvature || 0;
+            const mx = (pts.x1 + pts.x2) / 2;
+            const my = (pts.y1 + pts.y2) / 2;
+
+            // Anchor point for the middle segment
+            const cx = isHorizontal ? mx + curv : mx;
+            const cy = isHorizontal ? my : my + curv;
+            
+            const pathD = getOrthogonalPath(pts.x1, pts.y1, pts.x2, pts.y2, curv, startDir, endDir);
+
+            const midX = cx;
+            const midY = cy;
 
             return (
               <g key={edge.id} className="group cursor-pointer">
-                {/* Thick invisible interaction line to make clicking easy */}
-                <line
-                  x1={pts.x1}
-                  y1={pts.y1}
-                  x2={pts.x2}
-                  y2={pts.y2}
+                {/* Thick invisible interaction path to make clicking easy */}
+                <path
+                  d={pathD}
+                  fill="none"
                   stroke="transparent"
                   strokeWidth="12"
                   onClick={(e) => handleEdgeClick(e, edge.id)}
                   onDoubleClick={(e) => handleEdgeDoubleClick(e, edge.id)}
                 />
-                <line
-                  x1={pts.x1}
-                  y1={pts.y1}
-                  x2={pts.x2}
-                  y2={pts.y2}
+                <path
+                  d={pathD}
+                  fill="none"
                   stroke={isSelected ? "#3b82f6" : "#64748b"}
                   strokeWidth={isSelected ? 2.5 : 1.5}
                   markerEnd={`url(#${isSelected ? "arrowhead-selected" : "arrowhead"})`}
@@ -1106,33 +1401,90 @@ export function SystemDesignCanvas({
                 />
 
                 {/* Connection label */}
-                {edge.label && (
-                  <g 
-                    onClick={(e) => handleEdgeClick(e, edge.id)}
-                    onDoubleClick={(e) => handleEdgeDoubleClick(e, edge.id)}
-                  >
-                    <rect
-                      x={midX - (edge.label.length * 3.5) - 6}
-                      y={midY - 10}
-                      width={(edge.label.length * 7) + 12}
-                      height="20"
-                      rx="4"
-                      fill="#1e1e2f"
-                      stroke={isSelected ? "#3b82f6" : "rgba(255,255,255,0.06)"}
-                      strokeWidth="1"
-                    />
-                    <text
-                      x={midX}
-                      y={midY + 4}
-                      fill={isSelected ? "#60a5fa" : "#94a3b8"}
-                      fontSize="9"
-                      fontFamily="monospace"
-                      textAnchor="middle"
+                {edge.label && (() => {
+                  const lines = edge.label.split("\n");
+                  const lineHeight = 12;
+                  const totalHeight = lines.length * lineHeight + 8;
+                  const maxLineLength = Math.max(1, ...lines.map(l => l.length));
+                  const boxWidth = (maxLineLength * 5.5) + 12;
+
+                  return (
+                    <g 
+                      onClick={(e) => handleEdgeClick(e, edge.id)}
+                      onDoubleClick={(e) => handleEdgeDoubleClick(e, edge.id)}
                     >
-                      {edge.label}
-                    </text>
-                  </g>
-                )}
+                      <rect
+                        x={midX - boxWidth / 2}
+                        y={midY - totalHeight / 2}
+                        width={boxWidth}
+                        height={totalHeight}
+                        rx="4"
+                        fill="#1e1e2f"
+                        stroke={isSelected ? "#3b82f6" : "rgba(255,255,255,0.06)"}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={midX}
+                        y={midY}
+                        fill={isSelected ? "#60a5fa" : "#94a3b8"}
+                        fontSize="9"
+                        fontFamily="monospace"
+                        textAnchor="middle"
+                      >
+                        {lines.map((line, idx) => {
+                          const offset = (idx - (lines.length - 1) / 2) * lineHeight + 3;
+                          return (
+                            <tspan
+                              key={idx}
+                              x={midX}
+                              dy={idx === 0 ? offset : lineHeight}
+                            >
+                              {line}
+                            </tspan>
+                          );
+                        })}
+                      </text>
+                    </g>
+                  );
+                })()}
+
+                {/* Curvature Drag Handle (rendered only if selected and not readOnly) */}
+                {isSelected && !readOnly && len > 0 && (() => {
+                  // Offset handle position slightly if there's a label to avoid visual overlap
+                  const hx = edge.label ? (isHorizontal ? cx : cx + 18) : cx;
+                  const hy = edge.label ? (isHorizontal ? cy + 18 : cy) : cy;
+
+                  return (
+                    <g>
+                      {(curv !== 0 || edge.label) && (
+                        <line
+                          x1={mx}
+                          y1={my}
+                          x2={hx}
+                          y2={hy}
+                          stroke="#3b82f6"
+                          strokeWidth="1"
+                          strokeDasharray="2,2"
+                          pointerEvents="none"
+                        />
+                      )}
+                      <circle
+                        cx={hx}
+                        cy={hy}
+                        r="6"
+                        fill="#ffffff"
+                        stroke="#3b82f6"
+                        strokeWidth="2"
+                        style={{ cursor: "grab" }}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          isDraggingEdgeBend.current = edge.id;
+                        }}
+                      />
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
@@ -1285,7 +1637,7 @@ export function SystemDesignCanvas({
                   const midY = (fromNode.y + fromNode.height/2 + toNode.y + toNode.height/2) / 2;
                   return {
                     left: `${Math.max(10, Math.min(containerWidth - 270, (midX * zoom) + panOffset.x - 128))}px`,
-                    top: `${Math.max(10, Math.min(containerHeight - 120, (midY * zoom) + panOffset.y + 16))}px`
+                    top: `${Math.max(10, Math.min(containerHeight - 200, (midY * zoom) + panOffset.y + 16))}px`
                   };
                 }
               }
@@ -1326,15 +1678,30 @@ export function SystemDesignCanvas({
                   />
                 </div>
                 
-                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={editClassIsAbstract}
-                    onChange={(e) => setEditClassIsAbstract(e.target.checked)}
-                    className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span className="font-medium">Abstract Class</span>
-                </label>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] text-muted-foreground font-bold uppercase">Class Stereotype / Type</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={editClassIsAbstract}
+                      onChange={(e) => {
+                        setEditClassIsAbstract(e.target.checked);
+                        if (e.target.checked && !editClassStereotype) {
+                          setEditClassStereotype("abstract");
+                        }
+                      }}
+                      className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      disabled={!editClassIsAbstract}
+                      value={editClassIsAbstract ? editClassStereotype : ""}
+                      placeholder="e.g. abstract, singleton class"
+                      onChange={(e) => setEditClassStereotype(e.target.value)}
+                      className="flex-1 px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 transition-opacity"
+                    />
+                  </div>
+                </div>
                 
                 <div className="flex justify-end gap-1.5 pt-1">
                   <Button 
@@ -1351,30 +1718,68 @@ export function SystemDesignCanvas({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5 text-left">
                 {editingNodeId ? (
-                  <textarea
-                    autoFocus
-                    value={editInputValue}
-                    onChange={(e) => setEditInputValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") { setEditingNodeId(null); }
-                    }}
-                    rows={3}
-                    className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary font-sans resize-none"
-                  />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] text-muted-foreground font-bold uppercase">Component Label</label>
+                    <textarea
+                      autoFocus
+                      value={editInputValue}
+                      onChange={(e) => setEditInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") { setEditingNodeId(null); }
+                      }}
+                      rows={3}
+                      className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary font-sans resize-none"
+                    />
+                  </div>
                 ) : (
-                  <input
-                    type="text"
-                    autoFocus
-                    value={editInputValue}
-                    onChange={(e) => setEditInputValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleEditSubmit();
-                      if (e.key === "Escape") { setEditingEdgeId(null); }
-                    }}
-                    className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-muted-foreground font-bold uppercase">Connection Label</label>
+                      <textarea
+                        autoFocus
+                        value={editInputValue}
+                        onChange={(e) => setEditInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") { setEditingEdgeId(null); }
+                        }}
+                        rows={2}
+                        className="w-full px-2 py-1 bg-background text-foreground text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary font-sans resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-muted-foreground font-bold uppercase">Start Face</label>
+                        <select
+                          value={editEdgeFromPort}
+                          onChange={(e) => setEditEdgeFromPort(e.target.value)}
+                          className="w-full px-1.5 py-1 bg-background text-foreground text-[11px] rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary h-7"
+                        >
+                          <option value="auto">Auto</option>
+                          <option value="top">Top</option>
+                          <option value="bottom">Bottom</option>
+                          <option value="left">Left</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-muted-foreground font-bold uppercase">End Face</label>
+                        <select
+                          value={editEdgeToPort}
+                          onChange={(e) => setEditEdgeToPort(e.target.value)}
+                          className="w-full px-1.5 py-1 bg-background text-foreground text-[11px] rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary h-7"
+                        >
+                          <option value="auto">Auto</option>
+                          <option value="top">Top</option>
+                          <option value="bottom">Bottom</option>
+                          <option value="left">Left</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 )}
                 <div className="flex justify-end gap-1.5 pt-1">
                   <Button 
@@ -1401,7 +1806,7 @@ export function SystemDesignCanvas({
           ) : (
             <>
               <span className="w-1 h-1 rounded-full bg-cyan-400" />
-              <span>Grid Snap 10px · Double-click to rename</span>
+              <span>Grid Snap 5px · Double-click to rename</span>
             </>
           )}
         </div>

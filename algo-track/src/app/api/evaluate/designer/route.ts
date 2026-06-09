@@ -130,11 +130,12 @@ The JSON schema MUST exactly match:
       "width": number, 
       "height": number,
       "attributes": "string" (optional, only for type "class", multiline attributes/methods separated by \n),
-      "isAbstract": boolean (optional, only for type "class")
+      "isAbstract": boolean (optional, only for type "class"),
+      "stereotype": "string" (optional, only for type "class", e.g. "abstract", "model class", "singleton class")
     }
   ],
   "edges": [
-    { "id": "string", "from": "string", "to": "string", "label": "string" }
+    { "id": "string", "from": "string", "to": "string", "label": "string", "curvature": number (optional, bend offset of control point, e.g. from -80 to 80 to avoid overlaps) }
   ]
 }
 
@@ -167,11 +168,12 @@ The JSON schema MUST exactly match:
       "width": number, 
       "height": number,
       "attributes": "string" (optional, only for type "class", multiline attributes/methods separated by \n),
-      "isAbstract": boolean (optional, only for type "class")
+      "isAbstract": boolean (optional, only for type "class"),
+      "stereotype": "string" (optional, only for type "class", e.g. "abstract", "model class", "singleton class")
     }
   ],
   "edges": [
-    { "id": "string", "from": "string", "to": "string", "label": "string" }
+    { "id": "string", "from": "string", "to": "string", "label": "string", "curvature": number (optional, bend offset of control point, e.g. from -80 to 80 to avoid overlaps) }
   ]
 }
 Improve the layout, add missing standard components (like caches, replica databases, queue/message brokers, rate limiters, or domain/entities classes), and space them out nicely so they look beautiful and professional. Return ONLY the JSON. No explanations.`;
