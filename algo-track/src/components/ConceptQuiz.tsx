@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { 
     CheckCircle2, 
@@ -89,6 +90,10 @@ export function ConceptQuiz({
     const [loggedScores, setLoggedScores] = useState<Record<string, number>>({});
 
     // --- Subtopic deep dive states ---
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
     const [selectedExploreSubtopic, setSelectedExploreSubtopic] = useState<string | null>(null);
     const [subtopicExplanation, setSubtopicExplanation] = useState<{
         briefSummary: string;
@@ -1151,139 +1156,142 @@ export function ConceptQuiz({
             </div>
 
             {/* Subtopic Explorer Dialog Overlay */}
-            <AnimatePresence>
-                {selectedExploreSubtopic && (
-                    <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
-                    >
+            {mounted && createPortal(
+                <AnimatePresence>
+                    {selectedExploreSubtopic && (
                         <motion.div 
-                            initial={{ scale: 0.95, y: 15 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.95, y: 15 }}
-                            className="w-full max-w-lg overflow-hidden border border-cyan-500/25 bg-card/95 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
                         >
-                            {/* Modal Header */}
-                            <div className="p-4 border-b border-border/80 flex items-center justify-between bg-cyan-500/5">
-                                <div className="flex items-center gap-2">
-                                    <Sparkles className="w-4 h-4 text-cyan-500 animate-pulse" />
-                                    <div className="text-left">
-                                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">
-                                            AI Subtopic Deep-Dive Explorer
-                                        </span>
-                                        <h3 className="text-sm font-extrabold text-foreground leading-snug">
-                                            {selectedExploreSubtopic}
-                                        </h3>
+                            <motion.div 
+                                initial={{ scale: 0.95, y: 15 }}
+                                animate={{ scale: 1, y: 0 }}
+                                exit={{ scale: 0.95, y: 15 }}
+                                className="w-full max-w-lg overflow-hidden border border-cyan-500/25 bg-card/95 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]"
+                            >
+                                {/* Modal Header */}
+                                <div className="p-4 border-b border-border/80 flex items-center justify-between bg-cyan-500/5">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-cyan-500 animate-pulse" />
+                                        <div className="text-left">
+                                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">
+                                                AI Subtopic Deep-Dive Explorer
+                                            </span>
+                                            <h3 className="text-sm font-extrabold text-foreground leading-snug">
+                                                {selectedExploreSubtopic}
+                                            </h3>
+                                        </div>
                                     </div>
+                                    <button 
+                                        onClick={() => setSelectedExploreSubtopic(null)}
+                                        className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
                                 </div>
-                                <button 
-                                    onClick={() => setSelectedExploreSubtopic(null)}
-                                    className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
 
-                            {/* Modal Content */}
-                            <div className="p-5 overflow-y-auto space-y-4 text-left">
-                                {isSubtopicLoading ? (
-                                    <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
-                                        <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
-                                        <div>
-                                            <p className="text-xs font-bold text-foreground">AI Technical Coach is synthesizing concept...</p>
-                                            <p className="text-[10px] text-muted-foreground mt-0.5">Fetching summary, trade-offs, and design examples.</p>
-                                        </div>
-                                    </div>
-                                ) : subtopicError ? (
-                                    <div className="py-8 flex flex-col items-center justify-center text-center gap-2">
-                                        <span className="text-lg">⚠️</span>
-                                        <p className="text-xs font-bold text-red-500">{subtopicError}</p>
-                                        <Button 
-                                            onClick={() => handleExploreSubtopic(selectedExploreSubtopic)}
-                                            size="sm" 
-                                            variant="outline"
-                                            className="rounded-full text-[10px] border-red-500/20 text-red-500 mt-2"
-                                        >
-                                            Try Again
-                                        </Button>
-                                    </div>
-                                ) : subtopicExplanation ? (
-                                    <div className="space-y-4">
-                                        {/* Brief Summary */}
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest block">
-                                                Concept Summary
-                                            </span>
-                                            <p className="text-xs leading-relaxed text-foreground bg-cyan-500/5 p-3 rounded-xl border border-cyan-500/10">
-                                                {subtopicExplanation.briefSummary}
-                                            </p>
-                                        </div>
-
-                                        {/* Key Takeaways */}
-                                        <div className="space-y-2">
-                                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest block">
-                                                High-Yield Takeaways
-                                            </span>
-                                            <div className="space-y-1.5">
-                                                {subtopicExplanation.keyTakeaways.map((takeaway, tIdx) => (
-                                                    <div key={tIdx} className="flex items-start gap-2 text-xs text-muted-foreground leading-relaxed">
-                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                                                        <span>{takeaway}</span>
-                                                    </div>
-                                                ))}
+                                {/* Modal Content */}
+                                <div className="p-5 overflow-y-auto space-y-4 text-left">
+                                    {isSubtopicLoading ? (
+                                        <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
+                                            <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
+                                            <div>
+                                                <p className="text-xs font-bold text-foreground">AI Technical Coach is synthesizing concept...</p>
+                                                <p className="text-[10px] text-muted-foreground mt-0.5">Fetching summary, trade-offs, and design examples.</p>
                                             </div>
                                         </div>
+                                    ) : subtopicError ? (
+                                        <div className="py-8 flex flex-col items-center justify-center text-center gap-2">
+                                            <span className="text-lg">⚠️</span>
+                                            <p className="text-xs font-bold text-red-500">{subtopicError}</p>
+                                            <Button 
+                                                onClick={() => handleExploreSubtopic(selectedExploreSubtopic)}
+                                                size="sm" 
+                                                variant="outline"
+                                                className="rounded-full text-[10px] border-red-500/20 text-red-500 mt-2"
+                                            >
+                                                Try Again
+                                            </Button>
+                                        </div>
+                                    ) : subtopicExplanation ? (
+                                        <div className="space-y-4">
+                                            {/* Brief Summary */}
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest block">
+                                                    Concept Summary
+                                                </span>
+                                                <p className="text-xs leading-relaxed text-foreground bg-cyan-500/5 p-3 rounded-xl border border-cyan-500/10">
+                                                    {subtopicExplanation.briefSummary}
+                                                </p>
+                                            </div>
 
-                                        {/* Illustrative Example */}
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest block">
-                                                Illustrative Example / Mechanics
-                                            </span>
-                                            <pre className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-[10px] font-mono leading-relaxed text-zinc-300 overflow-x-auto">
-                                                {subtopicExplanation.illustrativeExample}
-                                            </pre>
+                                            {/* Key Takeaways */}
+                                            <div className="space-y-2">
+                                                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest block">
+                                                    High-Yield Takeaways
+                                                </span>
+                                                <div className="space-y-1.5">
+                                                    {subtopicExplanation.keyTakeaways.map((takeaway, tIdx) => (
+                                                        <div key={tIdx} className="flex items-start gap-2 text-xs text-muted-foreground leading-relaxed">
+                                                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                                            <span>{takeaway}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Illustrative Example */}
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest block">
+                                                    Illustrative Example / Mechanics
+                                                </span>
+                                                <pre className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-[10px] font-mono leading-relaxed text-zinc-300 overflow-x-auto">
+                                                    {subtopicExplanation.illustrativeExample}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
+
+                                {/* Modal Footer Actions */}
+                                {!isSubtopicLoading && subtopicExplanation && (
+                                    <div className="p-4 border-t border-border/80 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                            <Brain className="w-3.5 h-3.5 text-cyan-500" /> Pre-configured for CS recall checks
+                                        </div>
+                                        <div className="flex gap-2 w-full sm:w-auto">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelectedExploreSubtopic(null)}
+                                                className="rounded-full text-xs font-semibold px-4 flex-1 sm:flex-initial"
+                                            >
+                                                Dismiss
+                                            </Button>
+                                            {subtopicAddedStatus ? (
+                                                <span className="px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold flex items-center justify-center gap-1 shadow-sm shrink-0 animate-bounce">
+                                                    <ClipboardCheck className="w-4 h-4" /> Added to Cards!
+                                                </span>
+                                            ) : (
+                                                <Button
+                                                    onClick={handleAddSubtopicAsCard}
+                                                    size="sm"
+                                                    className="rounded-full bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs px-4 flex items-center justify-center gap-1 shadow-md shadow-cyan-950/20 flex-1 sm:flex-initial cursor-pointer"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" /> Add as Flashcard
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
-                                ) : null}
-                            </div>
-
-                            {/* Modal Footer Actions */}
-                            {!isSubtopicLoading && subtopicExplanation && (
-                                <div className="p-4 border-t border-border/80 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
-                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                        <Brain className="w-3.5 h-3.5 text-cyan-500" /> Pre-configured for CS recall checks
-                                    </div>
-                                    <div className="flex gap-2 w-full sm:w-auto">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setSelectedExploreSubtopic(null)}
-                                            className="rounded-full text-xs font-semibold px-4 flex-1 sm:flex-initial"
-                                        >
-                                            Dismiss
-                                        </Button>
-                                        {subtopicAddedStatus ? (
-                                            <span className="px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold flex items-center justify-center gap-1 shadow-sm shrink-0 animate-bounce">
-                                                <ClipboardCheck className="w-4 h-4" /> Added to Cards!
-                                            </span>
-                                        ) : (
-                                            <Button
-                                                onClick={handleAddSubtopicAsCard}
-                                                size="sm"
-                                                className="rounded-full bg-cyan-500 hover:bg-cyan-600 text-white font-extrabold text-xs px-4 flex items-center justify-center gap-1 shadow-md shadow-cyan-950/20 flex-1 sm:flex-initial cursor-pointer"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" /> Add as Flashcard
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </motion.div>
                         </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
 
         </div>
     );

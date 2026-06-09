@@ -28,7 +28,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
 import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock, Sliders } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus, fetchUserProfile } from "@/lib/client-api";
+import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus, fetchUserProfile, fetchDashboardStats } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
 import type { Flashcard, CardType } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
@@ -98,6 +98,7 @@ export default function HomePage() {
   const [view, setView] = useState<View>("dashboard");
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [dueCards, setDueCards] = useState<Flashcard[]>([]);
+  const [reviewsToday, setReviewsToday] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
@@ -171,17 +172,18 @@ export default function HomePage() {
     }
   }, []);
 
-  // Fetch fresh data from API and update cache
   const syncFromApi = useCallback(async (showSpinner = true) => {
     if (showSpinner) setIsSyncing(true);
     try {
-      const [all, due] = await Promise.all([
+      const [all, due, stats] = await Promise.all([
         fetchAllCards(),
         fetchDueCards(),
+        fetchDashboardStats(),
       ]);
       setCards(all);
       setDueCards(due);
-      writeCacheDB(all, due);
+      setReviewsToday(stats.reviewsToday ?? 0);
+      writeCacheDB(all, due, stats.reviewsToday ?? 0);
       setLastSyncTime(Date.now());
       refreshPauseStatus();
     } catch (err) {
@@ -201,10 +203,11 @@ export default function HomePage() {
   const prioritizedAndCappedDueCards = useMemo(() => {
     const sorted = prioritizeDueCards(dueCards);
     if (maxDailyReviews !== null && maxDailyReviews > 0) {
-      return sorted.slice(0, maxDailyReviews);
+      const remainingReviews = Math.max(0, maxDailyReviews - reviewsToday);
+      return sorted.slice(0, remainingReviews);
     }
     return sorted;
-  }, [dueCards, maxDailyReviews]);
+  }, [dueCards, maxDailyReviews, reviewsToday]);
 
   const pauseButtonTitle = useMemo(() => {
     if (globalPauseStatus.active) {
@@ -242,6 +245,7 @@ export default function HomePage() {
         // Show cached data immediately — no loading spinner
         setCards(cached.cards);
         setDueCards(cached.dueCards);
+        setReviewsToday(cached.reviewsToday ?? 0);
         setLastSyncTime(cached.timestamp);
         setIsLoading(false);
 
@@ -443,7 +447,12 @@ export default function HomePage() {
       if (due.length === 0) return;
 
       const prioritized = prioritizeDueCards(due);
-      setReviewSessionCards(prioritized);
+      let capped = prioritized;
+      if (maxDailyReviews !== null && maxDailyReviews > 0) {
+        const remainingReviews = Math.max(0, maxDailyReviews - reviewsToday);
+        capped = prioritized.slice(0, remainingReviews);
+      }
+      setReviewSessionCards(capped);
       setReviewSessionConfig({
         mode,
       });
@@ -1039,6 +1048,7 @@ export default function HomePage() {
               dueCards={dueCards}
               totalCards={cards}
               maxDailyReviews={maxDailyReviews}
+              reviewsToday={reviewsToday}
               onClose={() => setShowReviewModal(false)}
               onStart={handleStartReview}
               onRescheduled={() => {

@@ -448,6 +448,7 @@ export async function submitReview(
 export async function getDashboardStats(userId: string) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
+  const startOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)).toISOString();
   const endOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
   const { count: dueCount, error: dueError } = await supabase
@@ -469,9 +470,21 @@ export async function getDashboardStats(userId: string) {
     throw new Error(totalError.message);
   }
 
+  const { count: reviewsTodayCount, error: reviewsTodayError } = await supabase
+    .from("reviews")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("reviewed_at", startOfDayIso)
+    .lte("reviewed_at", endOfDayIso);
+
+  if (reviewsTodayError) {
+    throw new Error(reviewsTodayError.message);
+  }
+
   return {
     cardsDueToday: dueCount ?? 0,
     totalCards: totalCount ?? 0,
+    reviewsToday: reviewsTodayCount ?? 0,
   };
 }
 

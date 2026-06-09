@@ -15,6 +15,7 @@ export interface CachedData {
   cards: Flashcard[];
   dueCards: Flashcard[];
   timestamp: number;
+  reviewsToday?: number;
 }
 
 const DB_NAME = "algotrack-db";
@@ -78,10 +79,11 @@ export async function readCacheDB(): Promise<CachedData | null> {
 export async function writeCacheDB(
   cards: Flashcard[],
   dueCards: Flashcard[],
+  reviewsToday?: number,
 ): Promise<void> {
   try {
     const db = await openDB();
-    const data: CachedData = { cards, dueCards, timestamp: Date.now() };
+    const data: CachedData = { cards, dueCards, timestamp: Date.now(), reviewsToday };
 
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");

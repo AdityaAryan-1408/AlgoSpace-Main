@@ -68,6 +68,7 @@ interface ReviewModalProps {
   dueCards: Flashcard[];
   totalCards: Flashcard[];
   maxDailyReviews?: number | null;
+  reviewsToday?: number;
   onClose: () => void;
   onStart: (mode: "standard" | "random-quiz" | "sprint" | "reverse", count?: number, typeFilter?: CardType, orderedCards?: Flashcard[]) => void;
   onRescheduled?: () => void;
@@ -154,6 +155,7 @@ export function ReviewModal({
   dueCards,
   totalCards,
   maxDailyReviews,
+  reviewsToday,
   onClose,
   onStart,
   onRescheduled,
@@ -354,10 +356,11 @@ export function ReviewModal({
     });
 
     if (maxDailyReviews !== null && maxDailyReviews !== undefined && maxDailyReviews > 0) {
-      return sorted.slice(0, maxDailyReviews);
+      const remainingReviews = Math.max(0, maxDailyReviews - (reviewsToday ?? 0));
+      return sorted.slice(0, remainingReviews);
     }
     return sorted;
-  }, [dueCards, activeTab, maxDailyReviews]);
+  }, [dueCards, activeTab, maxDailyReviews, reviewsToday]);
 
   const [orderedCards, setOrderedCards] = useState<Flashcard[]>([]);
 
@@ -441,9 +444,13 @@ export function ReviewModal({
                   ? "Select the number of questions you want to review."
                   : dueCards.length === 0
                     ? "No cards are due right now. Check back later!"
-                    : maxDailyReviews && dueCards.length > maxDailyReviews
-                      ? `${maxDailyReviews} card${maxDailyReviews !== 1 ? "s" : ""} due today (capped from ${dueCards.length} total backlog cards).`
-                      : `${dueCards.length} card${dueCards.length !== 1 ? "s" : ""} due today. Hard and recently failed cards are queued first.`}
+                    : (() => {
+                        const remainingReviews = maxDailyReviews ? Math.max(0, maxDailyReviews - (reviewsToday ?? 0)) : 0;
+                        if (maxDailyReviews && dueCards.length > remainingReviews) {
+                          return `${remainingReviews} review${remainingReviews !== 1 ? "s" : ""} remaining today (capped from ${dueCards.length} total backlog cards).`;
+                        }
+                        return `${dueCards.length} card${dueCards.length !== 1 ? "s" : ""} due today. Hard and recently failed cards are queued first.`;
+                      })()}
           </p>
         </div>
 

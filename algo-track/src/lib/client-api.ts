@@ -174,9 +174,10 @@ export async function fetchSuggestion(input: {
 export async function fetchDashboardStats(): Promise<{
     cardsDueToday: number;
     totalCards: number;
+    reviewsToday: number;
 }> {
     const data = await apiFetch<{
-        stats: { cardsDueToday: number; totalCards: number };
+        stats: { cardsDueToday: number; totalCards: number; reviewsToday: number };
     }>("/dashboard");
     return data.stats;
 }
