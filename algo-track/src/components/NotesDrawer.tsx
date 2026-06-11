@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FileText, Check, Loader2, PenLine, Layout, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Check, Loader2, Layout, Sparkles } from "lucide-react";
 import { RichNotesEditor } from "./RichNotesEditor";
-import { WhiteboardCanvas } from "./WhiteboardCanvas";
 import { updateCard } from "@/lib/client-api";
 import { Button } from "@/components/ui/Button";
 import { isSystemDesignCard } from "@/lib/card-utils";
@@ -35,7 +34,6 @@ export function NotesPanel({
   const hasNotes = !!(card.richNotes || card.notes?.trim());
   const [richNotes, setRichNotes] = useState<string | undefined>(card.richNotes);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
-  const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isDragging, setIsDragging] = useState(false);
   const [systemDesignTab, setSystemDesignTab] = useState<"richNotes" | "canvas" | "assistant">("richNotes");
@@ -220,7 +218,7 @@ export function NotesPanel({
           </div>
         </div>
 
-        {/* Scrollable content: notes + whiteboard */}
+        {/* Scrollable content: notes */}
         <div className="flex-1 overflow-y-auto">
           {/* Notes / Diagram switcher */}
           <div className="p-3">
@@ -304,35 +302,6 @@ export function NotesPanel({
                 fallbackMarkdown={fallbackMarkdown}
                 onChange={handleChange}
               />
-            )}
-          </div>
-
-          {/* Whiteboard toggle */}
-          <div className="border-t border-border">
-            <button
-              onClick={() => setWhiteboardOpen(!whiteboardOpen)}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <PenLine className="w-3.5 h-3.5" />
-                Whiteboard
-              </div>
-              {whiteboardOpen ? (
-                <ChevronDown className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronUp className="w-3.5 h-3.5" />
-              )}
-            </button>
-
-            {/* Whiteboard canvas */}
-            {whiteboardOpen && (
-              <div className="px-2 pb-3">
-                <WhiteboardCanvas
-                  cardId={cardId}
-                  defaultExpanded
-                  className="w-full"
-                />
-              </div>
             )}
           </div>
         </div>

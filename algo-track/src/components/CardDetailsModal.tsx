@@ -7,10 +7,9 @@ import { updateCard, deleteCard, pauseCardReview, resumeCardReview, fetchAllCard
 import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
-import { WhiteboardCanvas } from "@/components/WhiteboardCanvas";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, Pencil, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Layout, Sparkles } from "lucide-react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Layout, Sparkles } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 import { useConfirmModal } from "@/components/ConfirmModal";
@@ -783,18 +782,6 @@ export function CardDetailsModal({
             </section>
           )}
 
-          {/* Whiteboard */}
-          <section className="flex flex-col gap-3">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
-              <Pencil className="w-4 h-4 text-teal-500" />
-              Whiteboard
-            </h3>
-            <WhiteboardCanvas
-              cardId={card.id}
-              compact={false}
-              className="w-full"
-            />
-          </section>
 
           {/* AI Review */}
           {aiReview && (
