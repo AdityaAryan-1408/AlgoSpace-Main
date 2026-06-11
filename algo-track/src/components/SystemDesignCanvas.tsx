@@ -24,7 +24,7 @@ import {
 
 export interface CanvasNode {
   id: string;
-  type: "service" | "client" | "database" | "router" | "text" | "class";
+  type: "service" | "client" | "database" | "router" | "text" | "class" | "group";
   label: string;
   x: number;
   y: number;
@@ -34,6 +34,9 @@ export interface CanvasNode {
   attributes?: string;
   isAbstract?: boolean;
   stereotype?: string;
+  isCollapsed?: boolean;
+  expandedWidth?: number;
+  expandedHeight?: number;
 }
 
 export interface CanvasEdge {
@@ -71,10 +74,70 @@ export function SystemDesignCanvas({
   const [edges, setEdges] = useState<CanvasEdge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"select" | "connect" | "service" | "client" | "database" | "router" | "text" | "class">("select");
+  const [mode, setMode] = useState<"select" | "connect" | "service" | "client" | "database" | "router" | "text" | "class" | "group" | "simulation">("select");
+  const [simulationPath, setSimulationPath] = useState<string[]>([]);
+  const [simulationPlaying, setSimulationPlaying] = useState(false);
+  const draggedChildNodeIds = useRef<string[]>([]);
   
   // Connection drag state
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [undoStack, setUndoStack] = useState<CanvasData[]>([]);
+  const [redoStack, setRedoStack] = useState<CanvasData[]>([]);
+
+  // Dispatch change and save state
+  const saveState = useCallback((newNodes: CanvasNode[], newEdges: CanvasEdge[], pushToUndo = true, customPan = panOffset, customZoom = zoom) => {
+    const data: CanvasData = { nodes: newNodes, edges: newEdges, panOffset: customPan, zoom: customZoom };
+    
+    if (pushToUndo) {
+      setUndoStack((prev) => [...prev, { nodes, edges, panOffset, zoom }]);
+      setRedoStack([]); // Clear redo
+    }
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+    onChange(JSON.stringify(data));
+  }, [nodes, edges, panOffset, zoom, onChange]);
+
+  const getCollapsedGroupForNode = useCallback((nodeId: string, allNodes: CanvasNode[]) => {
+    const node = allNodes.find(n => n.id === nodeId);
+    if (!node || node.type === "group") return null;
+    
+    const nodeCx = node.x + node.width / 2;
+    const nodeCy = node.y + node.height / 2;
+    
+    return allNodes.find(g => 
+      g.type === "group" && 
+      g.isCollapsed &&
+      nodeCx >= g.x && 
+      nodeCx <= g.x + (g.expandedWidth || g.width) && 
+      nodeCy >= g.y && 
+      nodeCy <= g.y + (g.expandedHeight || g.height)
+    ) || null;
+  }, []);
+
+  const isNodeHiddenByCollapsedGroup = useCallback((nodeId: string, allNodes: CanvasNode[]) => {
+    return getCollapsedGroupForNode(nodeId, allNodes) !== null;
+  }, [getCollapsedGroupForNode]);
+
+  const handleDuplicateSelected = useCallback(() => {
+    if (readOnly || !selectedNodeId) return;
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (!node) return;
+    
+    const dupId = `node-${Date.now()}`;
+    const duplicateNode: CanvasNode = {
+      ...node,
+      id: dupId,
+      label: `${node.label} (Copy)`,
+      x: node.x + 20,
+      y: node.y + 20
+    };
+    saveState([...nodes, duplicateNode], edges);
+    setSelectedNodeId(dupId);
+  }, [nodes, edges, selectedNodeId, saveState, readOnly]);
 
   // Editing state
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -86,9 +149,7 @@ export function SystemDesignCanvas({
   const [editEdgeFromPort, setEditEdgeFromPort] = useState("auto");
   const [editEdgeToPort, setEditEdgeToPort] = useState("auto");
 
-  // Undo / Redo stacks
-  const [undoStack, setUndoStack] = useState<CanvasData[]>([]);
-  const [redoStack, setRedoStack] = useState<CanvasData[]>([]);
+
 
   const svgRef = useRef<SVGSVGElement>(null);
   const isDraggingNode = useRef<string | null>(null);
@@ -99,8 +160,7 @@ export function SystemDesignCanvas({
   const dragStartAngle = useRef<number>(0);
   const isDraggingEdgeBend = useRef<string | null>(null);
 
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
 
@@ -133,19 +193,7 @@ export function SystemDesignCanvas({
     }
   }, [value]);
 
-  // Dispatch change and save state
-  const saveState = useCallback((newNodes: CanvasNode[], newEdges: CanvasEdge[], pushToUndo = true, customPan = panOffset, customZoom = zoom) => {
-    const data: CanvasData = { nodes: newNodes, edges: newEdges, panOffset: customPan, zoom: customZoom };
-    
-    if (pushToUndo) {
-      setUndoStack((prev) => [...prev, { nodes, edges, panOffset, zoom }]);
-      setRedoStack([]); // Clear redo
-    }
 
-    setNodes(newNodes);
-    setEdges(newEdges);
-    onChange(JSON.stringify(data));
-  }, [nodes, edges, panOffset, zoom, onChange]);
 
   const handleUndo = () => {
     if (undoStack.length === 0) return;
@@ -212,6 +260,11 @@ export function SystemDesignCanvas({
     let extraFields: Partial<CanvasNode> = {};
 
     switch (type) {
+      case "group":
+        label = "Subsystem";
+        width = 300;
+        height = 200;
+        break;
       case "service":
         label = "Service";
         width = 140;
@@ -285,7 +338,7 @@ export function SystemDesignCanvas({
     const x = coords.x;
     const y = coords.y;
 
-    if (mode !== "select" && mode !== "connect") {
+    if (mode !== "select" && mode !== "connect" && mode !== "simulation") {
       addShape(mode, x, y);
     } else {
       setSelectedNodeId(null);
@@ -312,9 +365,14 @@ export function SystemDesignCanvas({
     }
   }, [nodes, edges, selectedNodeId, selectedEdgeId, saveState, readOnly]);
 
-  // Keypress listener for delete key
+  // Keypress listener for delete and duplicate keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "d") {
+        e.preventDefault();
+        handleDuplicateSelected();
+        return;
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
         const activeEl = document.activeElement;
         const isInput = activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA" || activeEl?.getAttribute("contenteditable") === "true";
@@ -325,7 +383,7 @@ export function SystemDesignCanvas({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleDeleteSelected]);
+  }, [handleDeleteSelected, handleDuplicateSelected]);
 
   // Pointer drag triggers
   const handleNodePointerDown = (e: React.PointerEvent, nodeId: string) => {
@@ -333,6 +391,9 @@ export function SystemDesignCanvas({
     e.stopPropagation();
     
     if (mode === "connect") {
+      return;
+    }
+    if (mode === "simulation") {
       return;
     }
 
@@ -347,6 +408,18 @@ export function SystemDesignCanvas({
         x: coords.x - node.x,
         y: coords.y - node.y
       };
+
+      if (node.type === "group" && !node.isCollapsed) {
+        const children = nodes.filter(n => {
+          if (n.id === nodeId) return false;
+          const cx = n.x + n.width / 2;
+          const cy = n.y + n.height / 2;
+          return cx >= node.x && cx <= node.x + node.width && cy >= node.y && cy <= node.y + node.height;
+        });
+        draggedChildNodeIds.current = children.map(n => n.id);
+      } else {
+        draggedChildNodeIds.current = [];
+      }
     }
   };
 
@@ -474,12 +547,23 @@ export function SystemDesignCanvas({
       e.preventDefault();
       const nodeId = isDraggingNode.current;
       const coords = getLocalCoords(e.clientX, e.clientY);
+      const node = nodes.find(n => n.id === nodeId);
+      if (node) {
+        const nextX = Math.round((coords.x - dragStartOffset.current.x) / 5) * 5;
+        const nextY = Math.round((coords.y - dragStartOffset.current.y) / 5) * 5;
+        const dx = nextX - node.x;
+        const dy = nextY - node.y;
 
-      // Snap coordinates to 5px and drag freely without layout box bounding limits (infinite canvas)
-      const nextX = Math.round((coords.x - dragStartOffset.current.x) / 5) * 5;
-      const nextY = Math.round((coords.y - dragStartOffset.current.y) / 5) * 5;
-
-      setNodes(nodes.map((n) => n.id === nodeId ? { ...n, x: nextX, y: nextY } : n));
+        setNodes(nodes.map((n) => {
+          if (n.id === nodeId) {
+            return { ...n, x: nextX, y: nextY };
+          }
+          if (draggedChildNodeIds.current.includes(n.id)) {
+            return { ...n, x: n.x + dx, y: n.y + dy };
+          }
+          return n;
+        }));
+      }
     }
   };
 
@@ -569,6 +653,14 @@ export function SystemDesignCanvas({
 
   const handleNodeClick = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
+    if (mode === "simulation") {
+      if (simulationPath.includes(nodeId)) {
+        setSimulationPath(simulationPath.filter(id => id !== nodeId));
+      } else {
+        setSimulationPath([...simulationPath, nodeId]);
+      }
+      return;
+    }
     if (mode === "connect") {
       if (connectSourceId && connectSourceId !== nodeId) {
         // Create edge
@@ -1084,6 +1176,88 @@ export function SystemDesignCanvas({
           />
         );
 
+      case "group":
+        return (
+          <g>
+            <rect
+              x={node.x}
+              y={node.y}
+              width={node.width}
+              height={node.height}
+              rx="12"
+              fill={isSelected ? "rgba(59, 130, 246, 0.03)" : "rgba(100, 116, 139, 0.02)"}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeDasharray="6,4"
+            />
+            <rect
+              x={node.x}
+              y={node.y}
+              width={node.width}
+              height={28}
+              rx="12"
+              fill="rgba(100, 116, 139, 0.05)"
+              clipPath="inset(0 0 12 0)"
+            />
+            <text
+              x={node.x + 15}
+              y={node.y + 18}
+              fill="#94a3b8"
+              fontSize="10"
+              fontWeight="bold"
+              fontFamily="monospace"
+              textAnchor="start"
+              pointerEvents="none"
+            >
+              {node.label} {node.isCollapsed ? "[Collapsed]" : ""}
+            </text>
+            {!readOnly && (
+              <g
+                style={{ cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextNodes = nodes.map(n => {
+                    if (n.id === node.id) {
+                      const collapse = !n.isCollapsed;
+                      return {
+                        ...n,
+                        isCollapsed: collapse,
+                        expandedWidth: collapse ? n.width : undefined,
+                        expandedHeight: collapse ? n.height : undefined,
+                        width: collapse ? 140 : (n.expandedWidth || 300),
+                        height: collapse ? 45 : (n.expandedHeight || 200)
+                      };
+                    }
+                    return n;
+                  });
+                  saveState(nextNodes, edges);
+                }}
+              >
+                <rect
+                  x={node.x + node.width - 70}
+                  y={node.y + 6}
+                  width={60}
+                  height={16}
+                  rx="4"
+                  fill="rgba(59, 130, 246, 0.15)"
+                  stroke="#3b82f6"
+                  strokeWidth="0.5"
+                />
+                <text
+                  x={node.x + node.width - 40}
+                  y={node.y + 17}
+                  fill="#60a5fa"
+                  fontSize="8"
+                  fontWeight="bold"
+                  fontFamily="sans-serif"
+                  textAnchor="middle"
+                >
+                  {node.isCollapsed ? "Expand" : "Collapse"}
+                </text>
+              </g>
+            )}
+          </g>
+        );
       case "service":
       default:
         return (
@@ -1130,6 +1304,19 @@ export function SystemDesignCanvas({
             >
               <ArrowRight className="w-3.5 h-3.5" />
               Connect
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "simulation" ? "secondary" : "ghost"}
+              onClick={() => {
+                setMode(mode === "simulation" ? "select" : "simulation");
+                setSimulationPlaying(false);
+              }}
+              className="h-8 px-2 text-xs gap-1 text-yellow-500 font-semibold"
+              title="Trace and Animate Request Flow"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Simulate Flow
             </Button>
 
             <div className="w-px h-5 bg-border mx-1" />
@@ -1195,6 +1382,16 @@ export function SystemDesignCanvas({
               <Type className="w-3.5 h-3.5" />
               Text
             </Button>
+            <Button
+              size="sm"
+              variant={mode === "group" ? "secondary" : "ghost"}
+              onClick={() => setMode("group")}
+              className="h-8 px-2 text-xs gap-1 text-pink-400"
+              title="Add Boundary Subsystem Group"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              Subsystem
+            </Button>
           </div>
 
           <div className="flex items-center gap-1">
@@ -1217,6 +1414,16 @@ export function SystemDesignCanvas({
               title="Redo Shape Change"
             >
               <Redo2 className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={!selectedNodeId}
+              onClick={handleDuplicateSelected}
+              className="w-8 h-8 rounded-lg text-slate-400 hover:text-blue-400 disabled:opacity-30"
+              title="Duplicate Selected Component (Ctrl+D)"
+            >
+              <Plus className="w-3.5 h-3.5" />
             </Button>
             <Button
               size="icon"
@@ -1338,9 +1545,14 @@ export function SystemDesignCanvas({
 
           {/* Draw connecting lines (Edges) */}
           {edges.map((edge) => {
-            const fromNode = nodes.find((n) => n.id === edge.from);
-            const toNode = nodes.find((n) => n.id === edge.to);
+            const collapsedFromGroup = getCollapsedGroupForNode(edge.from, nodes);
+            const collapsedToGroup = getCollapsedGroupForNode(edge.to, nodes);
+
+            const fromNode = collapsedFromGroup || nodes.find((n) => n.id === edge.from);
+            const toNode = collapsedToGroup || nodes.find((n) => n.id === edge.to);
+
             if (!fromNode || !toNode) return null;
+            if (fromNode.id === toNode.id) return null;
 
             const pts = getLinePoints(fromNode, toNode, edge.fromPort, edge.toPort);
             const isSelected = selectedEdgeId === edge.id;
@@ -1491,6 +1703,9 @@ export function SystemDesignCanvas({
 
           {/* Draw shape nodes */}
           {nodes.map((node) => {
+            if (isNodeHiddenByCollapsedGroup(node.id, nodes)) {
+              return null;
+            }
             const isSelected = selectedNodeId === node.id;
             const textY = node.type === "database" 
               ? node.y + node.height / 2 + 6 
@@ -1605,11 +1820,119 @@ export function SystemDesignCanvas({
                     style={{ animationDuration: "8s" }}
                   />
                 )}
+
+                {/* Simulation Step Badge */}
+                {mode === "simulation" && (() => {
+                  const stepIdx = simulationPath.indexOf(node.id);
+                  if (stepIdx === -1) return null;
+                  return (
+                    <g transform={`translate(${node.x - 8}, ${node.y - 8})`}>
+                      <circle r="9" fill="#eab308" stroke="#ffffff" strokeWidth="1" />
+                      <text
+                        y="3"
+                        fill="#0f172a"
+                        fontSize="9.5"
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                        textAnchor="middle"
+                      >
+                        {stepIdx + 1}
+                      </text>
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
+
+          {/* Simulation animated pulses */}
+          {simulationPlaying && simulationPath.length >= 2 && (() => {
+            return simulationPath.slice(0, -1).map((nodeId, idx) => {
+              const nextNodeId = simulationPath[idx + 1];
+              const collapsedFromGroup = getCollapsedGroupForNode(nodeId, nodes);
+              const collapsedToGroup = getCollapsedGroupForNode(nextNodeId, nodes);
+
+              const fromNode = collapsedFromGroup || nodes.find(n => n.id === nodeId);
+              const toNode = collapsedToGroup || nodes.find(n => n.id === nextNodeId);
+
+              if (!fromNode || !toNode || fromNode.id === toNode.id) return null;
+
+              const edge = edges.find(e => 
+                (e.from === fromNode.id && e.to === toNode.id) || 
+                (e.from === toNode.id && e.to === fromNode.id)
+              );
+
+              const pts = getLinePoints(fromNode, toNode, edge?.fromPort, edge?.toPort);
+              const dx = pts.x2 - pts.x1;
+              const dy = pts.y2 - pts.y1;
+              const isHorizontal = Math.abs(dx) >= Math.abs(dy);
+              
+              const getPortDir = (port: string | undefined, isH: boolean, diff: number) => {
+                if (port && port !== "auto") return port;
+                return isH ? (diff >= 0 ? "right" : "left") : (diff >= 0 ? "bottom" : "top");
+              };
+              
+              const startDir = getPortDir(edge?.fromPort, isHorizontal, dx);
+              const endDir = getPortDir(edge?.toPort, isHorizontal, dx);
+              const curv = edge?.curvature || 0;
+
+              const pathD = getOrthogonalPath(pts.x1, pts.y1, pts.x2, pts.y2, curv, startDir, endDir);
+
+              return (
+                <g key={`sim-pulse-${idx}`}>
+                  <circle r="5.5" fill="#f59e0b" style={{ filter: "drop-shadow(0 0 3px #f59e0b)" }}>
+                    <animateMotion
+                      dur="2.2s"
+                      repeatCount="indefinite"
+                      path={pathD}
+                    />
+                  </circle>
+                </g>
+              );
+            });
+          })()}
           </g>
         </svg>
+
+        {/* Simulation Control Panel */}
+        {mode === "simulation" && (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-card border border-border px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3.5 z-20 animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex flex-col text-left">
+              <span className="text-[9px] font-bold text-yellow-500 uppercase tracking-wider">Flow Simulation</span>
+              <span className="text-[10px] text-muted-foreground max-w-xs truncate">
+                {simulationPath.length === 0 
+                  ? "Click components in order to trace a request path"
+                  : simulationPath.map((id, idx) => {
+                      const label = nodes.find(n => n.id === id)?.label || "Node";
+                      return `${idx > 0 ? " ➔ " : ""}${label}`;
+                    })}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                size="sm"
+                variant={simulationPlaying ? "secondary" : "default"}
+                disabled={simulationPath.length < 2}
+                onClick={() => setSimulationPlaying(!simulationPlaying)}
+                className="h-7 px-2.5 text-[10px] font-bold rounded-lg cursor-pointer"
+              >
+                {simulationPlaying ? "Pause" : "Play Flow"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSimulationPath([]);
+                  setSimulationPlaying(false);
+                }}
+                className="h-7 px-2 text-[10px] rounded-lg cursor-pointer"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Inline Label Editing Inputs */}
         {(editingNodeId || editingEdgeId) && (

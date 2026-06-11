@@ -39,7 +39,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function fetchAllCards(): Promise<Flashcard[]> {
-    const data = await apiFetch<{ cards: Flashcard[] }>("/cards");
+    const data = await apiFetch<{ cards: Flashcard[] }>("/cards?light=true");
     return data.cards;
 }
 

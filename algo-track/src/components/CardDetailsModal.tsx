@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 
 import type { Flashcard } from "@/data";
-import { updateCard, deleteCard, pauseCardReview, resumeCardReview, fetchAllCards } from "@/lib/client-api";
+import { updateCard, deleteCard, pauseCardReview, resumeCardReview, fetchAllCards, fetchCardDetails } from "@/lib/client-api";
 import { canPauseCard, isCardPaused, pauseThreshold } from "@/lib/card-utils";
 import { getStoredAiReview } from "@/components/CodePractice";
 import type { StoredAiReview } from "@/components/CodePractice";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
+import { AiStudyAssistant } from "@/components/AiStudyAssistant";
 import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Layout, Sparkles } from "lucide-react";
 import { motion, useDragControls } from "motion/react";
 import { useState, useEffect, useRef } from "react";
@@ -40,11 +41,13 @@ interface CardDetailsModalProps {
 }
 
 export function CardDetailsModal({
-  card,
+  card: propCard,
   allCards: propAllCards,
   onClose,
   onSaved,
 }: CardDetailsModalProps) {
+  const [card, setCard] = useState<Flashcard | null>(propCard);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const dragControls = useDragControls();
   const backdropRef = useRef<HTMLDivElement>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -160,6 +163,7 @@ export function CardDetailsModal({
   const [isPausing, setIsPausing] = useState(false);
   const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
   const [systemDesignTab, setSystemDesignTab] = useState<"richNotes" | "canvas" | "assistant">("richNotes");
+  const [cardStudyTab, setCardStudyTab] = useState<"richNotes" | "aiTools">("richNotes");
   const [canvasData, setCanvasData] = useState<string>("");
   const [editorKey, setEditorKey] = useState("editor-details-desc");
   const [isResuming, setIsResuming] = useState(false);
@@ -290,15 +294,32 @@ export function CardDetailsModal({
   };
 
   useEffect(() => {
-    if (card) {
-      setTags(card.tags);
-      setNotes(card.notes);
-      setRichNotes(card.richNotes);
-      setReviewNote((card.metadata?.reviewNote as string) || "");
-      setAiReview(getStoredAiReview(card.id));
-      setCanvasData((card.metadata?.systemDesignCanvas as string) || "");
+    if (propCard) {
+      setCard(propCard);
+      setTags(propCard.tags);
+      setNotes(propCard.notes || "");
+      setRichNotes(propCard.richNotes);
+      setReviewNote((propCard.metadata?.reviewNote as string) || "");
+      setCanvasData((propCard.metadata?.systemDesignCanvas as string) || "");
+      setLoadingDetails(true);
+      fetchCardDetails(propCard.id)
+        .then((fullCard) => {
+          setCard(fullCard);
+          setTags(fullCard.tags);
+          setNotes(fullCard.notes);
+          setRichNotes(fullCard.richNotes);
+          setReviewNote((fullCard.metadata?.reviewNote as string) || "");
+          setCanvasData((fullCard.metadata?.systemDesignCanvas as string) || "");
+        })
+        .catch((err) => {
+          console.error("Failed to fetch card details:", err);
+        })
+        .finally(() => {
+          setLoadingDetails(false);
+        });
+      setAiReview(getStoredAiReview(propCard.id));
     }
-  }, [card]);
+  }, [propCard]);
 
   if (!card) return null;
 
@@ -639,23 +660,35 @@ export function CardDetailsModal({
         ) : (
           <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
             <section className="flex flex-col gap-3">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
-              <BookOpen className="w-4 h-4 text-muted-foreground" />
-              Description
-            </h3>
-            <RichNotesEditor
-              readOnly
-              initialContent={card.description}
-              fallbackMarkdown={card.description}
-            />
-          </section>
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
+                <BookOpen className="w-4 h-4 text-muted-foreground" />
+                Description
+              </h3>
+              {loadingDetails ? (
+                <div className="h-24 flex items-center justify-center border border-border border-dashed rounded-xl bg-muted/5 animate-pulse">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground ml-2">Loading description...</span>
+                </div>
+              ) : (
+                <RichNotesEditor
+                  readOnly
+                  initialContent={card.description}
+                  fallbackMarkdown={card.description}
+                />
+              )}
+            </section>
 
           <section className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
               <FileText className="w-4 h-4 text-muted-foreground" />
               Rich Notes
             </h3>
-            {isSystemDesignCard(card.type, tags) ? (
+            {loadingDetails ? (
+              <div className="h-32 flex items-center justify-center border border-border border-dashed rounded-xl bg-muted/5 animate-pulse">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                <span className="text-xs text-muted-foreground ml-2">Loading rich notes...</span>
+              </div>
+            ) : isSystemDesignCard(card.type, tags) ? (
               <div className="flex flex-col gap-3">
                 {/* Tab switcher headers */}
                 <div className="flex border-b border-border gap-1 shrink-0 pb-1">
@@ -729,13 +762,64 @@ export function CardDetailsModal({
                 )}
               </div>
             ) : (
-              <RichNotesEditor
-                initialContent={card.richNotes}
-                fallbackMarkdown={card.notes}
-                onChange={(content) => {
-                  setRichNotes(content);
-                }}
-              />
+              <div className="flex flex-col gap-3">
+                {/* Tab switcher headers */}
+                <div className="flex border-b border-border gap-1 shrink-0 pb-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={cardStudyTab === "richNotes" ? "secondary" : "ghost"}
+                    onClick={() => setCardStudyTab("richNotes")}
+                    className="h-8 px-3 text-xs gap-1.5 rounded-lg cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Rich Notes
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={cardStudyTab === "aiTools" ? "secondary" : "ghost"}
+                    onClick={() => setCardStudyTab("aiTools")}
+                    className="h-8 px-3 text-xs gap-1.5 rounded-lg text-purple-400 hover:text-purple-300 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI Study Tools
+                  </Button>
+                </div>
+
+                {/* Tab Content */}
+                {cardStudyTab === "richNotes" && (
+                  <RichNotesEditor
+                    initialContent={richNotes}
+                    fallbackMarkdown={card.notes}
+                    onChange={(content) => {
+                      setRichNotes(content);
+                    }}
+                  />
+                )}
+
+                {cardStudyTab === "aiTools" && (
+                  <AiStudyAssistant
+                    card={card}
+                    currentNotes={richNotes || ""}
+                    onNotesGenerated={(txt) => {
+                      setRichNotes(txt);
+                      setEditorKey(`editor-notes-${Date.now()}`);
+                    }}
+                    onUpdateCard={async (updates) => {
+                      try {
+                        const newCard = await updateCard(card.id, updates);
+                        if (updates.metadata) {
+                          card.metadata = updates.metadata;
+                        }
+                        onSaved();
+                      } catch (err) {
+                        console.error("Failed to update card in study tools:", err);
+                      }
+                    }}
+                  />
+                )}
+              </div>
             )}
           </section>
 
@@ -752,7 +836,17 @@ export function CardDetailsModal({
             />
           </section>
 
-          {solutionBlocks.length > 0 && (
+          {loadingDetails ? (
+            <section className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
+                Solutions
+              </h3>
+              <div className="h-20 flex items-center justify-center border border-border border-dashed rounded-xl bg-muted/5 animate-pulse">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                <span className="text-xs text-muted-foreground ml-2">Loading solutions...</span>
+              </div>
+            </section>
+          ) : solutionBlocks.length > 0 && (
             <section className="flex flex-col gap-3">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 uppercase tracking-wider">
                 Solutions

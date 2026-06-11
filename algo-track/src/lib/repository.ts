@@ -16,10 +16,10 @@ type CardDbRow = {
   id: string;
   type: "leetcode" | "cs";
   title: string;
-  description: string;
+  description?: string;
   url: string | null;
-  notes: string | null;
-  solution: string | null;
+  notes?: string | null;
+  solution?: string | null;
   difficulty: "easy" | "medium" | "hard";
   last_rating: ReviewRating | null;
   last_reviewed_at: string | null;
@@ -50,10 +50,10 @@ function toCardRow(
     id: row.id,
     type: row.type,
     title: row.title,
-    description: row.description,
+    description: row.description ?? "",
     url: row.url,
     notes: row.notes ?? "",
-    solution: row.solution,
+    solution: row.solution ?? null,
     difficulty: row.difficulty,
     last_rating: row.last_rating,
     last_reviewed_at: row.last_reviewed_at,
@@ -104,16 +104,20 @@ async function listReviewStatsForCards(userId: string, cardIds: string[]) {
   return buildReviewStats((data ?? []) as ReviewDbRow[]);
 }
 
-export async function listCardsForUser(userId: string, dueOnly = false) {
+export async function listCardsForUser(userId: string, dueOnly = false, light = false) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
   const endOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
+  let selectFields = "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata";
+
+  if (light) {
+    selectFields = "id, type, title, url, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata";
+  }
+
   let query = supabase
     .from("cards")
-    .select(
-      "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata",
-    )
+    .select(selectFields)
     .eq("user_id", userId)
     .order("next_review_at", { ascending: true })
     .order("created_at", { ascending: true });
@@ -127,7 +131,18 @@ export async function listCardsForUser(userId: string, dueOnly = false) {
     throw new Error(error.message);
   }
 
-  const cardRows = (data ?? []) as CardDbRow[];
+  const cardRows = (data as unknown as CardDbRow[]) ?? [];
+
+  if (light) {
+    for (const row of cardRows) {
+      if (row.metadata) {
+        row.metadata = { ...row.metadata };
+        delete row.metadata.richNotes;
+        delete row.metadata.systemDesignCanvas;
+      }
+    }
+  }
+
   const stats = await listReviewStatsForCards(
     userId,
     cardRows.map((row) => row.id),
