@@ -10,8 +10,8 @@ import type { StoredAiReview } from "@/components/CodePractice";
 import { RichNotesEditor } from "@/components/RichNotesEditor";
 import { CodeEvolution } from "@/components/CodeEvolution";
 import { AiStudyAssistant } from "@/components/AiStudyAssistant";
-import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Layout, Sparkles } from "lucide-react";
-import { motion, useDragControls } from "motion/react";
+import { X, ExternalLink, FileText, BookOpen, Plus, Loader2, Trash2, Link2, Brain, Check, Edit2, Pause, Play, GripVertical, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, Layout, Sparkles, Info, Save } from "lucide-react";
+import { motion, useDragControls, AnimatePresence } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 import { useConfirmModal } from "@/components/ConfirmModal";
 import { createPortal } from "react-dom";
@@ -172,6 +172,8 @@ export function CardDetailsModal({
   const [showModalCalendar, setShowModalCalendar] = useState(false);
   const modalCalendarBtnRef = useRef<HTMLButtonElement>(null);
   const [modalCalendarRect, setModalCalendarRect] = useState<DOMRect | null>(null);
+  const [showDetailsPopover, setShowDetailsPopover] = useState(false);
+  const detailsPopoverRef = useRef<HTMLDivElement>(null);
   const [fetchedCards, setFetchedCards] = useState<Flashcard[]>([]);
 
   useEffect(() => {
@@ -343,6 +345,20 @@ export function CardDetailsModal({
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (showDetailsPopover && detailsPopoverRef.current && !detailsPopoverRef.current.contains(event.target as Node)) {
+        const target = event.target as HTMLElement;
+        if (target.closest(".z-\\[9999\\]") || target.closest(".z-\\[9998\\]")) {
+          return;
+        }
+        setShowDetailsPopover(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showDetailsPopover]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -422,10 +438,10 @@ export function CardDetailsModal({
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
         className={isMaximized
-          ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none"
+          ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none relative"
           : !dimensions
-            ? "w-full max-w-3xl bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-border"
-            : "bg-card rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-border"
+            ? "w-full max-w-3xl bg-card rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-border relative"
+            : "bg-card rounded-2xl shadow-2xl flex flex-col border border-border relative"
         }
         style={isMaximized
           ? { transform: "none" }
@@ -486,8 +502,10 @@ export function CardDetailsModal({
             />
           </>
         )}
-        {/* Header - Entire bar is draggable */}
-        <div 
+        {/* Inner Content Wrapper */}
+        <div className={isMaximized ? "flex flex-col flex-1 overflow-hidden" : "flex flex-col flex-1 overflow-hidden rounded-2xl"}>
+          {/* Header - Entire bar is draggable */}
+          <div 
           onPointerDown={(e) => {
             const target = e.target as HTMLElement;
             if (target.closest("button") || target.closest("input") || target.closest("select") || target.closest("textarea")) {
@@ -1012,215 +1030,319 @@ export function CardDetailsModal({
           )}
         </div>
         )}
+        </div>
 
-        {/* Footer */}
-        {!isEditing && (
-        <div className="p-4 border-t border-border flex flex-col gap-3 bg-muted/10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-xs text-muted-foreground flex items-center gap-4">
-                <span>
-                  Last reviewed:{" "}
-                  <strong className="text-foreground">{card.lastReview}</strong>
-                </span>
-                {isReference ? (
-                  <span className="flex items-center gap-1 text-cyan-500">
-                    <BookOpen className="w-3 h-3" />
-                    <strong>Reference Card</strong>
-                  </span>
-                ) : isCardPaused(card) ? (
-                  <span className="flex items-center gap-1 text-amber-500">
-                    <Pause className="w-3 h-3" />
-                    <strong>Reviews paused</strong>
-                  </span>
-                ) : (
-                  <span>
-                    Next review:{" "}
-                    <strong className="text-foreground">{card.nextReview}</strong>
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {isReference ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowResumeOptions(!showResumeOptions)}
-                  disabled={isResuming}
-                  className="text-cyan-500 hover:text-cyan-600 hover:bg-cyan-500/10 gap-1.5 rounded-full px-4"
-                >
-                  {isResuming ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  {isResuming ? "Processing..." : "Add to Review Queue"}
-                </Button>
-              ) : isCardPaused(card) ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowResumeOptions(!showResumeOptions)}
-                  disabled={isResuming}
-                  className="text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 gap-1.5 rounded-full px-4"
-                >
-                  {isResuming ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Play className="w-4 h-4" />
-                  )}
-                  {isResuming ? "Resuming..." : "Resume Reviews"}
-                </Button>
-              ) : canPauseCard(card) ? (
-                <Button
-                  variant="ghost"
-                  onClick={handlePause}
-                  disabled={isPausing || isSaving || isDeleting}
-                  className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 gap-1.5 rounded-full px-4"
-                >
-                  {isPausing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Pause className="w-4 h-4" />
-                  )}
-                  {isPausing ? "Pausing..." : "Pause Reviews"}
-                </Button>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">
-                  Pause available after {pauseThreshold(card)} reviews ({card.history.total}/{pauseThreshold(card)})
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                onClick={handleDelete}
-                disabled={isDeleting || isSaving}
-                className="text-hard hover:text-hard hover:bg-hard-bg gap-1.5 rounded-full px-4"
-              >
-                {isDeleting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4" />
-                )}
-                {isDeleting ? "Deleting..." : "Delete"}
-              </Button>
-              <Button
+        {/* Floating Side Action Pills */}
+        {!isEditing && (() => {
+          const isPillsOnLeft = dimensions
+            ? (dimensions.left + dimensions.width + 80 > window.innerWidth)
+            : false;
+
+          const pillContainerClass = isMaximized
+            ? "absolute bottom-6 right-6 flex flex-row gap-3 z-[60] bg-card p-2 rounded-full border border-border shadow-lg"
+            : isPillsOnLeft
+              ? "absolute top-24 -left-14 flex flex-col gap-3 z-[60]"
+              : "absolute top-24 -right-14 flex flex-col gap-3 z-[60]";
+
+          const pillBaseClass = "w-11 h-11 rounded-full flex items-center justify-center bg-card border border-border shadow-md transition-all duration-200 hover:scale-105 select-none cursor-pointer relative group";
+
+          return (
+            <div className={pillContainerClass}>
+              {/* Save & Close Pill */}
+              <button
+                type="button"
                 onClick={handleSave}
                 disabled={isSaving || isDeleting}
-                className="rounded-full px-6 font-semibold gap-2"
+                className={`${pillBaseClass} text-primary hover:border-primary/50 hover:bg-primary/10 hover:shadow-primary/10`}
               >
-                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isSaving ? "Saving..." : "Save & Close"}
-              </Button>
-            </div>
-          </div>
-
-          {/* Resume / Add to Queue options picker */}
-          {showResumeOptions && (
-            <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-muted/30 border border-border mt-3 select-none flex-wrap relative">
-              <span className="text-xs font-semibold text-muted-foreground mr-2">
-                {isReference ? "Add to review queue in:" : "Resume in:"}
-              </span>
-              {[
-                { label: "Now", value: 0 },
-                { label: "1 Day", value: 1 },
-                { label: "3 Days", value: 3 },
-                { label: "7 Days", value: 7 },
-              ].map((opt) => (
-                <Button
-                  key={opt.value}
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    if (isReference) {
-                      await handleAddToQueue(opt.value);
-                    } else {
-                      await handleResume(opt.value);
-                    }
-                  }}
-                  disabled={isResuming || isSaving}
-                  className="rounded-full text-xs"
-                >
-                  {opt.label}
-                </Button>
-              ))}
-
-              {/* Custom Date Picker */}
-              <div className="relative inline-block">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  ref={modalCalendarBtnRef}
-                  onClick={() => {
-                    if (modalCalendarBtnRef.current) {
-                      setModalCalendarRect(modalCalendarBtnRef.current.getBoundingClientRect());
-                    }
-                    setShowModalCalendar(!showModalCalendar);
-                  }}
-                  disabled={isResuming || isSaving}
-                  className="rounded-full text-xs gap-1"
-                >
-                  <CalendarIcon className="w-3 h-3" />
-                  Custom Date
-                </Button>
-                {showModalCalendar && createPortal(
-                  <>
-                    <div 
-                      className="fixed inset-0 z-[9998] cursor-default" 
-                      onClick={() => setShowModalCalendar(false)} 
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="fixed z-[9999] w-64 bg-card border border-border rounded-2xl shadow-2xl p-3 flex flex-col gap-2 cursor-default text-left"
-                      style={modalCalendarRect ? (() => {
-                        const CALENDAR_H = 340;
-                        const spaceAbove = modalCalendarRect.top;
-                        const placeAbove = spaceAbove >= CALENDAR_H + 8;
-                        return {
-                          top: placeAbove ? undefined : `${modalCalendarRect.bottom + 8}px`,
-                          bottom: placeAbove ? `${window.innerHeight - modalCalendarRect.top + 8}px` : undefined,
-                          left: `${Math.max(8, modalCalendarRect.left + modalCalendarRect.width / 2 - 128)}px`,
-                        };
-                      })() : undefined}
-                    >
-                      <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
-                        <button
-                          type="button"
-                          onClick={prevModalCalendarMonth}
-                          className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-xs font-bold text-foreground">
-                          {monthNames[modalCalendarMonth.getMonth()]} {modalCalendarMonth.getFullYear()}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={nextModalCalendarMonth}
-                          className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
-                        {dayNames.map((dName, idx) => (
-                          <div key={`dayname-${idx}`}>{dName}</div>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-7 gap-1">
-                        {renderModalCalendarDays()}
-                      </div>
-                    </motion.div>
-                  </>,
-                  document.body
+                {isSaving ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Save className="w-5 h-5" />
                 )}
+                {/* Tooltip */}
+                <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap bg-card text-foreground text-[10px] font-bold tracking-wide uppercase px-2.5 py-1 rounded-md shadow-md border border-border z-[100] ${
+                  isMaximized 
+                    ? "bottom-full top-auto left-1/2 -translate-x-1/2 -translate-y-0 mb-2" 
+                    : isPillsOnLeft 
+                      ? "left-full ml-3" 
+                      : "right-full mr-3"
+                }`}>
+                  Save & Close
+                </div>
+              </button>
+
+              {/* Details & Review Pill */}
+              <div className="relative" ref={detailsPopoverRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowDetailsPopover(!showDetailsPopover)}
+                  className={`${pillBaseClass} ${
+                    showDetailsPopover 
+                      ? "border-cyan-500 bg-cyan-500/10 text-cyan-500 shadow-cyan-500/10" 
+                      : "text-cyan-500 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:shadow-cyan-500/10"
+                  }`}
+                >
+                  <CalendarIcon className="w-5 h-5" />
+                  {/* Tooltip */}
+                  <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap bg-card text-foreground text-[10px] font-bold tracking-wide uppercase px-2.5 py-1 rounded-md shadow-md border border-border z-[100] ${
+                    isMaximized 
+                      ? "bottom-full top-auto left-1/2 -translate-x-1/2 -translate-y-0 mb-2" 
+                      : isPillsOnLeft 
+                        ? "left-full ml-3" 
+                        : "right-full mr-3"
+                  }`}>
+                    Review Details
+                  </div>
+                </button>
+
+                {/* Details Popover */}
+                <AnimatePresence>
+                  {showDetailsPopover && (
+                    <motion.div
+                      initial={{ 
+                        opacity: 0, 
+                        scale: 0.95, 
+                        y: isMaximized ? 10 : 0, 
+                        x: isMaximized ? 0 : (isPillsOnLeft ? 10 : -10) 
+                      }}
+                      animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                      exit={{ 
+                        opacity: 0, 
+                        scale: 0.95, 
+                        y: isMaximized ? 10 : 0, 
+                        x: isMaximized ? 0 : (isPillsOnLeft ? 10 : -10) 
+                      }}
+                      className={`absolute z-[70] w-72 p-4 bg-card border border-border rounded-2xl shadow-2xl flex flex-col gap-3 text-sm text-left ${
+                        isMaximized
+                          ? "bottom-full mb-3 right-0"
+                          : isPillsOnLeft
+                            ? "right-full mr-3 top-0"
+                            : "left-full ml-3 top-0"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                        <span className="font-bold text-foreground flex items-center gap-1.5">
+                          <Brain className="w-4 h-4 text-purple-500" />
+                          Review Statistics
+                        </span>
+                        <span className="text-[10px] text-muted-foreground bg-muted border border-border/30 px-2 py-0.5 rounded-full font-bold">
+                          {card.history?.total ?? 0} reviews
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Last Reviewed:</span>
+                          <span className="font-semibold text-foreground">{card.lastReview || "Never"}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Next Review:</span>
+                          {isReference ? (
+                            <span className="font-semibold text-cyan-500 flex items-center gap-1">
+                              <BookOpen className="w-3.5 h-3.5" /> Reference
+                            </span>
+                          ) : isCardPaused(card) ? (
+                            <span className="font-semibold text-amber-500 flex items-center gap-1">
+                              <Pause className="w-3.5 h-3.5" /> Paused
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-foreground">{card.nextReview || "Now"}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-border/60 pt-2 flex flex-col gap-2">
+                        {isReference ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => setShowResumeOptions(!showResumeOptions)}
+                            disabled={isResuming}
+                            className="w-full text-cyan-500 hover:text-cyan-600 hover:bg-cyan-500/10 gap-1.5 rounded-xl h-9"
+                          >
+                            {isResuming ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Plus className="w-3.5 h-3.5" />
+                            )}
+                            {isResuming ? "Processing..." : "Add to Review Queue"}
+                          </Button>
+                        ) : isCardPaused(card) ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => setShowResumeOptions(!showResumeOptions)}
+                            disabled={isResuming}
+                            className="w-full text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 gap-1.5 rounded-xl h-9"
+                          >
+                            {isResuming ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5" />
+                            )}
+                            {isResuming ? "Resuming..." : "Resume Reviews"}
+                          </Button>
+                        ) : canPauseCard(card) ? (
+                          <Button
+                            variant="ghost"
+                            onClick={handlePause}
+                            disabled={isPausing || isSaving || isDeleting}
+                            className="w-full text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 gap-1.5 rounded-xl h-9"
+                          >
+                            {isPausing ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Pause className="w-3.5 h-3.5" />
+                            )}
+                            {isPausing ? "Pausing..." : "Pause Reviews"}
+                          </Button>
+                        ) : (
+                          <div className="text-[10px] text-muted-foreground leading-normal text-center p-1.5 bg-muted/20 border border-dashed border-border rounded-xl">
+                            Pause available after {pauseThreshold(card)} reviews ({card.history?.total ?? 0}/{pauseThreshold(card)})
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Resume / Add to Queue options picker inside popover */}
+                      {showResumeOptions && (
+                        <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-muted/30 border border-border mt-1 relative">
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider text-center">
+                            {isReference ? "Add in:" : "Resume in:"}
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {[
+                              { label: "Now", value: 0 },
+                              { label: "1 Day", value: 1 },
+                              { label: "3 Days", value: 3 },
+                              { label: "7 Days", value: 7 },
+                            ].map((opt) => (
+                              <Button
+                                key={opt.value}
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  if (isReference) {
+                                    await handleAddToQueue(opt.value);
+                                  } else {
+                                    await handleResume(opt.value);
+                                  }
+                                }}
+                                disabled={isResuming || isSaving}
+                                className="rounded-lg text-xs py-1 h-7 border-border/80 hover:bg-background"
+                              >
+                                {opt.label}
+                              </Button>
+                            ))}
+                          </div>
+
+                          {/* Custom Date Picker Trigger */}
+                          <div className="relative w-full">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              ref={modalCalendarBtnRef}
+                              onClick={() => {
+                                if (modalCalendarBtnRef.current) {
+                                  setModalCalendarRect(modalCalendarBtnRef.current.getBoundingClientRect());
+                                }
+                                setShowModalCalendar(!showModalCalendar);
+                              }}
+                              disabled={isResuming || isSaving}
+                              className="w-full rounded-lg text-xs gap-1.5 h-7 border-border/80 hover:bg-background"
+                            >
+                              <CalendarIcon className="w-3.5 h-3.5" />
+                              Custom Date
+                            </Button>
+                            
+                            {/* Render calendar using portal if active */}
+                            {showModalCalendar && createPortal(
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-[9998] cursor-default" 
+                                  onClick={() => setShowModalCalendar(false)} 
+                                />
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  className="fixed z-[9999] w-64 bg-card border border-border rounded-2xl shadow-2xl p-3 flex flex-col gap-2 cursor-default text-left"
+                                  style={modalCalendarRect ? (() => {
+                                    const CALENDAR_H = 340;
+                                    const spaceAbove = modalCalendarRect.top;
+                                    const placeAbove = spaceAbove >= CALENDAR_H + 8;
+                                    return {
+                                      top: placeAbove ? undefined : `${modalCalendarRect.bottom + 8}px`,
+                                      bottom: placeAbove ? `${window.innerHeight - modalCalendarRect.top + 8}px` : undefined,
+                                      left: `${Math.max(8, modalCalendarRect.left + modalCalendarRect.width / 2 - 128)}px`,
+                                    };
+                                  })() : undefined}
+                                >
+                                  <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={prevModalCalendarMonth}
+                                      className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    >
+                                      <ChevronLeft className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="text-xs font-bold text-foreground">
+                                      {monthNames[modalCalendarMonth.getMonth()]} {modalCalendarMonth.getFullYear()}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={nextModalCalendarMonth}
+                                      className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    >
+                                      <ChevronRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+
+                                  <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-muted-foreground uppercase">
+                                    {dayNames.map((dName, idx) => (
+                                      <div key={`dayname-${idx}`}>{dName}</div>
+                                    ))}
+                                  </div>
+
+                                  <div className="grid grid-cols-7 gap-1">
+                                    {renderModalCalendarDays()}
+                                  </div>
+                                </motion.div>
+                              </>,
+                              document.body
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
+
+              {/* Delete Pill */}
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isDeleting || isSaving}
+                className={`${pillBaseClass} text-hard hover:border-hard/50 hover:bg-hard-bg/50 hover:shadow-hard/10`}
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-5 h-5" />
+                )}
+                {/* Tooltip */}
+                <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap bg-card text-foreground text-[10px] font-bold tracking-wide uppercase px-2.5 py-1 rounded-md shadow-md border border-border z-[100] ${
+                  isMaximized 
+                    ? "bottom-full top-auto left-1/2 -translate-x-1/2 -translate-y-0 mb-2" 
+                    : isPillsOnLeft 
+                      ? "left-full ml-3" 
+                      : "right-full mr-3"
+                }`}>
+                  Delete Card
+                </div>
+              </button>
             </div>
-          )}
-        </div>
-        )}
+          );
+        })()}
       </motion.div>
     </div>,
     document.body
