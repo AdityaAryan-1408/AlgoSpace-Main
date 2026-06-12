@@ -81,6 +81,37 @@ async function callGroq(
   return text;
 }
 
+function extractJsonString(str: string): string {
+  let clean = str.trim();
+  
+  // Strip code fences if they wrap the entire thing or exist
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  const match = clean.match(codeBlockRegex);
+  if (match) {
+    clean = match[1].trim();
+  }
+  
+  const firstCurly = clean.indexOf("{");
+  const firstBracket = clean.indexOf("[");
+  
+  let startIdx = -1;
+  let endIdx = -1;
+  
+  if (firstCurly !== -1 && (firstBracket === -1 || firstCurly < firstBracket)) {
+    startIdx = firstCurly;
+    endIdx = clean.lastIndexOf("}");
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = clean.lastIndexOf("]");
+  }
+  
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return clean.slice(startIdx, endIdx + 1);
+  }
+  
+  return clean;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await withUser(request);
@@ -169,22 +200,25 @@ Description:
 ${cardDescription || ""}`;
 
     } else if (action === "notes_enhancer") {
-      systemPrompt = `You are a professional technical writer and CS tutor.
-Help the user refine their active study notes for the topic: "${cardTitle}".
-You have access to their current notes. The user will specify what they want to change (e.g. "make it more presentable", "add concrete code examples", "tweak formatting").
-Your goal is to suggest an enhanced markdown layout.
+      systemPrompt = `You are a professional computer science tutor and technical writer.
+Help the student learn the topic: "${cardTitle}".
+You have access to the student's active study notes for context:
+${notes || "(Empty)"}
 
-Respond ONLY with a valid JSON object matching this schema:
-{
-  "message": "your conversation response explaining your changes",
-  "notes": "the complete, updated notes in beautiful markdown"
-}
-Only return valid, raw JSON. Do NOT wrap it in markdown code blocks (\`\`\`json).`;
+GUIDELINES:
+1. Answer the student's question in a clear, concise, and helpful manner using clean Markdown.
+2. Provide concrete explanations, real-world analogies, or code/diagram examples if relevant.
+3. Keep the context of their current notes in mind when answering.
+4. Keep the response engaging and focused on teaching.`;
 
-      userPrompt = `User instructions: "${userPromptInput}"
-Current Notes:
-${notes || "(Empty)"}`;
-      isJson = true;
+      const formattedHistory = Array.isArray(chatHistory)
+        ? chatHistory.map((m: any) => `${m.role === "user" ? "Student" : "Tutor"}: ${m.text || m.message}`).join("\n")
+        : "";
+
+      userPrompt = `Student's input: "${userPromptInput}"
+Chat History:
+${formattedHistory || "(No history)"}`;
+      isJson = false;
     } else if (action === "sql_erd") {
       isJson = true;
       systemPrompt = `You are a Database Designer. Your job is to return ONLY a valid, parseable JSON object representing the Entity-Relationship Diagram (ERD) schema for the problem "${cardTitle}".
@@ -252,17 +286,19 @@ Description: ${cardDescription || ""}`;
 
     // JSON response parsing
     let cleanJson = aiContent.trim();
-    const codeFenceMatch = cleanJson.match(/```(?:json)?\n([\s\S]*?)```/) || cleanJson.match(/\{[\s\S]*\}/) || cleanJson.match(/\[[\s\S]*\]/);
-    if (codeFenceMatch) {
-      cleanJson = codeFenceMatch[1] || codeFenceMatch[0];
-    }
-
     try {
-      const parsed = JSON.parse(cleanJson.trim());
+      const extracted = extractJsonString(cleanJson);
+      const parsed = JSON.parse(extracted);
       return jsonOk(parsed);
     } catch (err) {
-      console.error("Failed to parse study tools JSON:", err, cleanJson);
-      throw new Error("AI model generated invalid JSON response data. Please try again.");
+      // Fallback: try parsing cleanJson directly
+      try {
+        const parsed = JSON.parse(cleanJson);
+        return jsonOk(parsed);
+      } catch (err2) {
+        console.error("Failed to parse study tools JSON:", err2, aiContent);
+        throw new Error("AI model generated invalid JSON response data. Please try again.");
+      }
     }
   } catch (err) {
     return handleApiError(err);

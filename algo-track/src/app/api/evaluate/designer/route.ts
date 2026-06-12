@@ -91,6 +91,37 @@ async function callGroq(
   return text;
 }
 
+function extractJsonString(str: string): string {
+  let clean = str.trim();
+  
+  // Strip code fences if they wrap the entire thing or exist
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  const match = clean.match(codeBlockRegex);
+  if (match) {
+    clean = match[1].trim();
+  }
+  
+  const firstCurly = clean.indexOf("{");
+  const firstBracket = clean.indexOf("[");
+  
+  let startIdx = -1;
+  let endIdx = -1;
+  
+  if (firstCurly !== -1 && (firstBracket === -1 || firstCurly < firstBracket)) {
+    startIdx = firstCurly;
+    endIdx = clean.lastIndexOf("}");
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = clean.lastIndexOf("]");
+  }
+  
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return clean.slice(startIdx, endIdx + 1);
+  }
+  
+  return clean;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await withUser(request);
@@ -266,13 +297,9 @@ ${JSON.stringify(currentCanvas || { nodes: [], edges: [] }, null, 2)}`;
 
     // JSON response parsing for diagrams or chat
     let cleanJson = aiContent.trim();
-    const codeFenceMatch = cleanJson.match(/```(?:json)?\n([\s\S]*?)```/) || cleanJson.match(/\{[\s\S]*\}/);
-    if (codeFenceMatch) {
-      cleanJson = codeFenceMatch[1] || codeFenceMatch[0];
-    }
-
     try {
-      const parsed = JSON.parse(cleanJson.trim());
+      const extracted = extractJsonString(cleanJson);
+      const parsed = JSON.parse(extracted);
       if (action === "chat") {
         return jsonOk({
           message: parsed.message || "I've processed your request.",
@@ -286,16 +313,33 @@ ${JSON.stringify(currentCanvas || { nodes: [], edges: [] }, null, 2)}`;
         diagram: { nodes, edges } 
       });
     } catch (err) {
-      console.error("Failed to parse diagram/chat JSON from LLM content:", err, cleanJson);
-      if (action === "chat") {
-        // Fallback for chat
-        return jsonOk({
-          message: aiContent,
-          diagram: null,
-          notes: null
+      // Fallback: try parsing cleanJson directly
+      try {
+        const parsed = JSON.parse(cleanJson);
+        if (action === "chat") {
+          return jsonOk({
+            message: parsed.message || "I've processed your request.",
+            diagram: parsed.diagram || null,
+            notes: parsed.notes || null
+          });
+        }
+        const nodes = Array.isArray(parsed?.nodes) ? parsed.nodes : [];
+        const edges = Array.isArray(parsed?.edges) ? parsed.edges : [];
+        return jsonOk({ 
+          diagram: { nodes, edges } 
         });
+      } catch (err2) {
+        console.error("Failed to parse diagram/chat JSON from LLM content:", err2, aiContent);
+        if (action === "chat") {
+          // Fallback for chat
+          return jsonOk({
+            message: aiContent,
+            diagram: null,
+            notes: null
+          });
+        }
+        throw new Error("AI model generated invalid JSON layout data. Please try again.");
       }
-      throw new Error("AI model generated invalid JSON layout data. Please try again.");
     }
 
   } catch (err) {

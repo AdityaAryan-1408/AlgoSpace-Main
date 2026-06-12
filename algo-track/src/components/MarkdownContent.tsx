@@ -79,97 +79,130 @@ function renderMarkdownBlocks(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const blocks = trimmed.split(/\n{2,}/);
+  const lines = trimmed.split("\n");
+  const elements: React.ReactNode[] = [];
+  
+  let currentList: { type: "ul" | "ol"; items: string[] } | null = null;
 
-  return blocks.map((block, index) => {
-    const lines = block.split("\n");
+  const flushList = (key: string) => {
+    if (!currentList) return null;
+    const listType = currentList.type;
+    const listItems = currentList.items;
+    currentList = null;
 
-    if (lines.every((line) => /^-\s+/.test(line.trim()))) {
+    if (listType === "ul") {
       return (
-        <ul key={`list-${index}`} className="list-disc pl-5 space-y-1">
-          {lines.map((line, lineIndex) => (
+        <ul key={key} className="list-disc pl-5 space-y-1 my-2">
+          {listItems.map((item, itemIdx) => (
             <li
-              key={`list-item-${index}-${lineIndex}`}
+              key={`${key}-${itemIdx}`}
               dangerouslySetInnerHTML={{
-                __html: formatInlineMarkdown(line.replace(/^-\s+/, "").trim()),
+                __html: formatInlineMarkdown(item),
               }}
             />
           ))}
         </ul>
       );
-    }
-
-    const headingMatch = lines[0].match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const headingHtml = formatInlineMarkdown(headingMatch[2]);
-      const headingClass = cn("font-semibold", level <= 2 ? "text-lg" : "text-base");
-      const key = `heading-${index}`;
-
-      if (level === 1) {
-        return (
-          <h1
-            key={key}
-            className={headingClass}
-            dangerouslySetInnerHTML={{ __html: headingHtml }}
-          />
-        );
-      }
-      if (level === 2) {
-        return (
-          <h2
-            key={key}
-            className={headingClass}
-            dangerouslySetInnerHTML={{ __html: headingHtml }}
-          />
-        );
-      }
-      if (level === 3) {
-        return (
-          <h3
-            key={key}
-            className={headingClass}
-            dangerouslySetInnerHTML={{ __html: headingHtml }}
-          />
-        );
-      }
-      if (level === 4) {
-        return (
-          <h4
-            key={key}
-            className={headingClass}
-            dangerouslySetInnerHTML={{ __html: headingHtml }}
-          />
-        );
-      }
-      if (level === 5) {
-        return (
-          <h5
-            key={key}
-            className={headingClass}
-            dangerouslySetInnerHTML={{ __html: headingHtml }}
-          />
-        );
-      }
+    } else {
       return (
-        <h6
-          key={key}
-          className={headingClass}
-          dangerouslySetInnerHTML={{ __html: headingHtml }}
-        />
+        <ol key={key} className="list-decimal pl-5 space-y-1 my-2">
+          {listItems.map((item, itemIdx) => (
+            <li
+              key={`${key}-${itemIdx}`}
+              dangerouslySetInnerHTML={{
+                __html: formatInlineMarkdown(item),
+              }}
+            />
+          ))}
+        </ol>
       );
     }
+  };
 
-    return (
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+
+    // 1. Heading check
+    const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const listEl = flushList(`list-before-h-${i}`);
+      if (listEl) elements.push(listEl);
+
+      const level = headingMatch[1].length;
+      const headingHtml = formatInlineMarkdown(headingMatch[2]);
+      const headingClass = cn(
+        "font-semibold mt-4 mb-2 block text-foreground",
+        level === 1 ? "text-xl" : level === 2 ? "text-lg" : "text-base"
+      );
+      
+      const headingEl = (
+        level === 1 ? <h1 key={`h-${i}`} className={headingClass} dangerouslySetInnerHTML={{ __html: headingHtml }} /> :
+        level === 2 ? <h2 key={`h-${i}`} className={headingClass} dangerouslySetInnerHTML={{ __html: headingHtml }} /> :
+        level === 3 ? <h3 key={`h-${i}`} className={headingClass} dangerouslySetInnerHTML={{ __html: headingHtml }} /> :
+        level === 4 ? <h4 key={`h-${i}`} className={headingClass} dangerouslySetInnerHTML={{ __html: headingHtml }} /> :
+        level === 5 ? <h5 key={`h-${i}`} className={headingClass} dangerouslySetInnerHTML={{ __html: headingHtml }} /> :
+        <h6 key={`h-${i}`} className={headingClass} dangerouslySetInnerHTML={{ __html: headingHtml }} />
+      );
+      elements.push(headingEl);
+      continue;
+    }
+
+    // 2. Bullet list check
+    const bulletMatch = line.match(/^(\s*)[-*+]\s+(.+)$/);
+    if (bulletMatch) {
+      if (currentList && currentList.type !== "ul") {
+        const listEl = flushList(`list-flush-ol-${i}`);
+        if (listEl) elements.push(listEl);
+      }
+      if (!currentList) {
+        currentList = { type: "ul", items: [] };
+      }
+      currentList.items.push(bulletMatch[2]);
+      continue;
+    }
+
+    // 3. Numbered list check
+    const numberedMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
+    if (numberedMatch) {
+      if (currentList && currentList.type !== "ol") {
+        const listEl = flushList(`list-flush-ul-${i}`);
+        if (listEl) elements.push(listEl);
+      }
+      if (!currentList) {
+        currentList = { type: "ol", items: [] };
+      }
+      currentList.items.push(numberedMatch[2]);
+      continue;
+    }
+
+    // 4. Blank line / paragraph
+    if (trimmedLine === "") {
+      const listEl = flushList(`list-flush-blank-${i}`);
+      if (listEl) elements.push(listEl);
+      continue;
+    }
+
+    // It's a regular paragraph line
+    const listEl = flushList(`list-flush-p-${i}`);
+    if (listEl) elements.push(listEl);
+
+    elements.push(
       <p
-        key={`p-${index}`}
-        className="leading-relaxed"
+        key={`p-${i}`}
+        className="leading-relaxed my-1"
         dangerouslySetInnerHTML={{
-          __html: formatInlineMarkdown(block).replace(/\n/g, "<br/>"),
+          __html: formatInlineMarkdown(trimmedLine),
         }}
       />
     );
-  });
+  }
+
+  // Flush any final list
+  const listEl = flushList(`list-final`);
+  if (listEl) elements.push(listEl);
+
+  return elements;
 }
 
 interface CodeBlockProps {

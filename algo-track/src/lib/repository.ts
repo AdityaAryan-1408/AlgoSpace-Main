@@ -219,15 +219,6 @@ export async function updateCardById(
   if (updates.solvedAt !== undefined) payload.solved_at = updates.solvedAt;
   if (updates.topicDomain !== undefined) payload.topic_domain = updates.topicDomain;
   if (updates.topicIds !== undefined) payload.topic_ids = updates.topicIds;
-  if (updates.metadata !== undefined) payload.metadata = updates.metadata;
-  if (updates.nextReview !== undefined) payload.next_review_at = updates.nextReview;
-  if (updates.dueInDays !== undefined) payload.interval_days = updates.dueInDays;
-  // Store richNotes inside the metadata JSON column to avoid a DB migration
-  if (updates.richNotes !== undefined) {
-    const existingMeta = (payload.metadata as Record<string, unknown>) || {};
-    payload.metadata = { ...existingMeta, richNotes: updates.richNotes };
-  }
-
   const hasRichUpdate =
     updates.solution !== undefined ||
     updates.solutions !== undefined ||
@@ -235,10 +226,32 @@ export async function updateCardById(
     updates.spaceComplexity !== undefined ||
     updates.relatedProblems !== undefined;
 
+  const needsExistingCard =
+    hasRichUpdate ||
+    updates.richNotes !== undefined ||
+    updates.metadata !== undefined;
+
+  let existingCard = null;
+  if (needsExistingCard) {
+    existingCard = await getCardById(userId, cardId);
+    if (!existingCard) throw new Error("Card not found");
+  }
+
+  if (updates.metadata !== undefined || updates.richNotes !== undefined) {
+    const existingMeta = existingCard?.metadata || {};
+    payload.metadata = {
+      ...existingMeta,
+      ...(updates.metadata || {}),
+      ...(updates.richNotes !== undefined ? { richNotes: updates.richNotes } : {})
+    };
+  }
+
+  if (updates.nextReview !== undefined) payload.next_review_at = updates.nextReview;
+  if (updates.dueInDays !== undefined) payload.interval_days = updates.dueInDays;
+
   let finalTags = updates.tags;
 
   if (hasRichUpdate) {
-    const existingCard = await getCardById(userId, cardId);
     if (!existingCard) throw new Error("Card not found");
 
     if (finalTags === undefined) {

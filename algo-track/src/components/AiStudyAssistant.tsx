@@ -21,12 +21,79 @@ import {
   BookOpen
 } from "lucide-react";
 import type { Flashcard } from "@/data";
+import { MarkdownContent } from "@/components/MarkdownContent";
 
 interface AiStudyAssistantProps {
   card: Flashcard;
   currentNotes: string;
   onUpdateCard: (updates: Partial<Flashcard>) => Promise<void>;
   onNotesGenerated: (content: string) => void;
+}
+
+function blockNoteToMarkdown(jsonStr: string): string {
+  if (!jsonStr) return "";
+  try {
+    const blocks = JSON.parse(jsonStr);
+    if (!Array.isArray(blocks)) return jsonStr;
+    
+    const formatContent = (contentItem: any) => {
+      if (!contentItem) return "";
+      let text = contentItem.text || "";
+      if (contentItem.styles) {
+        if (contentItem.styles.bold) text = `**${text}**`;
+        if (contentItem.styles.italic) text = `*${text}*`;
+        if (contentItem.styles.underline) text = `_${text}_`;
+        if (contentItem.styles.strike) text = `~~${text}~~`;
+        if (contentItem.styles.code) text = `\`${text}\``;
+      }
+      return text;
+    };
+
+    const blockToMd = (block: any, depth = 0): string => {
+      const indent = "  ".repeat(depth);
+      let text = "";
+      if (Array.isArray(block.content)) {
+        text = block.content.map(formatContent).join("");
+      } else if (typeof block.content === "string") {
+        text = block.content;
+      }
+
+      let line = "";
+      switch (block.type) {
+        case "heading":
+          const level = block.props?.level || 1;
+          line = `${"#".repeat(level)} ${text}`;
+          break;
+        case "bulletListItem":
+          line = `${indent}- ${text}`;
+          break;
+        case "numberedListItem":
+          line = `${indent}1. ${text}`;
+          break;
+        case "checkListItem":
+          const checked = block.props?.checked ? "[x]" : "[ ]";
+          line = `${indent}- ${checked} ${text}`;
+          break;
+        case "codeBlock":
+          line = `\`\`\`\n${text}\n\`\`\``;
+          break;
+        default:
+          line = text;
+          break;
+      }
+
+      let result = line;
+      if (Array.isArray(block.children) && block.children.length > 0) {
+        const childrenMd = block.children.map((c: any) => blockToMd(c, depth + 1)).join("\n");
+        result = `${result}\n${childrenMd}`;
+      }
+      return result;
+    };
+
+    return blocks.map((b: any) => blockToMd(b)).join("\n\n");
+  } catch {
+    return jsonStr;
+  }
 }
 
 export function AiStudyAssistant({
@@ -118,7 +185,8 @@ export function AiStudyAssistant({
     } else if (actionType === "notes_enhancer") {
       if (!conceptChatInput.trim()) return;
       payload.userPromptInput = conceptChatInput.trim();
-      payload.notes = currentNotes;
+      payload.notes = blockNoteToMarkdown(currentNotes);
+      payload.chatHistory = conceptChatHistory;
       setConceptChatHistory(prev => [...prev, { role: "user", text: conceptChatInput.trim() }]);
       setConceptChatInput("");
     } else if (actionType === "sql_alternatives") {
@@ -175,8 +243,7 @@ export function AiStudyAssistant({
           ...prev, 
           { 
             role: "assistant", 
-            text: body.message,
-            notesProposal: body.notes || undefined
+            text: body.text
           }
         ]);
       } else if (actionType === "sql_erd") {
@@ -299,9 +366,13 @@ export function AiStudyAssistant({
               </div>
             )}
             {dsaChatHistory.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"}`}>
-                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-yellow-600/90 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none"}`}>
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start w-full"}`}>
+                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-yellow-600/90 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none w-full"}`}>
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  ) : (
+                    <MarkdownContent content={msg.text} />
+                  )}
                 </div>
               </div>
             ))}
@@ -362,9 +433,9 @@ export function AiStudyAssistant({
                   {copiedEdgeCases ? "Copied" : "Copy Edge Cases"}
                 </button>
               </div>
-              <pre className="text-xs text-foreground/90 font-sans leading-relaxed whitespace-pre-wrap text-left select-text">
-                {dsaEdgeCases}
-              </pre>
+              <div className="text-xs text-foreground/90 leading-relaxed text-left select-text w-full">
+                <MarkdownContent content={dsaEdgeCases} />
+              </div>
             </div>
           )}
         </div>
@@ -414,8 +485,8 @@ export function AiStudyAssistant({
                             {sol.code}
                           </pre>
                         </div>
-                        <div className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap select-text">
-                          <p>{sol.explanation}</p>
+                        <div className="text-[11px] text-muted-foreground leading-relaxed select-text w-full">
+                          <MarkdownContent content={sol.explanation} />
                         </div>
                       </div>
                     )}
@@ -493,9 +564,9 @@ export function AiStudyAssistant({
                   {copiedOptimizer ? "Copied" : "Copy Tuning Report"}
                 </button>
               </div>
-              <pre className="text-xs text-foreground/90 font-sans leading-relaxed whitespace-pre-wrap text-left select-text">
-                {optimizedReport}
-              </pre>
+              <div className="text-xs text-foreground/90 leading-relaxed text-left select-text w-full">
+                <MarkdownContent content={optimizedReport} />
+              </div>
             </div>
           )}
         </div>
@@ -512,23 +583,19 @@ export function AiStudyAssistant({
               </div>
             )}
             {conceptChatHistory.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"}`}>
-                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-purple-600 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none"}`}>
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start w-full"}`}>
+                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-purple-600 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none w-full"}`}>
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  ) : (
+                    <MarkdownContent content={msg.text} />
+                  )}
                 </div>
                 
-                {msg.notesProposal && (
+                {msg.role === "assistant" && (
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onNotesGenerated(msg.notesProposal!)}
-                      className="h-6 px-2 text-[9px] font-bold rounded-lg border-purple-500/30 text-purple-400 hover:bg-purple-500/10 cursor-pointer"
-                    >
-                      Apply Suggestions to Editor
-                    </Button>
                     <button
-                      onClick={() => copyText(msg.notesProposal!, () => {})}
+                      onClick={() => copyText(msg.text, () => {})}
                       className="h-6 px-2 bg-muted/40 hover:bg-muted text-slate-400 hover:text-foreground transition-all flex items-center gap-1 text-[9px] font-bold rounded-lg border border-border cursor-pointer"
                     >
                       <Copy className="w-2.5 h-2.5" />
@@ -595,9 +662,9 @@ export function AiStudyAssistant({
                   {copiedAnalogy ? "Copied" : "Copy Analogy"}
                 </button>
               </div>
-              <pre className="text-xs text-foreground/90 font-sans leading-relaxed whitespace-pre-wrap text-left select-text">
-                {analogyText}
-              </pre>
+              <div className="text-xs text-foreground/90 leading-relaxed text-left select-text w-full">
+                <MarkdownContent content={analogyText} />
+              </div>
             </div>
           )}
         </div>

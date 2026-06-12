@@ -282,10 +282,22 @@ export function NotesPanel({
                   <SystemDesignAssistant
                     currentNotes={richNotes || ""}
                     currentCanvas={canvasData}
-                    onNotesGenerated={(txt) => {
+                    onNotesGenerated={async (txt) => {
                       setRichNotes(txt);
                       setEditorKey(`editor-drawer-notes-${Date.now()}`);
-                      handleChange(txt);
+                      if (saveTimeout.current) {
+                        clearTimeout(saveTimeout.current);
+                      }
+                      setSaveStatus("saving");
+                      try {
+                        await updateCard(currentCardId.current, { richNotes: txt, notes: txt });
+                        setSaveStatus("saved");
+                        if (onSaved) onSaved();
+                        setTimeout(() => setSaveStatus("idle"), 2000);
+                      } catch (err) {
+                        console.error("Failed to save generated notes:", err);
+                        setSaveStatus("idle");
+                      }
                     }}
                     onDiagramGenerated={(diag) => {
                       setCanvasData(diag);

@@ -16,6 +16,7 @@ import {
   Copy,
   Check
 } from "lucide-react";
+import { MarkdownContent } from "@/components/MarkdownContent";
 
 interface SystemDesignAssistantProps {
   currentNotes: string;
@@ -31,6 +32,72 @@ const TEMPLATES = [
   { label: "API Gateway microservices", prompt: "Microservices architecture with API Gateway, OAuth Auth service, User service, Orders service, Kafka message queue, and DB." },
   { label: "CDN Caching flow", prompt: "CDN flow showing Client requests hitting Edge Server, Origin Shield, and Origin Web Server, with Cache invalidation triggers." }
 ];
+
+function blockNoteToMarkdown(jsonStr: string): string {
+  if (!jsonStr) return "";
+  try {
+    const blocks = JSON.parse(jsonStr);
+    if (!Array.isArray(blocks)) return jsonStr;
+    
+    const formatContent = (contentItem: any) => {
+      if (!contentItem) return "";
+      let text = contentItem.text || "";
+      if (contentItem.styles) {
+        if (contentItem.styles.bold) text = `**${text}**`;
+        if (contentItem.styles.italic) text = `*${text}*`;
+        if (contentItem.styles.underline) text = `_${text}_`;
+        if (contentItem.styles.strike) text = `~~${text}~~`;
+        if (contentItem.styles.code) text = `\`${text}\``;
+      }
+      return text;
+    };
+
+    const blockToMd = (block: any, depth = 0): string => {
+      const indent = "  ".repeat(depth);
+      let text = "";
+      if (Array.isArray(block.content)) {
+        text = block.content.map(formatContent).join("");
+      } else if (typeof block.content === "string") {
+        text = block.content;
+      }
+
+      let line = "";
+      switch (block.type) {
+        case "heading":
+          const level = block.props?.level || 1;
+          line = `${"#".repeat(level)} ${text}`;
+          break;
+        case "bulletListItem":
+          line = `${indent}- ${text}`;
+          break;
+        case "numberedListItem":
+          line = `${indent}1. ${text}`;
+          break;
+        case "checkListItem":
+          const checked = block.props?.checked ? "[x]" : "[ ]";
+          line = `${indent}- ${checked} ${text}`;
+          break;
+        case "codeBlock":
+          line = `\`\`\`\n${text}\n\`\`\``;
+          break;
+        default:
+          line = text;
+          break;
+      }
+
+      let result = line;
+      if (Array.isArray(block.children) && block.children.length > 0) {
+        const childrenMd = block.children.map((c: any) => blockToMd(c, depth + 1)).join("\n");
+        result = `${result}\n${childrenMd}`;
+      }
+      return result;
+    };
+
+    return blocks.map((b: any) => blockToMd(b)).join("\n\n");
+  } catch {
+    return jsonStr;
+  }
+}
 
 export function SystemDesignAssistant({
   currentNotes,
@@ -102,7 +169,7 @@ export function SystemDesignAssistant({
         },
         body: JSON.stringify({
           prompt: requestPrompt,
-          currentNotes,
+          currentNotes: blockNoteToMarkdown(currentNotes),
           currentCanvas: currentCanvas ? JSON.parse(currentCanvas) : null,
           action,
           chatHistory: action === "chat" ? chatHistory : undefined
@@ -299,9 +366,13 @@ export function SystemDesignAssistant({
               </div>
             )}
             {chatHistory.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"}`}>
-                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-purple-600 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none"}`}>
-                  <p className="whitespace-pre-wrap">{msg.text}</p>
+              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start w-full"}`}>
+                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-purple-600 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none w-full"}`}>
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  ) : (
+                    <MarkdownContent content={msg.text} />
+                  )}
                 </div>
                 
                 {/* Proposed application actions */}
@@ -412,9 +483,9 @@ export function SystemDesignAssistant({
                   {copiedReport ? "Copied" : "Copy"}
                 </button>
               </div>
-              <pre className="text-[10.5px] text-foreground/90 font-sans leading-relaxed whitespace-pre-wrap text-left select-text">
-                {analysisReport}
-              </pre>
+              <div className="text-[10.5px] text-foreground/90 leading-relaxed text-left select-text w-full">
+                <MarkdownContent content={analysisReport} />
+              </div>
             </div>
           )}
         </div>

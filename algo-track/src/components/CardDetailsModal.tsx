@@ -804,6 +804,7 @@ export function CardDetailsModal({
                     currentNotes={richNotes || ""}
                     onNotesGenerated={(txt) => {
                       setRichNotes(txt);
+                      setNotes(txt);
                       setEditorKey(`editor-notes-${Date.now()}`);
                     }}
                     onUpdateCard={async (updates) => {
