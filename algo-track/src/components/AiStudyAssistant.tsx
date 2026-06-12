@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
-import { SystemDesignCanvas } from "./SystemDesignCanvas";
+
 import { 
   Sparkles, 
   MessageSquare, 
@@ -107,7 +107,7 @@ export function AiStudyAssistant({
   const isSql = card.type === "sql";
   const isConcept = card.type === "cs" || (!isDsa && !isSql);
 
-  const initialTab = isDsa ? "hint" : isSql ? "alternatives" : "enhancer";
+  const initialTab = isDsa ? "hint" : isSql ? "alternatives" : "generator";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   const [loading, setLoading] = useState(false);
@@ -138,26 +138,24 @@ export function AiStudyAssistant({
   const [analogyText, setAnalogyText] = useState<string | null>(null);
   const [copiedAnalogy, setCopiedAnalogy] = useState(false);
 
-  // Notes Enhancer States
-  const [conceptChatInput, setConceptChatInput] = useState("");
-  const [conceptChatHistory, setConceptChatHistory] = useState<{ role: "user" | "assistant"; text: string; notesProposal?: string }[]>([]);
-  const conceptChatBottomRef = useRef<HTMLDivElement>(null);
+  // Concept Generator States
+  const [generatorGuidelines, setGeneratorGuidelines] = useState("");
+  const [generatedConceptNotes, setGeneratedConceptNotes] = useState<string | null>(null);
+  const [copiedGenerator, setCopiedGenerator] = useState(false);
 
   // Auto-scroll chats
   useEffect(() => {
     dsaChatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [dsaChatHistory, loadingAction]);
 
-  useEffect(() => {
-    conceptChatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conceptChatHistory, loadingAction]);
+
 
   // Sync alternative solutions when card changes
   useEffect(() => {
     setSqlAlternatives((card.metadata?.aiSqlSolutions as { title: string; code: string; explanation: string }[]) || []);
     setUserQuery(card.solutions?.[0]?.content || card.solution || "");
     setDsaChatHistory([]);
-    setConceptChatHistory([]);
+    setGeneratedConceptNotes(null);
     setDsaEdgeCases(null);
     setOptimizedReport(null);
     setAnalogyText(null);
@@ -182,13 +180,9 @@ export function AiStudyAssistant({
         return;
       }
       payload.solution = userQuery;
-    } else if (actionType === "notes_enhancer") {
-      if (!conceptChatInput.trim()) return;
-      payload.userPromptInput = conceptChatInput.trim();
+    } else if (actionType === "concept_generate") {
+      payload.userPromptInput = generatorGuidelines.trim();
       payload.notes = blockNoteToMarkdown(currentNotes);
-      payload.chatHistory = conceptChatHistory;
-      setConceptChatHistory(prev => [...prev, { role: "user", text: conceptChatInput.trim() }]);
-      setConceptChatInput("");
     } else if (actionType === "sql_alternatives") {
       payload.solution = card.solutions?.[0]?.content || card.solution || "";
     }
@@ -238,31 +232,14 @@ export function AiStudyAssistant({
             aiSqlSolutions: solutions
           }
         });
-      } else if (actionType === "notes_enhancer") {
-        setConceptChatHistory(prev => [
-          ...prev, 
-          { 
-            role: "assistant", 
-            text: body.text
-          }
-        ]);
-      } else if (actionType === "sql_erd") {
-        // AI ERD layout generator
-        const erdVal = JSON.stringify(body);
-        await onUpdateCard({
-          metadata: {
-            ...card.metadata,
-            sqlErdCanvas: erdVal
-          }
-        });
+      } else if (actionType === "concept_generate") {
+        setGeneratedConceptNotes(body.text);
       }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Something went wrong.");
       if (actionType === "dsa_hint") {
         setDsaChatHistory(prev => [...prev, { role: "tutor", text: `Error: ${err.message || "Failed to contact tutor"}` }]);
-      } else if (actionType === "notes_enhancer") {
-        setConceptChatHistory(prev => [...prev, { role: "assistant", text: `Error: ${err.message || "Failed to process notes"}` }]);
       }
     } finally {
       setLoading(false);
@@ -276,7 +253,7 @@ export function AiStudyAssistant({
     setTimeout(() => callback(false), 2000);
   };
 
-  const currentErdCanvasVal = (card.metadata?.sqlErdCanvas as string) || "";
+
 
   return (
     <div className="flex flex-col gap-4 text-left p-4 bg-muted/10 border border-border/80 rounded-2xl w-full">
@@ -285,7 +262,7 @@ export function AiStudyAssistant({
         <Sparkles className="w-5 h-5 text-yellow-500 animate-pulse" />
         <div>
           <h4 className="text-sm font-semibold text-foreground">AI Study Assistant</h4>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Socratic hints, query tuning, ERDs, and notes refining</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Socratic hints, query tuning, concept generation & analogies</p>
         </div>
       </div>
 
@@ -316,12 +293,6 @@ export function AiStudyAssistant({
               Alternative Queries
             </button>
             <button
-              onClick={() => setActiveTab("erd")}
-              className={`flex-1 py-1.5 rounded-lg cursor-pointer ${activeTab === "erd" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              Schema ERD Canvas
-            </button>
-            <button
               onClick={() => setActiveTab("optimizer")}
               className={`flex-1 py-1.5 rounded-lg cursor-pointer ${activeTab === "optimizer" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
@@ -332,10 +303,10 @@ export function AiStudyAssistant({
         {isConcept && (
           <>
             <button
-              onClick={() => setActiveTab("enhancer")}
-              className={`flex-1 py-1.5 rounded-lg cursor-pointer ${activeTab === "enhancer" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("generator")}
+              className={`flex-1 py-1.5 rounded-lg cursor-pointer ${activeTab === "generator" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
-              Notes Enhancer Chat
+              AI Concept Generator
             </button>
             <button
               onClick={() => setActiveTab("analogy")}
@@ -498,35 +469,7 @@ export function AiStudyAssistant({
         </div>
       )}
 
-      {/* --- SQL: Schema ERD Canvas --- */}
-      {isSql && activeTab === "erd" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3 pb-1">
-            <span className="text-[10px] text-muted-foreground font-bold uppercase">Relational Schema Diagram</span>
-            <Button
-              size="sm"
-              disabled={loading}
-              onClick={() => handleStudyToolAction("sql_erd")}
-              className="h-7 px-3 text-[10px] bg-emerald-600 hover:bg-emerald-600/90 text-white font-semibold rounded-lg cursor-pointer"
-            >
-              {loadingAction === "sql_erd" ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-              Generate Table ERD from AI
-            </Button>
-          </div>
 
-          <div className="h-[400px] border border-border rounded-xl overflow-hidden bg-background">
-            <SystemDesignCanvas
-              value={currentErdCanvasVal}
-              onChange={(val) => onUpdateCard({
-                metadata: {
-                  ...card.metadata,
-                  sqlErdCanvas: val
-                }
-              })}
-            />
-          </div>
-        </div>
-      )}
 
       {/* --- SQL: Tuning/Optimizer --- */}
       {isSql && activeTab === "optimizer" && (
@@ -572,69 +515,54 @@ export function AiStudyAssistant({
         </div>
       )}
 
-      {/* --- CS Core: Notes Enhancer Chat --- */}
-      {isConcept && activeTab === "enhancer" && (
+      {/* --- CS Core: AI Concept Generator --- */}
+      {isConcept && activeTab === "generator" && (
         <div className="flex flex-col gap-3">
-          <div className="h-64 border border-border rounded-xl bg-background/50 overflow-y-auto p-3 flex flex-col gap-3">
-            {conceptChatHistory.length === 0 && (
-              <div className="my-auto text-center text-xs text-muted-foreground px-4">
-                <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-purple-400" />
-                No messages yet. Ask me to refine, clarify, structure, or inject code/diagram examples into your notes.
-              </div>
-            )}
-            {conceptChatHistory.map((msg, idx) => (
-              <div key={idx} className={`flex flex-col max-w-[85%] ${msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start w-full"}`}>
-                <div className={`p-2.5 rounded-xl text-xs leading-relaxed ${msg.role === "user" ? "bg-purple-600 text-white rounded-br-none" : "bg-muted text-foreground rounded-bl-none w-full"}`}>
-                  {msg.role === "user" ? (
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
-                  ) : (
-                    <MarkdownContent content={msg.text} />
-                  )}
-                </div>
-                
-                {msg.role === "assistant" && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    <button
-                      onClick={() => copyText(msg.text, () => {})}
-                      className="h-6 px-2 bg-muted/40 hover:bg-muted text-slate-400 hover:text-foreground transition-all flex items-center gap-1 text-[9px] font-bold rounded-lg border border-border cursor-pointer"
-                    >
-                      <Copy className="w-2.5 h-2.5" />
-                      1-Click Copy
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {loadingAction === "notes_enhancer" && (
-              <div className="flex mr-auto items-center gap-1.5 bg-muted p-2 rounded-xl text-xs text-muted-foreground rounded-bl-none animate-pulse">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Thinking...
-              </div>
-            )}
-            <div ref={conceptChatBottomRef} />
+          <div className="flex flex-col gap-1.5 text-left">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Generation Guidelines (optional)</label>
+            <textarea
+              value={generatorGuidelines}
+              onChange={(e) => setGeneratorGuidelines(e.target.value)}
+              placeholder={`e.g. "Include Python examples", "Focus on memory management tradeoffs", "Add a comparison table"...`}
+              rows={2}
+              disabled={loading}
+              className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+            />
           </div>
 
-          <div className="flex gap-1.5 shrink-0">
-            <input
-              type="text"
-              value={conceptChatInput}
-              onChange={(e) => setConceptChatInput(e.target.value)}
-              placeholder="e.g. Make these notes presentable, add headings and a Python dictionary example..."
-              disabled={loading}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleStudyToolAction("notes_enhancer");
-              }}
-              className="flex-1 px-3 py-1.5 bg-background text-foreground text-xs rounded-xl border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <Button
-              size="sm"
-              disabled={loading || !conceptChatInput.trim()}
-              onClick={() => handleStudyToolAction("notes_enhancer")}
-              className="h-8 rounded-xl px-3 text-xs bg-purple-600 hover:bg-purple-600/90 text-white font-semibold cursor-pointer"
-            >
-              Send
-            </Button>
-          </div>
+          <Button
+            size="sm"
+            disabled={loading}
+            onClick={() => handleStudyToolAction("concept_generate")}
+            className="w-full bg-purple-600 hover:bg-purple-600/90 text-white font-semibold h-9 rounded-xl text-xs cursor-pointer"
+          >
+            {loadingAction === "concept_generate" ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Sparkles className="w-4 h-4 mr-1" />}
+            {generatedConceptNotes ? "Regenerate Concept Notes" : "Generate Concept Notes"}
+          </Button>
+
+          {generatedConceptNotes && (
+            <div className="flex flex-col gap-2.5 border border-border rounded-xl p-3 bg-background/50 max-h-72 overflow-y-auto relative text-left">
+              <div className="flex justify-end gap-1.5 shrink-0 border-b border-border/40 pb-1.5">
+                <button
+                  onClick={() => copyText(generatedConceptNotes, setCopiedGenerator)}
+                  className="p-1 rounded bg-muted/40 hover:bg-muted text-slate-400 hover:text-foreground transition-all flex items-center gap-1 text-[9px] font-bold cursor-pointer"
+                >
+                  {copiedGenerator ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedGenerator ? "Copied" : "Copy"}
+                </button>
+                <button
+                  onClick={() => onNotesGenerated(generatedConceptNotes)}
+                  className="p-1 rounded bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 hover:text-purple-300 transition-all flex items-center gap-1 text-[9px] font-bold cursor-pointer"
+                >
+                  <ArrowRight className="w-3 h-3" />
+                  Apply to Notes
+                </button>
+              </div>
+              <div className="text-xs text-foreground/90 leading-relaxed text-left select-text w-full">
+                <MarkdownContent content={generatedConceptNotes} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

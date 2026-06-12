@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
-import { X, Code, BookOpen, Database, GripVertical, RotateCcw } from "lucide-react";
+import { X, Code, BookOpen, Database, GripVertical, RotateCcw, ChevronLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { AddCardForm } from "@/components/AddCardForm";
 import type { CardType, Flashcard } from "@/data";
@@ -148,10 +148,10 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
     };
 
     const modalClass = isMaximized
-        ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none"
+        ? "fixed inset-0 z-50 bg-card flex flex-col w-screen h-screen max-w-none max-h-none rounded-none border-none relative"
         : dimensions
-            ? "bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col border border-border"
-            : "w-full max-w-2xl bg-card rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] border border-border";
+            ? "bg-card rounded-2xl shadow-xl flex flex-col border border-border relative"
+            : "w-full max-w-2xl bg-card rounded-2xl shadow-xl flex flex-col max-h-[90vh] border border-border relative";
 
     const modalStyle = isMaximized
         ? { transform: "none" }
@@ -224,9 +224,11 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
                         />
                     </>
                 )}
-
-                {/* Header - Entire bar is draggable */}
-                <div
+                
+                {/* Inner Content Wrapper */}
+                <div className={isMaximized ? "flex flex-col flex-1 overflow-hidden" : "flex flex-col flex-1 overflow-hidden rounded-2xl"}>
+                    {/* Header - Entire bar is draggable */}
+                    <div
                     onPointerDown={(e) => {
                         const target = e.target as HTMLElement;
                         if (target.closest("button") || target.closest("input") || target.closest("select") || target.closest("textarea")) {
@@ -356,22 +358,47 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
                         />
                     )}
                 </div>
+                </div>
 
-                {/* Back button (only shown when in form step, before the form's own submit) */}
-                {step === "form" && (
-                    <div className="px-6 pb-4 shrink-0">
-                        <Button
-                            variant="ghost"
-                            onClick={() => {
-                                setStep("choose");
-                                resetToDefault("choose");
-                            }}
-                            className="font-semibold"
-                        >
-                            ← Back
-                        </Button>
-                    </div>
-                )}
+                {/* Floating Pill Back Button */}
+                {step === "form" && (() => {
+                    const isPillsOnLeft = dimensions
+                        ? (dimensions.left + dimensions.width + 80 > window.innerWidth)
+                        : false;
+
+                    const pillContainerClass = isMaximized
+                        ? "absolute bottom-6 right-6 flex flex-row gap-3 z-[60] bg-card p-2 rounded-full border border-border shadow-lg"
+                        : isPillsOnLeft
+                            ? "absolute top-24 -left-14 flex flex-col gap-3 z-[60]"
+                            : "absolute top-24 -right-14 flex flex-col gap-3 z-[60]";
+
+                    const pillBaseClass = "w-11 h-11 rounded-full flex items-center justify-center bg-card border border-border shadow-md transition-all duration-200 hover:scale-105 select-none cursor-pointer relative group";
+
+                    return (
+                        <div className={pillContainerClass}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setStep("choose");
+                                    resetToDefault("choose");
+                                }}
+                                className={`${pillBaseClass} text-muted-foreground hover:border-foreground/30 hover:bg-muted`}
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                                {/* Tooltip */}
+                                <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap bg-card text-foreground text-[10px] font-bold tracking-wide uppercase px-2.5 py-1 rounded-md shadow-md border border-border z-[100] ${
+                                    isMaximized 
+                                        ? "bottom-full top-auto left-1/2 -translate-x-1/2 -translate-y-0 mb-2" 
+                                        : isPillsOnLeft 
+                                            ? "left-full ml-3" 
+                                            : "right-full mr-3"
+                                }`}>
+                                    Go Back
+                                </div>
+                            </button>
+                        </div>
+                    );
+                })()}
             </motion.div>
         </div>
     );

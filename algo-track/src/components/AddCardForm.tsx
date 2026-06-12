@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { isSystemDesignCard } from "@/lib/card-utils";
 import { SystemDesignCanvas } from "@/components/SystemDesignCanvas";
 import { SystemDesignAssistant } from "@/components/SystemDesignAssistant";
+import { AiStudyAssistant } from "@/components/AiStudyAssistant";
 
 export interface AddCardFormDefaults {
     type?: CardType;
@@ -91,6 +92,8 @@ export function AddCardForm({
     const [scrapeSuccess, setScrapeSuccess] = useState(false);
     const [scrapeFailed, setScrapeFailed] = useState(false);
     const [editorKey, setEditorKey] = useState("editor-desc-init");
+    const [cardStudyTab, setCardStudyTab] = useState<"richNotes" | "aiTools">("richNotes");
+    const [formMetadata, setFormMetadata] = useState<Record<string, unknown>>(defaults?.metadata || {});
 
     const [fetchedCards, setFetchedCards] = useState<Flashcard[]>([]);
     const [calendarMonth, setCalendarMonth] = useState(() => new Date());
@@ -322,6 +325,7 @@ export function AddCardForm({
                     isCodeCard && url.trim() ? url.trim() : undefined,
                 metadata: {
                     ...(defaults?.metadata || {}),
+                    ...formMetadata,
                     reference_only: isReferenceOnly ? true : undefined,
                     ...(isSystemDesignCard(cardType, tags) ? { systemDesignCanvas: canvasData } : {}),
                 },
@@ -583,15 +587,74 @@ export function AddCardForm({
                         )}
                     </div>
                 ) : (
-                    <RichNotesEditor
-                        key={`rich-notes-${editorKey}`}
-                        initialContent={richNotes}
-                        fallbackMarkdown={notes}
-                        onChange={(content) => {
-                            setRichNotes(content);
-                        }}
-                        placeholder="Type '/' for commands. Add notes, diagrams, code blocks..."
-                    />
+                    <div className="flex flex-col gap-3">
+                        {/* Tab Switcher Headers */}
+                        <div className="flex border-b border-border gap-1 shrink-0 pb-1">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={cardStudyTab === "richNotes" ? "secondary" : "ghost"}
+                                onClick={() => setCardStudyTab("richNotes")}
+                                className="h-8 px-3 text-xs gap-1.5 rounded-lg cursor-pointer"
+                            >
+                                <FileText className="w-3.5 h-3.5" />
+                                Rich Notes
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={cardStudyTab === "aiTools" ? "secondary" : "ghost"}
+                                onClick={() => setCardStudyTab("aiTools")}
+                                className="h-8 px-3 text-xs gap-1.5 rounded-lg text-purple-400 hover:text-purple-300 cursor-pointer"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                AI Study Tools
+                            </Button>
+                        </div>
+
+                        {/* Tab Contents */}
+                        {cardStudyTab === "richNotes" && (
+                            <RichNotesEditor
+                                key={`rich-notes-${editorKey}`}
+                                initialContent={richNotes}
+                                fallbackMarkdown={notes}
+                                onChange={(content) => {
+                                    setRichNotes(content);
+                                }}
+                                placeholder="Type '/' for commands. Add notes, diagrams, code blocks..."
+                            />
+                        )}
+
+                        {cardStudyTab === "aiTools" && (
+                            <AiStudyAssistant
+                                card={{
+                                    id: cardId || `temp-${Date.now()}`,
+                                    type: cardType,
+                                    title: title.trim() || "Untitled",
+                                    description: description.trim(),
+                                    difficulty,
+                                    tags: tagsInput.split(",").map(t => t.trim()).filter(Boolean),
+                                    notes: notes,
+                                    solutions: solutions.filter(s => s.content.trim()).map(s => ({ name: s.name, content: s.content })),
+                                    solution: solutions[0]?.content || "",
+                                    metadata: formMetadata,
+                                    history: { total: 0 },
+                                    dueInDays: 0,
+                                } as any}
+                                currentNotes={richNotes || ""}
+                                onNotesGenerated={(txt) => {
+                                    setRichNotes(txt);
+                                    setEditorKey(`editor-notes-${Date.now()}`);
+                                    setCardStudyTab("richNotes");
+                                }}
+                                onUpdateCard={async (updates) => {
+                                    if (updates.metadata) {
+                                        setFormMetadata(prev => ({ ...prev, ...updates.metadata }));
+                                    }
+                                }}
+                            />
+                        )}
+                    </div>
                 )}
             </div>
 

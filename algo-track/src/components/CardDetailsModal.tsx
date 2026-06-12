@@ -1343,6 +1343,43 @@ export function CardDetailsModal({
             </div>
           );
         })()}
+
+        {/* Floating Cancel Edit Pill (Edit Mode) */}
+        {isEditing && (() => {
+          const isPillsOnLeft = dimensions
+            ? (dimensions.left + dimensions.width + 80 > window.innerWidth)
+            : false;
+
+          const pillContainerClass = isMaximized
+            ? "absolute bottom-6 right-6 flex flex-row gap-3 z-[60] bg-card p-2 rounded-full border border-border shadow-lg"
+            : isPillsOnLeft
+              ? "absolute top-24 -left-14 flex flex-col gap-3 z-[60]"
+              : "absolute top-24 -right-14 flex flex-col gap-3 z-[60]";
+
+          const pillBaseClass = "w-11 h-11 rounded-full flex items-center justify-center bg-card border border-border shadow-md transition-all duration-200 hover:scale-105 select-none cursor-pointer relative group";
+
+          return (
+            <div className={pillContainerClass}>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className={`${pillBaseClass} text-muted-foreground hover:border-foreground/30 hover:bg-muted`}
+              >
+                <ChevronLeft className="w-5 h-5" />
+                {/* Tooltip */}
+                <div className={`absolute top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap bg-card text-foreground text-[10px] font-bold tracking-wide uppercase px-2.5 py-1 rounded-md shadow-md border border-border z-[100] ${
+                  isMaximized 
+                    ? "bottom-full top-auto left-1/2 -translate-x-1/2 -translate-y-0 mb-2" 
+                    : isPillsOnLeft 
+                      ? "left-full ml-3" 
+                      : "right-full mr-3"
+                }`}>
+                  Cancel Edit
+                </div>
+              </button>
+            </div>
+          );
+        })()}
       </motion.div>
     </div>,
     document.body

@@ -251,6 +251,24 @@ PLACEMENT RULES:
 Problem: ${cardTitle}
 Description: ${cardDescription || ""}`;
 
+    } else if (action === "concept_generate") {
+      systemPrompt = `You are a world-class Computer Science educator and technical writer.
+Generate comprehensive, production-grade concept notes for the CS topic: "${cardTitle}".
+
+RULES:
+1. Write in clean, structured Markdown format (use headings, bullet points, code blocks, and tables where appropriate).
+2. Cover: core definition, key subtopics, real-world applications, common tradeoffs/pitfalls, and interview-worthy insights.
+3. Include code examples (in Python or the most relevant language) and diagrams (using Mermaid.js \`\`\`mermaid blocks) where helpful.
+4. Keep explanations concise, accurate, and engaging. Assume the reader has basic CS knowledge.
+5. Do NOT wrap your entire output in a markdown block, only the code/diagram blocks.`;
+
+      const guidelines = userPromptInput || "";
+      userPrompt = `Generate detailed concept notes for: "${cardTitle}"
+Description: ${cardDescription || ""}
+${notes ? `Existing notes to build upon:\n${notes}` : ""}
+${guidelines ? `Additional guidelines from the user:\n${guidelines}` : ""}`;
+
+      isJson = false;
     } else {
       throw new Error("Invalid action type");
     }
