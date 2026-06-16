@@ -1,7 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Pin, Sparkles, TrendingUp, TrendingDown, Compass, ArrowRight, Globe, Brain, PlaySquare, RefreshCw, Timer, Zap, Network, Loader2, CheckCircle2, AlertTriangle, Target } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { TopicRadarChart } from "@/components/charts/TopicRadarChart";
+import dynamic from "next/dynamic";
+
+const TopicRadarChart = dynamic(() => import("@/components/charts/TopicRadarChart").then(m => ({ default: m.TopicRadarChart })), {
+  ssr: false,
+  loading: () => <div className="h-[300px] rounded-xl bg-muted/20 animate-pulse" />,
+});
 import type { Flashcard } from "@/data";
 
 interface FeatureCarouselWidgetProps {

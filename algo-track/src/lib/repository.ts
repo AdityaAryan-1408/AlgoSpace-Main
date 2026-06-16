@@ -763,31 +763,35 @@ export async function globalPauseReviews(
   if (cardsError) throw new Error(cardsError.message);
 
   // 2. For each card, snapshot the EXACT original next_review_at and push to far-future
-  for (const card of cards ?? []) {
+  // Run updates in parallel batches of 25 to avoid N+1 sequential queries
+  const eligibleCards = (cards ?? []).filter(card => {
     const currentMeta = (card.metadata as Record<string, unknown>) || {};
+    // Skip already individually-paused or globally_paused cards
+    return currentMeta.review_paused !== true && currentMeta.globally_paused !== true;
+  });
 
-    // Skip already individually-paused cards (they already have far-future next_review_at)
-    if (currentMeta.review_paused === true) continue;
-    // Skip already globally_paused cards
-    if (currentMeta.globally_paused === true) continue;
-
-    const { error } = await supabase
-      .from("cards")
-      .update({
-        next_review_at: "9999-12-31T23:59:59.999Z",
-        metadata: {
-          ...currentMeta,
-          original_next_review_at: card.next_review_at,
-          pause_started_at: now.toISOString(),
-          globally_paused: true,
-          paused_by_type: cardType,
-        },
-        updated_at: now.toISOString(),
-      })
-      .eq("id", card.id)
-      .eq("user_id", userId);
-
-    if (error) throw new Error(error.message);
+  const BATCH_SIZE = 25;
+  for (let i = 0; i < eligibleCards.length; i += BATCH_SIZE) {
+    const batch = eligibleCards.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(card => {
+      const currentMeta = (card.metadata as Record<string, unknown>) || {};
+      return supabase
+        .from("cards")
+        .update({
+          next_review_at: "9999-12-31T23:59:59.999Z",
+          metadata: {
+            ...currentMeta,
+            original_next_review_at: card.next_review_at,
+            pause_started_at: now.toISOString(),
+            globally_paused: true,
+            paused_by_type: cardType,
+          },
+          updated_at: now.toISOString(),
+        })
+        .eq("id", card.id)
+        .eq("user_id", userId)
+        .then(({ error }) => { if (error) throw new Error(error.message); });
+    }));
   }
 
   // 3. Update user metadata with global pause state
@@ -937,34 +941,37 @@ export async function globalResumeReviews(
     overdueCards[i].offsetDays = Math.floor(i / BATCH_SIZE);
   }
 
-  // Now update all cards in the database
+  // Now update all cards in the database — run in parallel batches of 25
   const allCards = [...overdueCards, ...futureCards];
 
-  for (const { id, meta, offsetDays } of allCards) {
-    // Calculate new next_review_at relative to now
-    const nextReview = new Date(now);
-    nextReview.setTime(nextReview.getTime() + offsetDays * 86_400_000);
-    const nextReviewIso = nextReview.toISOString();
+  const RESUME_BATCH = 25;
+  for (let i = 0; i < allCards.length; i += RESUME_BATCH) {
+    const batch = allCards.slice(i, i + RESUME_BATCH);
+    await Promise.all(batch.map(({ id, meta, offsetDays }) => {
+      // Calculate new next_review_at relative to now
+      const nextReview = new Date(now);
+      nextReview.setTime(nextReview.getTime() + offsetDays * 86_400_000);
+      const nextReviewIso = nextReview.toISOString();
 
-    // Clean up the global-pause metadata
-    const { remaining_review_days, globally_paused, original_next_review_at, pause_started_at, paused_by_type, ...cleanMeta } = meta;
-    void remaining_review_days;
-    void globally_paused;
-    void original_next_review_at;
-    void pause_started_at;
-    void paused_by_type;
+      // Clean up the global-pause metadata
+      const { remaining_review_days, globally_paused, original_next_review_at, pause_started_at, paused_by_type, ...cleanMeta } = meta;
+      void remaining_review_days;
+      void globally_paused;
+      void original_next_review_at;
+      void pause_started_at;
+      void paused_by_type;
 
-    const { error } = await supabase
-      .from("cards")
-      .update({
-        next_review_at: nextReviewIso,
-        metadata: cleanMeta,
-        updated_at: now.toISOString(),
-      })
-      .eq("id", id)
-      .eq("user_id", userId);
-
-    if (error) throw new Error(error.message);
+      return supabase
+        .from("cards")
+        .update({
+          next_review_at: nextReviewIso,
+          metadata: cleanMeta,
+          updated_at: now.toISOString(),
+        })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .then(({ error }) => { if (error) throw new Error(error.message); });
+    }));
   }
 
   // 2. Clear user pause state
@@ -1031,23 +1038,28 @@ export async function redistributeCards(userId: string, cardsPerDay: number = 7)
   }
 
   // Stagger: cardsPerDay cards per day starting from day 1
-  for (let i = 0; i < cards.length; i++) {
-    const dayOffset = Math.floor(i / cardsPerDay) + 1; // start from day 1
-    const nextReview = new Date(now);
-    nextReview.setDate(nextReview.getDate() + dayOffset);
-    // Set to start of that day (midnight UTC) for clean scheduling
-    nextReview.setUTCHours(0, 0, 0, 0);
+  // Run in parallel batches of 25 to avoid N+1 sequential queries
+  const REDIST_BATCH = 25;
+  for (let batchStart = 0; batchStart < cards.length; batchStart += REDIST_BATCH) {
+    const batch = cards.slice(batchStart, batchStart + REDIST_BATCH);
+    await Promise.all(batch.map((card, batchIdx) => {
+      const i = batchStart + batchIdx;
+      const dayOffset = Math.floor(i / cardsPerDay) + 1; // start from day 1
+      const nextReview = new Date(now);
+      nextReview.setDate(nextReview.getDate() + dayOffset);
+      // Set to start of that day (midnight UTC) for clean scheduling
+      nextReview.setUTCHours(0, 0, 0, 0);
 
-    const { error: updateError } = await supabase
-      .from("cards")
-      .update({
-        next_review_at: nextReview.toISOString(),
-        updated_at: now.toISOString(),
-      })
-      .eq("id", cards[i].id)
-      .eq("user_id", userId);
-
-    if (updateError) throw new Error(updateError.message);
+      return supabase
+        .from("cards")
+        .update({
+          next_review_at: nextReview.toISOString(),
+          updated_at: now.toISOString(),
+        })
+        .eq("id", card.id)
+        .eq("user_id", userId)
+        .then(({ error: updateError }) => { if (updateError) throw new Error(updateError.message); });
+    }));
   }
 
   return { redistributed: cards.length };
@@ -1090,23 +1102,28 @@ export async function shuffleAllCards(userId: string, cardsPerDay: number = 7) {
   }
 
   // Stagger: cardsPerDay cards per day starting from day 1 (tomorrow)
-  for (let i = 0; i < cards.length; i++) {
-    const dayOffset = Math.floor(i / cardsPerDay) + 1; // start from day 1
-    const nextReview = new Date(now);
-    nextReview.setDate(nextReview.getDate() + dayOffset);
-    // Set to start of that day (midnight UTC) for clean scheduling
-    nextReview.setUTCHours(0, 0, 0, 0);
+  // Run in parallel batches of 25 to avoid N+1 sequential queries
+  const SHUFFLE_BATCH = 25;
+  for (let batchStart = 0; batchStart < cards.length; batchStart += SHUFFLE_BATCH) {
+    const batch = cards.slice(batchStart, batchStart + SHUFFLE_BATCH);
+    await Promise.all(batch.map((card, batchIdx) => {
+      const i = batchStart + batchIdx;
+      const dayOffset = Math.floor(i / cardsPerDay) + 1; // start from day 1
+      const nextReview = new Date(now);
+      nextReview.setDate(nextReview.getDate() + dayOffset);
+      // Set to start of that day (midnight UTC) for clean scheduling
+      nextReview.setUTCHours(0, 0, 0, 0);
 
-    const { error: updateError } = await supabase
-      .from("cards")
-      .update({
-        next_review_at: nextReview.toISOString(),
-        updated_at: now.toISOString(),
-      })
-      .eq("id", cards[i].id)
-      .eq("user_id", userId);
-
-    if (updateError) throw new Error(updateError.message);
+      return supabase
+        .from("cards")
+        .update({
+          next_review_at: nextReview.toISOString(),
+          updated_at: now.toISOString(),
+        })
+        .eq("id", card.id)
+        .eq("user_id", userId)
+        .then(({ error: updateError }) => { if (updateError) throw new Error(updateError.message); });
+    }));
   }
 
   return { shuffled: cards.length };

@@ -2,7 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 bg-muted/20 animate-pulse flex items-center justify-center">
+      <span className="text-xs text-muted-foreground">Loading editor...</span>
+    </div>
+  ),
+});
 import { Timer, Keyboard, RotateCcw, Trophy, Zap, ArrowRight, Delete } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 

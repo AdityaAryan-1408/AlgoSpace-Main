@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { Flashcard, CardType } from "@/data";
@@ -8,10 +9,18 @@ import { isCardPaused } from "@/lib/card-utils";
 import { fetchGlobalPauseStatus, resumeAllReviews, resumeCardReview } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
 import { MasteryHeatmap } from "./MasteryHeatmap";
-import { CardDetailsModal } from "./CardDetailsModal";
+
+// Lazy-load heavy chart components (recharts ~350KB) and modals
+const CardDetailsModal = dynamic(() => import("./CardDetailsModal").then(m => ({ default: m.CardDetailsModal })), { ssr: false });
 import { StreakTracker } from "./StreakTracker";
-import { PerformanceChart } from "./charts/PerformanceChart";
-import { TopicRadarChart } from "./charts/TopicRadarChart";
+const PerformanceChart = dynamic(() => import("./charts/PerformanceChart").then(m => ({ default: m.PerformanceChart })), {
+  ssr: false,
+  loading: () => <div className="h-[300px] rounded-xl bg-muted/20 animate-pulse" />,
+});
+const TopicRadarChart = dynamic(() => import("./charts/TopicRadarChart").then(m => ({ default: m.TopicRadarChart })), {
+  ssr: false,
+  loading: () => <div className="h-[300px] rounded-xl bg-muted/20 animate-pulse" />,
+});
 import { DailyGoal } from "./DailyGoal";
 import { ProblemCountWidget } from "./ProblemCountWidget";
 import { SearchFilter } from "./SearchFilter";

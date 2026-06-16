@@ -1,29 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { Dashboard } from "@/components/Dashboard";
 import { ReviewModal } from "@/components/ReviewModal";
-import { ReviewSession } from "@/components/ReviewSession";
 import type { ReviewResult } from "@/components/ReviewSession";
-import { ReviewComplete } from "@/components/ReviewComplete";
-import { AddCardModal } from "@/components/AddCardModal";
-import { GuideScreen } from "@/components/GuideScreen";
-import { GoalsScreen } from "@/components/GoalsScreen";
-import { AchievementsScreen } from "@/components/AchievementsScreen";
-import { CoachChat } from "@/components/CoachChat";
-import { SkillTreeView } from "@/components/SkillTreeView";
-import { StressModeSession } from "@/components/StressModeSession";
-import { GlobalPauseModal } from "@/components/GlobalPauseModal";
-import { BigODrill } from "@/components/BigODrill";
-import { PatternQuiz } from "@/components/PatternQuiz";
-import { CramMode } from "@/components/CramMode";
-import { Speedrun } from "@/components/Speedrun";
-import { AntiPatterns } from "@/components/AntiPatterns";
-import { ObfuscationChallenge } from "@/components/ObfuscationChallenge";
-import { CrossLanguage } from "@/components/CrossLanguage";
-import { CalendarView } from "@/components/CalendarView";
-import { TrainingHub } from "@/components/TrainingHub";
-import { VagueInterviewer } from "@/components/VagueInterviewer";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
 import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock, Sliders } from "lucide-react";
@@ -33,10 +14,40 @@ import type { GlobalPauseStatus } from "@/lib/client-api";
 import type { Flashcard, CardType } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
-import { ImportListModal } from "@/components/ImportListModal";
 import { useConfirmModal } from "@/components/ConfirmModal";
-import { PreferencesModal } from "@/components/PreferencesModal";
-import { RecoveryModeModal } from "@/components/RecoveryModeModal";
+
+// ── Dynamically imported components (code-split) ────────────
+// These are only loaded when the user navigates to the corresponding view,
+// reducing the initial JS bundle by ~60-70%.
+const ViewLoader = () => (
+  <div className="flex-1 flex items-center justify-center">
+    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+  </div>
+);
+
+const ReviewSession = dynamic(() => import("@/components/ReviewSession").then(m => ({ default: m.ReviewSession })), { ssr: false, loading: ViewLoader });
+const ReviewComplete = dynamic(() => import("@/components/ReviewComplete").then(m => ({ default: m.ReviewComplete })), { ssr: false, loading: ViewLoader });
+const AddCardModal = dynamic(() => import("@/components/AddCardModal").then(m => ({ default: m.AddCardModal })), { ssr: false });
+const GuideScreen = dynamic(() => import("@/components/GuideScreen").then(m => ({ default: m.GuideScreen })), { ssr: false, loading: ViewLoader });
+const GoalsScreen = dynamic(() => import("@/components/GoalsScreen").then(m => ({ default: m.GoalsScreen })), { ssr: false, loading: ViewLoader });
+const AchievementsScreen = dynamic(() => import("@/components/AchievementsScreen").then(m => ({ default: m.AchievementsScreen })), { ssr: false, loading: ViewLoader });
+const CoachChat = dynamic(() => import("@/components/CoachChat").then(m => ({ default: m.CoachChat })), { ssr: false, loading: ViewLoader });
+const SkillTreeView = dynamic(() => import("@/components/SkillTreeView").then(m => ({ default: m.SkillTreeView })), { ssr: false, loading: ViewLoader });
+const StressModeSession = dynamic(() => import("@/components/StressModeSession").then(m => ({ default: m.StressModeSession })), { ssr: false, loading: ViewLoader });
+const GlobalPauseModal = dynamic(() => import("@/components/GlobalPauseModal").then(m => ({ default: m.GlobalPauseModal })), { ssr: false });
+const BigODrill = dynamic(() => import("@/components/BigODrill").then(m => ({ default: m.BigODrill })), { ssr: false, loading: ViewLoader });
+const PatternQuiz = dynamic(() => import("@/components/PatternQuiz").then(m => ({ default: m.PatternQuiz })), { ssr: false, loading: ViewLoader });
+const CramMode = dynamic(() => import("@/components/CramMode").then(m => ({ default: m.CramMode })), { ssr: false, loading: ViewLoader });
+const Speedrun = dynamic(() => import("@/components/Speedrun").then(m => ({ default: m.Speedrun })), { ssr: false, loading: ViewLoader });
+const AntiPatterns = dynamic(() => import("@/components/AntiPatterns").then(m => ({ default: m.AntiPatterns })), { ssr: false, loading: ViewLoader });
+const ObfuscationChallenge = dynamic(() => import("@/components/ObfuscationChallenge").then(m => ({ default: m.ObfuscationChallenge })), { ssr: false, loading: ViewLoader });
+const CrossLanguage = dynamic(() => import("@/components/CrossLanguage").then(m => ({ default: m.CrossLanguage })), { ssr: false, loading: ViewLoader });
+const CalendarView = dynamic(() => import("@/components/CalendarView").then(m => ({ default: m.CalendarView })), { ssr: false, loading: ViewLoader });
+const TrainingHub = dynamic(() => import("@/components/TrainingHub").then(m => ({ default: m.TrainingHub })), { ssr: false, loading: ViewLoader });
+const VagueInterviewer = dynamic(() => import("@/components/VagueInterviewer").then(m => ({ default: m.VagueInterviewer })), { ssr: false, loading: ViewLoader });
+const ImportListModal = dynamic(() => import("@/components/ImportListModal").then(m => ({ default: m.ImportListModal })), { ssr: false });
+const PreferencesModal = dynamic(() => import("@/components/PreferencesModal").then(m => ({ default: m.PreferencesModal })), { ssr: false });
+const RecoveryModeModal = dynamic(() => import("@/components/RecoveryModeModal").then(m => ({ default: m.RecoveryModeModal })), { ssr: false });
 
 type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub" | "vague-interviewer";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
@@ -775,9 +786,9 @@ export default function HomePage() {
             {view === "dashboard" && (
               <motion.div
                 key="dashboard"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -797,9 +808,9 @@ export default function HomePage() {
             {view === "training-hub" && (
               <motion.div
                 key="training-hub"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col overflow-y-auto"
               >
@@ -809,9 +820,9 @@ export default function HomePage() {
             {view === "calendar" && (
               <motion.div
                 key="calendar"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -821,9 +832,9 @@ export default function HomePage() {
             {view === "guide" && (
               <motion.div
                 key="guide"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -836,9 +847,9 @@ export default function HomePage() {
             {view === "goals" && (
               <motion.div
                 key="goals"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -848,9 +859,9 @@ export default function HomePage() {
             {view === "achievements" && (
               <motion.div
                 key="achievements"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -860,9 +871,9 @@ export default function HomePage() {
             {view === "coach" && (
               <motion.div
                 key="coach"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -872,9 +883,9 @@ export default function HomePage() {
             {view === "skill-tree" && (
               <motion.div
                 key="skill-tree"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -896,9 +907,9 @@ export default function HomePage() {
             {view === "bigo-drill" && (
               <motion.div
                 key="bigo-drill"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -908,9 +919,9 @@ export default function HomePage() {
             {view === "pattern-quiz" && (
               <motion.div
                 key="pattern-quiz"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -920,9 +931,9 @@ export default function HomePage() {
             {view === "cram-mode" && (
               <motion.div
                 key="cram-mode"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -943,9 +954,9 @@ export default function HomePage() {
             {view === "speedrun" && (
               <motion.div
                 key="speedrun"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -955,9 +966,9 @@ export default function HomePage() {
             {view === "anti-patterns" && (
               <motion.div
                 key="anti-patterns"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -967,9 +978,9 @@ export default function HomePage() {
             {view === "obfuscation" && (
               <motion.div
                 key="obfuscation"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -979,9 +990,9 @@ export default function HomePage() {
             {view === "cross-language" && (
               <motion.div
                 key="cross-language"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -991,9 +1002,9 @@ export default function HomePage() {
             {view === "review-session" && (
               <motion.div
                 key="review-session"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -1010,9 +1021,9 @@ export default function HomePage() {
             {view === "review-complete" && sessionStats && (
               <motion.div
                 key="review-complete"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col"
               >
@@ -1030,9 +1041,9 @@ export default function HomePage() {
             {view === "vague-interviewer" && (
               <motion.div
                 key="vague-interviewer"
-                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="flex-1 flex flex-col overflow-y-auto"
               >

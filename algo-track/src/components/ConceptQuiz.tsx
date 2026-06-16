@@ -25,7 +25,12 @@ import {
     ClipboardCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import confetti from "canvas-confetti";
+
+// Lazy-load confetti to avoid bundling ~180KB upfront
+const fireConfetti = async (opts: Record<string, unknown>) => {
+    const confetti = (await import("canvas-confetti")).default;
+    confetti(opts);
+};
 import { createCard } from "@/lib/client-api";
 
 export interface QuizQuestion {
@@ -148,7 +153,7 @@ export function ConceptQuiz({
             });
 
             setSubtopicAddedStatus(true);
-            confetti({
+            fireConfetti({
                 particleCount: 50,
                 spread: 40,
                 origin: { y: 0.8 }
@@ -244,7 +249,7 @@ export function ConceptQuiz({
             setCurrentStep(prev => prev + 1);
         } else {
             if (score >= Math.ceil(questions.length * 0.8)) {
-                confetti({
+                fireConfetti({
                     particleCount: 100,
                     spread: 60,
                     origin: { y: 0.6 },
@@ -295,7 +300,7 @@ export function ConceptQuiz({
             // Check if all clozes completed
             const newlyCompleted = Object.keys(clozeAnswers).length + 1 === parsedClozes.length;
             if (newlyCompleted) {
-                confetti({
+                fireConfetti({
                     particleCount: 50,
                     spread: 40,
                     origin: { y: 0.7 }
@@ -336,7 +341,7 @@ export function ConceptQuiz({
                 const next = new Set(prev);
                 next.add(term);
                 if (next.size === conceptMatches.length) {
-                    confetti({
+                    fireConfetti({
                         particleCount: 60,
                         spread: 50,
                         origin: { y: 0.6 }

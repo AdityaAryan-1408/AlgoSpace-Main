@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/Button";
 import { MessageSquare, Send, Loader2, Lock, Unlock, Sparkles, HelpCircle, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Flashcard } from "@/data";
-import confetti from "canvas-confetti";
+
+// Lazy-load confetti to avoid bundling ~180KB upfront
+const fireConfetti = async (opts: Record<string, unknown>) => {
+    const confetti = (await import("canvas-confetti")).default;
+    confetti(opts);
+};
 
 interface RubberDuckGateProps {
     card: Flashcard;
@@ -90,7 +95,7 @@ export function RubberDuckGate({ card, onUnlock }: RubberDuckGateProps) {
             if (result.approved) {
                 setApproved(true);
                 try {
-                    confetti({
+                    fireConfetti({
                         particleCount: 100,
                         spread: 75,
                         origin: { y: 0.65 },

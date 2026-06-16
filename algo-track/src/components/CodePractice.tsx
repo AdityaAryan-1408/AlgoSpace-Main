@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import Editor from "@monaco-editor/react";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[320px] rounded-xl border border-border bg-muted/20 animate-pulse flex items-center justify-center">
+      <span className="text-xs text-muted-foreground">Loading editor...</span>
+    </div>
+  ),
+});
 import { Button } from "@/components/ui/Button";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import {

@@ -19,7 +19,12 @@ import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api"
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
 import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import confetti from "canvas-confetti";
+
+// Lazy-load confetti to avoid bundling ~180KB upfront
+const fireConfetti = async (opts: Record<string, unknown>) => {
+    const confetti = (await import("canvas-confetti")).default;
+    confetti(opts);
+};
 import { useConfirmModal } from "@/components/ConfirmModal";
 import { ConceptQuiz, type QuizQuestion } from "@/components/ConceptQuiz";
 
@@ -356,7 +361,7 @@ export function ReviewSession({
             
             // Gamification: Confetti explosion!
             if (finalResults.length > 0) {
-                confetti({
+                fireConfetti({
                     particleCount: 150,
                     spread: 80,
                     origin: { y: 0.6 },
