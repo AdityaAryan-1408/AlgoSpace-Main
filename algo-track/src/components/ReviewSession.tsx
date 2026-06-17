@@ -17,7 +17,7 @@ import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
 import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
-import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles, ChevronLeft, ChevronRight, Calendar as CalendarIcon, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 // Lazy-load confetti to avoid bundling ~180KB upfront
@@ -42,6 +42,7 @@ interface ReviewSessionProps {
     onCancel: () => void;
     mode?: "standard" | "random-quiz" | "sprint" | "reverse";
     timeLimitSeconds?: number;
+    isQuickReview?: boolean;
 }
 
 const ratingConfig = {
@@ -100,6 +101,7 @@ export function ReviewSession({
     onCancel,
     mode = "standard",
     timeLimitSeconds,
+    isQuickReview = false,
 }: ReviewSessionProps) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -431,13 +433,22 @@ export function ReviewSession({
         }
     };
 
-    const handleRate = (rating: Rating) => {
-        setPendingRating(rating);
-        setShowAiPractice(false);
-        setShowFeynman(false);
-        setShowDryRun(false);
-        setShowSpotTheBug(false);
-        setShowAnswer(true);
+    const handleRate = async (rating: Rating) => {
+        const isPausedOrReference = currentCard?.metadata?.review_paused === true ||
+                                    currentCard?.metadata?.globally_paused === true ||
+                                    currentCard?.metadata?.reference_only === true;
+
+        if (isQuickReview && isPausedOrReference) {
+            // Immediately submit and bypass choose interval screen
+            await submitReviewWithRating(rating);
+        } else {
+            setPendingRating(rating);
+            setShowAiPractice(false);
+            setShowFeynman(false);
+            setShowDryRun(false);
+            setShowSpotTheBug(false);
+            setShowAnswer(true);
+        }
     };
 
     const prepareQuiz = async () => {
@@ -566,19 +577,19 @@ export function ReviewSession({
     };
 
 
-    const submitFinalReview = async (manualDays?: number) => {
-        if (!pendingRating || isSubmitting || completedRef.current) return;
+    const submitReviewWithRating = async (rating: Rating, manualDays?: number) => {
+        if (isSubmitting || completedRef.current) return;
 
         const responseMs = Date.now() - cardStartTime.current;
         setIsSubmitting(true);
 
-        const result: ReviewResult = { card: currentCard, rating: pendingRating, responseMs };
+        const result: ReviewResult = { card: currentCard, rating, responseMs };
         const newResults = [...results, result];
         setResults(newResults);
         resultsRef.current = newResults;
 
         try {
-            await submitCardReview(currentCard.id, pendingRating, responseMs, manualDays);
+            await submitCardReview(currentCard.id, rating, responseMs, manualDays);
             if (reviewNote !== (currentCard.metadata?.reviewNote || "")) {
                 await updateCard(currentCard.id, {
                     metadata: { ...currentCard.metadata, reviewNote }
@@ -590,6 +601,11 @@ export function ReviewSession({
             setIsSubmitting(false);
             advance(newResults, currentIndex + 1);
         }
+    };
+
+    const submitFinalReview = async (manualDays?: number) => {
+        if (!pendingRating) return;
+        await submitReviewWithRating(pendingRating, manualDays);
     };
 
     const handlePauseReview = async () => {
@@ -610,6 +626,33 @@ export function ReviewSession({
             await pauseCardReview(currentCard.id);
         } catch (err) {
             console.error("Failed to pause review:", err);
+        } finally {
+            setIsSubmitting(false);
+            advance(newResults, currentIndex + 1);
+        }
+    };
+
+    const handleMakeReference = async () => {
+        if (!pendingRating || isSubmitting || completedRef.current) return;
+
+        const responseMs = Date.now() - cardStartTime.current;
+        setIsSubmitting(true);
+
+        const result: ReviewResult = { card: currentCard, rating: pendingRating, responseMs };
+        const newResults = [...results, result];
+        setResults(newResults);
+        resultsRef.current = newResults;
+
+        try {
+            // Submit the review first so it counts
+            await submitCardReview(currentCard.id, pendingRating, responseMs);
+            // Then update the card to be reference-only
+            await updateCard(currentCard.id, {
+                metadata: { ...currentCard.metadata, reference_only: true, reviewNote },
+                nextReview: "9999-12-31T23:59:59.999Z"
+            });
+        } catch (err) {
+            console.error("Failed to make card reference:", err);
         } finally {
             setIsSubmitting(false);
             advance(newResults, currentIndex + 1);
@@ -652,6 +695,37 @@ export function ReviewSession({
                         title={isFullscreen ? "Exit Focus Mode" : "Enter Focus Mode"}
                     >
                         {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                            const confirmed = await confirmModal({
+                                title: "Convert to Reference Card",
+                                message: `Are you sure you want to move "${currentCard.title}" to reference cards? It will not show up in the review pool anymore.`,
+                                confirmLabel: "Make Reference",
+                                variant: "warning",
+                            });
+                            if (confirmed) {
+                                setIsSubmitting(true);
+                                try {
+                                    await updateCard(currentCard.id, {
+                                        metadata: { ...currentCard.metadata, reference_only: true },
+                                        nextReview: "9999-12-31T23:59:59.999Z"
+                                    });
+                                    advance(resultsRef.current, currentIndex + 1);
+                                } catch (err) {
+                                    console.error("Failed to mark card as reference:", err);
+                                } finally {
+                                    setIsSubmitting(false);
+                                }
+                            }
+                        }}
+                        disabled={isSubmitting}
+                        className="text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 gap-1 text-xs px-2.5 h-8 rounded-lg"
+                    >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        Make Reference
                     </Button>
                     <Button
                         variant="ghost"
@@ -1327,6 +1401,16 @@ export function ReviewSession({
                           Pause
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleMakeReference}
+                        disabled={isSubmitting}
+                        className="text-[10px] text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 gap-1 rounded-full px-2.5 py-0.5 h-7"
+                      >
+                        <BookOpen className="w-3 h-3" />
+                        Reference
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => setPendingRating(null)} disabled={isSubmitting} className="text-muted-foreground text-[10px] rounded-full px-2.5 py-0.5 h-7">
                         Back
                       </Button>

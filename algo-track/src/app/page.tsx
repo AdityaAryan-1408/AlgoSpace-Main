@@ -63,6 +63,7 @@ interface ReviewSessionConfig {
   timeLimitSeconds?: number;
   count?: number;
   typeFilter?: "leetcode" | "cs";
+  isQuickReview?: boolean;
 }
 
 // ── Cache helpers ────────────────────────────────────────────
@@ -355,7 +356,7 @@ export default function HomePage() {
       const card = cards.find(c => c.id === customEvent.detail);
       if (card) {
         setReviewSessionCards([card]);
-        setReviewSessionConfig({ mode: "standard" });
+        setReviewSessionConfig({ mode: "standard", isQuickReview: true });
         setView("review-session");
       }
     };
@@ -1015,6 +1016,7 @@ export default function HomePage() {
                   onCancel={handleReviewCancel}
                   mode={reviewSessionConfig.mode}
                   timeLimitSeconds={reviewSessionConfig.timeLimitSeconds}
+                  isQuickReview={reviewSessionConfig.isQuickReview}
                 />
               </motion.div>
             )}

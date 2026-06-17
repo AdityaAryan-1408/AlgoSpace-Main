@@ -427,6 +427,22 @@ export function CardDetailsModal({
     }
   };
 
+  const handleMarkAsReference = async () => {
+    if (!card) return;
+    setIsResuming(true);
+    try {
+      await updateCard(card.id, {
+        metadata: { ...card.metadata, reference_only: true },
+        nextReview: "9999-12-31T23:59:59.999Z"
+      });
+      onSaved();
+    } catch (err) {
+      console.error("Failed to mark card as reference:", err);
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
   return createPortal(
     <div
       ref={backdropRef}
@@ -1199,6 +1215,22 @@ export function CardDetailsModal({
                           <div className="text-[10px] text-muted-foreground leading-normal text-center p-1.5 bg-muted/20 border border-dashed border-border rounded-xl">
                             Pause available after {pauseThreshold(card)} reviews ({card.history?.total ?? 0}/{pauseThreshold(card)})
                           </div>
+                        )}
+
+                        {!isReference && (
+                          <Button
+                            variant="ghost"
+                            onClick={handleMarkAsReference}
+                            disabled={isResuming || isSaving || isDeleting}
+                            className="w-full text-cyan-500 hover:text-cyan-600 hover:bg-cyan-500/10 gap-1.5 rounded-xl h-9"
+                          >
+                            {isResuming ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <BookOpen className="w-3.5 h-3.5" />
+                            )}
+                            {isResuming ? "Resuming..." : "Mark as Reference"}
+                          </Button>
                         )}
                       </div>
 

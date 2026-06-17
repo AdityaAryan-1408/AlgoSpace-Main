@@ -447,7 +447,9 @@ export async function submitReview(
     throw new Error(reviewError.message);
   }
 
-  const isReference = (card.metadata as Record<string, unknown> | null)?.reference_only === true;
+  const cardMeta = card.metadata as Record<string, unknown> | null;
+  const isReference = cardMeta?.reference_only === true;
+  const isPaused = cardMeta?.review_paused === true || cardMeta?.globally_paused === true;
 
   const { error: cardUpdateError } = await supabase
     .from("cards")
@@ -457,7 +459,7 @@ export async function submitReview(
       repetition_count: srs.repetitionCount,
       last_rating: rating,
       last_reviewed_at: now.toISOString(),
-      next_review_at: isReference ? "9999-12-31T23:59:59.999Z" : srs.nextReviewAt.toISOString(),
+      next_review_at: (isReference || isPaused) ? "9999-12-31T23:59:59.999Z" : srs.nextReviewAt.toISOString(),
       updated_at: now.toISOString(),
     })
     .eq("id", cardId)

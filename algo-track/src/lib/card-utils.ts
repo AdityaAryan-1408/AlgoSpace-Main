@@ -8,13 +8,7 @@ import type { Flashcard } from "@/data";
  * - CS Core (all): 3 reviews
  */
 export function canPauseCard(card: Flashcard): boolean {
-    const totalReviews = card.history.total;
-    if (card.type === "cs") return totalReviews >= 3;
-    // DSA cards
-    if (card.difficulty === "easy") return totalReviews >= 3;
-    if (card.difficulty === "medium") return totalReviews >= 5;
-    if (card.difficulty === "hard") return totalReviews >= 7;
-    return false;
+    return true;
 }
 
 /**
