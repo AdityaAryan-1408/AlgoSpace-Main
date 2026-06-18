@@ -12,6 +12,7 @@ import { isSystemDesignCard } from "@/lib/card-utils";
 import { SystemDesignCanvas } from "@/components/SystemDesignCanvas";
 import { SystemDesignAssistant } from "@/components/SystemDesignAssistant";
 import { AiStudyAssistant } from "@/components/AiStudyAssistant";
+import { extractTextFromRichNotes } from "@/lib/highlight";
 
 export interface AddCardFormDefaults {
     type?: CardType;
@@ -302,7 +303,7 @@ export function AddCardForm({
                 description: description.trim(),
                 difficulty,
                 tags: tags.length > 0 ? tags : undefined,
-                notes: notes.trim() || undefined,
+                notes: (richNotes ? extractTextFromRichNotes(richNotes) : notes).trim() || undefined,
                 richNotes: richNotes || undefined,
                 solution:
                     isCodeCard && compiledSolutions[0]?.content

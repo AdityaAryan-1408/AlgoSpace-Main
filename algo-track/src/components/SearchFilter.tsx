@@ -7,11 +7,12 @@ import type { Flashcard, Difficulty } from "@/data";
 interface Props {
     cards: Flashcard[];
     onFiltered: (cards: Flashcard[]) => void;
+    onQueryChange?: (query: string) => void;
 }
 
 type StatusFilter = "all" | "due" | "upcoming" | "reference";
 
-export function SearchFilter({ cards, onFiltered }: Props) {
+export function SearchFilter({ cards, onFiltered, onQueryChange }: Props) {
     const [query, setQuery] = useState("");
     const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
     const [status, setStatus] = useState<StatusFilter>("all");
@@ -35,7 +36,10 @@ export function SearchFilter({ cards, onFiltered }: Props) {
             result = result.filter(
                 (c) =>
                     c.title.toLowerCase().includes(q) ||
-                    c.description.toLowerCase().includes(q) ||
+                    c.description?.toLowerCase().includes(q) ||
+                    c.notes?.toLowerCase().includes(q) ||
+                    c.solution?.toLowerCase().includes(q) ||
+                    c.solutions?.some(s => s.content.toLowerCase().includes(q)) ||
                     c.tags.some((t) => t.toLowerCase().includes(q)),
             );
         }
@@ -66,6 +70,10 @@ export function SearchFilter({ cards, onFiltered }: Props) {
     useEffect(() => {
         onFiltered(filtered);
     }, [filtered, onFiltered]);
+
+    useEffect(() => {
+        onQueryChange?.(query);
+    }, [query, onQueryChange]);
 
     const hasActiveFilters =
         difficulty !== "all" || status !== "all" || selectedTag !== "all";

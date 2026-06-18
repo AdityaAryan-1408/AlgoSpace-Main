@@ -7,7 +7,7 @@ import { ReviewModal } from "@/components/ReviewModal";
 import type { ReviewResult } from "@/components/ReviewSession";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
-import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock, Sliders } from "lucide-react";
+import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock, Sliders, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus, fetchUserProfile, fetchDashboardStats } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
@@ -48,6 +48,7 @@ const VagueInterviewer = dynamic(() => import("@/components/VagueInterviewer").t
 const ImportListModal = dynamic(() => import("@/components/ImportListModal").then(m => ({ default: m.ImportListModal })), { ssr: false });
 const PreferencesModal = dynamic(() => import("@/components/PreferencesModal").then(m => ({ default: m.PreferencesModal })), { ssr: false });
 const RecoveryModeModal = dynamic(() => import("@/components/RecoveryModeModal").then(m => ({ default: m.RecoveryModeModal })), { ssr: false });
+const GlobalSearchModal = dynamic(() => import("@/components/GlobalSearchModal").then(m => ({ default: m.GlobalSearchModal })), { ssr: false });
 
 type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub" | "vague-interviewer";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
@@ -135,6 +136,7 @@ export default function HomePage() {
   const [globalPauseStatus, setGlobalPauseStatus] = useState<GlobalPauseStatus>({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(false);
   const [maxDailyReviews, setMaxDailyReviews] = useState<number | null>(null);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
@@ -732,44 +734,15 @@ export default function HomePage() {
               <Lock className="w-4 h-4" />
             </Button>
 
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowThemeMenu(!showThemeMenu)}
-                className="rounded-full transition-transform hover:rotate-12"
-              >
-                <Palette className="w-5 h-5" />
-              </Button>
-              {showThemeMenu && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setShowThemeMenu(false)} 
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-36 bg-card border border-border rounded-xl shadow-lg overflow-hidden py-1 z-50 animate-in slide-in-from-top-2">
-                    {[
-                      { id: "light", label: "Light" },
-                      { id: "dark", label: "Dark" },
-                      { id: "theme-vscode", label: "VS Code" },
-                      { id: "theme-ocean", label: "Deep Ocean" },
-                      { id: "theme-github", label: "GitHub Dark" },
-                      { id: "theme-dracula", label: "Dracula" },
-                      { id: "theme-monokai", label: "Monokai" },
-                      { id: "theme-gruvbox", label: "Gruvbox" },
-                    ].map(t => (
-                      <button 
-                        key={t.id}
-                        onClick={() => { setTheme(t.id); setShowThemeMenu(false); }} 
-                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-muted/50 transition-colors ${theme === t.id ? 'font-bold text-cyan-500 bg-cyan-500/5' : 'text-foreground'}`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSearchModal(true)}
+              className="rounded-full text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 transition-colors"
+              title="Search cards & content"
+            >
+              <Search className="w-5 h-5" />
+            </Button>
           </nav>
         </div>
       </header>
@@ -1130,6 +1103,15 @@ export default function HomePage() {
               onChanged={() => {
                 syncFromApi(false);
               }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showSearchModal && (
+            <GlobalSearchModal
+              cards={cards}
+              onClose={() => setShowSearchModal(false)}
             />
           )}
         </AnimatePresence>

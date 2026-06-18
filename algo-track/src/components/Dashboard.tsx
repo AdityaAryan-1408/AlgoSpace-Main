@@ -143,13 +143,19 @@ export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartRe
   const [isResumingAllPaused, setIsResumingAllPaused] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const handleSelectCard = (e: Event) => {
-      const customEvent = e as CustomEvent<string>;
-      const card = cards.find(c => c.id === customEvent.detail);
+      const customEvent = e as CustomEvent<string | { id: string; searchQuery?: string }>;
+      const detail = customEvent.detail;
+      const cardId = typeof detail === "string" ? detail : detail?.id;
+      const query = typeof detail === "string" ? "" : detail?.searchQuery || "";
+      
+      const card = cards.find(c => c.id === cardId);
       if (card) {
         setSelectedCard(card);
+        setSearchQuery(query);
       }
     };
     window.addEventListener("select-card", handleSelectCard);
@@ -457,7 +463,7 @@ export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartRe
       {cards.length > 0 && (
         <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
           <div className="flex-1 w-full">
-            <SearchFilter cards={typeFilteredCards} onFiltered={handleFiltered} />
+            <SearchFilter cards={typeFilteredCards} onFiltered={handleFiltered} onQueryChange={setSearchQuery} />
           </div>
           <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto pt-0.5">
             <div className="flex items-center bg-muted/50 p-1 rounded-lg border">
@@ -802,6 +808,7 @@ export function Dashboard({ cards, dueCount, totalDueCount, onRefresh, onStartRe
               setSelectedCard(null);
               onRefresh();
             }}
+            searchQuery={searchQuery}
           />
         )}
       </AnimatePresence>

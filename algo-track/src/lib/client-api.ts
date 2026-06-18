@@ -43,6 +43,11 @@ export async function fetchAllCards(): Promise<Flashcard[]> {
     return data.cards;
 }
 
+export async function searchCards(searchQuery: string): Promise<Flashcard[]> {
+    const data = await apiFetch<{ cards: Flashcard[] }>(`/cards?search=${encodeURIComponent(searchQuery)}`);
+    return data.cards;
+}
+
 export async function fetchDueCards(): Promise<Flashcard[]> {
     const data = await apiFetch<{ cards: Flashcard[] }>("/cards?dueOnly=true");
     return data.cards;

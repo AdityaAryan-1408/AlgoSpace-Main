@@ -19,6 +19,7 @@ import { AddCardForm, AddCardFormDefaults } from "./AddCardForm";
 import { isSystemDesignCard } from "@/lib/card-utils";
 import { SystemDesignCanvas } from "@/components/SystemDesignCanvas";
 import { SystemDesignAssistant } from "@/components/SystemDesignAssistant";
+import { highlightTextInDOM, extractTextFromRichNotes } from "@/lib/highlight";
 
 const WindowsMaximizeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
@@ -38,6 +39,7 @@ interface CardDetailsModalProps {
   allCards?: Flashcard[];
   onClose: () => void;
   onSaved: () => void;
+  searchQuery?: string;
 }
 
 export function CardDetailsModal({
@@ -45,11 +47,14 @@ export function CardDetailsModal({
   allCards: propAllCards,
   onClose,
   onSaved,
+  searchQuery,
 }: CardDetailsModalProps) {
   const [card, setCard] = useState<Flashcard | null>(propCard);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const dragControls = useDragControls();
   const backdropRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [notes, setNotes] = useState("");
@@ -181,6 +186,18 @@ export function CardDetailsModal({
       fetchAllCards().then(setFetchedCards).catch(console.error);
     }
   }, [propAllCards]);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      const query = searchQuery || "";
+      const timer = setTimeout(() => {
+        if (contentRef.current) {
+          highlightTextInDOM(contentRef.current, query);
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, card, richNotes, cardStudyTab, systemDesignTab, isEditing, loadingDetails]);
 
   const allCards = propAllCards && propAllCards.length > 0 ? propAllCards : fetchedCards;
 
@@ -363,8 +380,9 @@ export function CardDetailsModal({
     setIsSaving(true);
     try {
       const isSys = isSystemDesignCard(card.type, tags);
+      const plainNotes = richNotes ? extractTextFromRichNotes(richNotes) : notes;
       await updateCard(card.id, { 
-        notes, 
+        notes: plainNotes, 
         richNotes,
         tags,
         metadata: { 
@@ -519,7 +537,7 @@ export function CardDetailsModal({
           </>
         )}
         {/* Inner Content Wrapper */}
-        <div className={isMaximized ? "flex flex-col flex-1 overflow-hidden" : "flex flex-col flex-1 overflow-hidden rounded-2xl"}>
+        <div ref={contentRef} className={isMaximized ? "flex flex-col flex-1 overflow-hidden" : "flex flex-col flex-1 overflow-hidden rounded-2xl"}>
           {/* Header - Entire bar is draggable */}
           <div 
           onPointerDown={(e) => {

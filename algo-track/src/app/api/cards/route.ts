@@ -78,7 +78,8 @@ export async function GET(request: NextRequest) {
     const user = await withUser(request);
     const dueOnly = request.nextUrl.searchParams.get("dueOnly") === "true";
     const light = request.nextUrl.searchParams.get("light") === "true";
-    const cards = await listCardsForUser(user.id, dueOnly, light);
+    const search = request.nextUrl.searchParams.get("search") || undefined;
+    const cards = await listCardsForUser(user.id, dueOnly, light, search);
     return jsonOk({ cards });
   } catch (error) {
     return handleApiError(error);
