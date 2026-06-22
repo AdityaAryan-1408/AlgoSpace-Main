@@ -9,7 +9,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/Button";
 import { LayoutDashboard, PlayCircle, Plus, Sun, Moon, Loader2, RefreshCw, FileDown, Compass, Target, Award, MessageSquare, Network, Zap, ChevronDown, Pause, Play, Timer, Crosshair, Building2, Keyboard, Bug, ShuffleIcon, Languages, Palette, Calendar, LayoutGrid, Lock, Sliders, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { fetchAllCards, fetchDueCards, fetchGlobalPauseStatus, fetchUserProfile, fetchDashboardStats } from "@/lib/client-api";
+import { fetchAllCards, fetchGlobalPauseStatus, fetchUserProfile, fetchDashboardStats } from "@/lib/client-api";
 import type { GlobalPauseStatus } from "@/lib/client-api";
 import type { Flashcard, CardType } from "@/data";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
@@ -49,6 +49,7 @@ const ImportListModal = dynamic(() => import("@/components/ImportListModal").the
 const PreferencesModal = dynamic(() => import("@/components/PreferencesModal").then(m => ({ default: m.PreferencesModal })), { ssr: false });
 const RecoveryModeModal = dynamic(() => import("@/components/RecoveryModeModal").then(m => ({ default: m.RecoveryModeModal })), { ssr: false });
 const GlobalSearchModal = dynamic(() => import("@/components/GlobalSearchModal").then(m => ({ default: m.GlobalSearchModal })), { ssr: false });
+
 
 type View = "dashboard" | "guide" | "goals" | "achievements" | "coach" | "skill-tree" | "stress-mode" | "review-session" | "review-complete" | "bigo-drill" | "pattern-quiz" | "cram-mode" | "speedrun" | "anti-patterns" | "obfuscation" | "cross-language" | "calendar" | "training-hub" | "vague-interviewer";
 type ReviewMode = "standard" | "random-quiz" | "sprint" | "reverse";
@@ -105,6 +106,22 @@ function prioritizeDueCards(cards: Flashcard[]) {
   });
 }
 
+function computeDueCards(allCards: Flashcard[]): Flashcard[] {
+  const now = new Date();
+  const endOfDay = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)
+  );
+  return allCards.filter(c => {
+    const nextReview = new Date(c.nextReview);
+    return !isNaN(nextReview.getTime()) && nextReview <= endOfDay;
+  });
+}
+
+function mergeUpdatedCards(current: Flashcard[], updated: Flashcard[]): Flashcard[] {
+  const updatedMap = new Map(updated.map(c => [c.id, c]));
+  return current.map(c => updatedMap.get(c.id) ?? c);
+}
+
 // ── Main component ───────────────────────────────────────────
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);
@@ -129,14 +146,14 @@ export default function HomePage() {
     mode: "standard",
   });
   const [showImportModal, setShowImportModal] = useState(false);
-  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [, setTick] = useState(0); // Force re-render for "last synced" label
   const [isExtraFeaturesOpen, setIsExtraFeaturesOpen] = useState(false);
   const extraFeaturesRef = useRef<HTMLDivElement>(null);
   const [globalPauseStatus, setGlobalPauseStatus] = useState<GlobalPauseStatus>({ active: false, startedAt: null, until: null, autoResume: false, remainingDays: null });
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
-  const [showSearchModal, setShowSearchModal] = useState(false);
+
   const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(false);
   const [maxDailyReviews, setMaxDailyReviews] = useState<number | null>(null);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
@@ -186,18 +203,22 @@ export default function HomePage() {
     }
   }, []);
 
-  const syncFromApi = useCallback(async (showSpinner = true) => {
+  const syncFromApi = useCallback(async (showSpinner = true, forceStats = false) => {
     if (showSpinner) setIsSyncing(true);
     try {
-      const [all, due, stats] = await Promise.all([
-        fetchAllCards(),
-        fetchDueCards(),
-        fetchDashboardStats(),
-      ]);
+      const all = await fetchAllCards();
+      const due = computeDueCards(all);
       setCards(all);
       setDueCards(due);
-      setReviewsToday(stats.reviewsToday ?? 0);
-      writeCacheDB(all, due, stats.reviewsToday ?? 0);
+      
+      let todayCount = reviewsToday;
+      if (forceStats || !lastSyncTime) {
+        const stats = await fetchDashboardStats();
+        todayCount = stats.reviewsToday ?? 0;
+        setReviewsToday(todayCount);
+      }
+      
+      writeCacheDB(all, due, todayCount);
       setLastSyncTime(Date.now());
       refreshPauseStatus();
     } catch (err) {
@@ -205,7 +226,7 @@ export default function HomePage() {
     } finally {
       if (showSpinner) setIsSyncing(false);
     }
-  }, [refreshPauseStatus]);
+  }, [refreshPauseStatus, reviewsToday, lastSyncTime]);
 
   const isAnyPauseActive = !!(
     globalPauseStatus.active ||
@@ -262,39 +283,12 @@ export default function HomePage() {
         setReviewsToday(cached.reviewsToday ?? 0);
         setLastSyncTime(cached.timestamp);
         setIsLoading(false);
-
-        // Background refresh if cache is stale
-        if (isCacheStale(cached, CACHE_TTL_MS)) {
-          syncFromApi(false);
-        }
       } else {
         // No cache — must fetch (show spinner)
         syncFromApi(true).finally(() => setIsLoading(false));
       }
     });
-
-    // Auto-sync every hour (while tab is active)
-    syncTimerRef.current = setInterval(() => {
-      syncFromApi(false);
-    }, CACHE_TTL_MS);
-
-    // Sync when user returns to the tab after being away
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        readCacheDB().then((cached) => {
-          if (!cached || isCacheStale(cached, CACHE_TTL_MS)) {
-            syncFromApi(false);
-          }
-        });
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [syncFromApi]);
+  }, [syncFromApi, refreshPauseStatus]);
 
   // Update "last synced" label every 30s
   useEffect(() => {
@@ -385,12 +379,7 @@ export default function HomePage() {
   }, [cards]);
 
   const handleManualRefresh = async () => {
-    await syncFromApi(true);
-    // Reset auto-sync timer
-    if (syncTimerRef.current) clearInterval(syncTimerRef.current);
-    syncTimerRef.current = setInterval(() => {
-      syncFromApi(false);
-    }, CACHE_TTL_MS);
+    await syncFromApi(true, true);
   };
 
   const handleStartReview = async (mode: ReviewMode = "standard", count?: number, typeFilter?: CardType, orderedCards?: Flashcard[]) => {
@@ -414,7 +403,7 @@ export default function HomePage() {
         if (typeFilter) pool = pool.filter(c => c.type === typeFilter);
         if (pool.length === 0) return;
         let sprintCards = [];
-        let due = await fetchDueCards();
+        let due = dueCards;
         if (typeFilter) due = due.filter(c => c.type === typeFilter);
         if (due.length === 0) {
           const shuffled = [...pool].sort(() => 0.5 - Math.random());
@@ -433,7 +422,7 @@ export default function HomePage() {
         if (typeFilter) pool = pool.filter(c => c.type === typeFilter);
         if (pool.length === 0) return;
         let reverseCards = [];
-        let due = await fetchDueCards();
+        let due = dueCards;
         if (typeFilter) due = due.filter(c => c.type === typeFilter);
         if (due.length === 0) {
           const shuffled = [...pool].sort(() => 0.5 - Math.random());
@@ -456,7 +445,7 @@ export default function HomePage() {
         return;
       }
 
-      let due = await fetchDueCards();
+      let due = dueCards;
       if (typeFilter) due = due.filter(c => c.type === typeFilter);
       if (due.length === 0) return;
 
@@ -476,22 +465,47 @@ export default function HomePage() {
     }
   };
 
-  const handleReviewComplete = async (
+  const handleReviewComplete = (
     results: ReviewResult[],
     durationMs: number,
+    updatedCards?: Flashcard[],
+    newReviewsToday?: number,
   ) => {
-    const remaining = await fetchDueCards().catch(() => []);
-    await syncFromApi(false);
-    setSessionStats({
-      results,
-      durationMs,
-      remainingDue: remaining.length,
-    });
+    if (updatedCards) {
+      const merged = mergeUpdatedCards(cards, updatedCards);
+      const newDue = computeDueCards(merged);
+      setCards(merged);
+      setDueCards(newDue);
+      if (newReviewsToday !== undefined) setReviewsToday(newReviewsToday);
+      writeCacheDB(merged, newDue, newReviewsToday ?? reviewsToday);
+      setSessionStats({
+        results,
+        durationMs,
+        remainingDue: newDue.length,
+      });
+    } else {
+      const newDue = computeDueCards(cards);
+      setSessionStats({
+        results,
+        durationMs,
+        remainingDue: newDue.length,
+      });
+    }
     setView("review-complete");
   };
 
-  const handleReviewCancel = async () => {
-    await syncFromApi(false);
+  const handleReviewCancel = (
+    updatedCards?: Flashcard[],
+    newReviewsToday?: number,
+  ) => {
+    if (updatedCards) {
+      const merged = mergeUpdatedCards(cards, updatedCards);
+      const newDue = computeDueCards(merged);
+      setCards(merged);
+      setDueCards(newDue);
+      if (newReviewsToday !== undefined) setReviewsToday(newReviewsToday);
+      writeCacheDB(merged, newDue, newReviewsToday ?? reviewsToday);
+    }
     setView("dashboard");
   };
 
@@ -505,7 +519,8 @@ export default function HomePage() {
     onDashboard: () => setView("dashboard"),
     onRefresh: () => handleManualRefresh(),
     onToggleTheme: toggleTheme,
-    isModalOpen: showAddCardModal || showReviewModal,
+    onSearch: () => setShowSearchModal(true),
+    isModalOpen: showAddCardModal || showReviewModal || showSearchModal,
     disabled: !keyboardShortcutsEnabled,
   });
 
@@ -727,6 +742,16 @@ export default function HomePage() {
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => setShowSearchModal(true)}
+              className="rounded-full text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 transition-colors"
+              title="Global Search (Press /)"
+            >
+              <Search className="w-4 h-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleLockApp}
               className="rounded-full text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
               title="Lock Application"
@@ -734,15 +759,6 @@ export default function HomePage() {
               <Lock className="w-4 h-4" />
             </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowSearchModal(true)}
-              className="rounded-full text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 transition-colors"
-              title="Search cards & content"
-            >
-              <Search className="w-5 h-5" />
-            </Button>
           </nav>
         </div>
       </header>
@@ -1008,7 +1024,6 @@ export default function HomePage() {
                   remainingDue={sessionStats.remainingDue}
                   onBackToDashboard={() => {
                     setView("dashboard");
-                    syncFromApi(false);
                   }}
                 />
               </motion.div>
@@ -1049,7 +1064,15 @@ export default function HomePage() {
           {showAddCardModal && (
             <AddCardModal
               onClose={() => setShowAddCardModal(false)}
-              onAdded={() => syncFromApi(false)}
+              onAdded={(newCard) => {
+                if (newCard) {
+                  const updatedCards = [...cards, newCard];
+                  const updatedDue = computeDueCards(updatedCards);
+                  setCards(updatedCards);
+                  setDueCards(updatedDue);
+                  writeCacheDB(updatedCards, updatedDue, reviewsToday);
+                }
+              }}
               cards={cards}
             />
           )}
@@ -1090,7 +1113,6 @@ export default function HomePage() {
                 setKeyboardShortcutsEnabled(newPrefs.keyboardShortcutsEnabled);
                 setTheme(newPrefs.defaultTheme);
                 setMaxDailyReviews(newPrefs.maxDailyReviews);
-                syncFromApi(false);
               }}
             />
           )}
@@ -1115,6 +1137,7 @@ export default function HomePage() {
             />
           )}
         </AnimatePresence>
+
       </main>
     </div>
   );

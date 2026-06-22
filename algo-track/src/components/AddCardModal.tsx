@@ -9,7 +9,7 @@ import type { CardType, Flashcard } from "@/data";
 
 interface AddCardModalProps {
     onClose: () => void;
-    onAdded: () => void;
+    onAdded: (card?: Flashcard) => void;
     cards?: Flashcard[];
 }
 
@@ -142,8 +142,8 @@ export function AddCardModal({ onClose, onAdded, cards }: AddCardModalProps) {
         resetToDefault("form");
     };
 
-    const handleSubmitted = () => {
-        onAdded();
+    const handleSubmitted = (card?: Flashcard) => {
+        onAdded(card);
         onClose();
     };
 

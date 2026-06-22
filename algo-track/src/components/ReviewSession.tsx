@@ -15,7 +15,7 @@ import { DryRunChallenge } from "@/components/DryRunChallenge";
 import { NotesPanel } from "@/components/NotesDrawer";
 import { SpotTheBug } from "@/components/SpotTheBug";
 import { SimilarQuestions } from "@/components/SimilarQuestions";
-import { submitCardReview, pauseCardReview, updateCard } from "@/lib/client-api";
+import { submitCardReview, pauseCardReview, updateCard, submitBatchReviews, BatchReviewItem } from "@/lib/client-api";
 import { canPauseCard, isCardPaused } from "@/lib/card-utils";
 import { Eye, Loader2, Code, ExternalLink, Brain, Pause, PenLine, Mic, Bug, Pencil, MessageSquare, Search, Maximize2, Minimize2, Palette, CalendarDays, Sparkles, ChevronLeft, ChevronRight, Calendar as CalendarIcon, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -38,8 +38,8 @@ export interface ReviewResult {
 interface ReviewSessionProps {
     cards: Flashcard[];
     allCards?: Flashcard[];
-    onComplete: (results: ReviewResult[], durationMs: number) => void;
-    onCancel: () => void;
+    onComplete: (results: ReviewResult[], durationMs: number, updatedCards?: Flashcard[], reviewsToday?: number) => void;
+    onCancel: (updatedCards?: Flashcard[], reviewsToday?: number) => void;
     mode?: "standard" | "random-quiz" | "sprint" | "reverse";
     timeLimitSeconds?: number;
     isQuickReview?: boolean;
@@ -118,6 +118,7 @@ export function ReviewSession({
     const [dismissedDryRunPrompt, setDismissedDryRunPrompt] = useState(false);
     const [reviewNote, setReviewNote] = useState<string>("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [results, setResults] = useState<ReviewResult[]>([]);
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(
         mode === "sprint" ? Math.max(1, timeLimitSeconds ?? 300) : null,
@@ -133,6 +134,7 @@ export function ReviewSession({
     const sessionStartTime = useRef(Date.now());
     const resultsRef = useRef<ReviewResult[]>([]);
     const completedRef = useRef(false);
+    const pendingReviewsRef = useRef<BatchReviewItem[]>([]);
     const [notesDrawerOpen, setNotesDrawerOpen] = useState(false);
 
     // Group cards by due date (YYYY-MM-DD)
@@ -357,7 +359,7 @@ export function ReviewSession({
                 : [];
 
     const finishSession = useCallback(
-        (finalResults: ReviewResult[]) => {
+        async (finalResults: ReviewResult[]) => {
             if (completedRef.current) return;
             completedRef.current = true;
             
@@ -372,10 +374,44 @@ export function ReviewSession({
             }
 
             const durationMs = Date.now() - sessionStartTime.current;
-            onComplete(finalResults, durationMs);
+            
+            if (pendingReviewsRef.current.length > 0) {
+                setIsSaving(true);
+                try {
+                    const { updatedCards, reviewsToday } = await submitBatchReviews(pendingReviewsRef.current);
+                    onComplete(finalResults, durationMs, updatedCards, reviewsToday);
+                } catch (err) {
+                    console.error("Failed to submit batch reviews:", err);
+                    onComplete(finalResults, durationMs);
+                } finally {
+                    setIsSaving(false);
+                }
+            } else {
+                onComplete(finalResults, durationMs);
+            }
         },
         [onComplete],
     );
+
+    const handleCancelSession = async () => {
+        if (completedRef.current) return;
+        completedRef.current = true;
+
+        if (pendingReviewsRef.current.length > 0) {
+            setIsSaving(true);
+            try {
+                const { updatedCards, reviewsToday } = await submitBatchReviews(pendingReviewsRef.current);
+                onCancel(updatedCards, reviewsToday);
+            } catch (err) {
+                console.error("Failed to submit batch reviews:", err);
+                onCancel();
+            } finally {
+                setIsSaving(false);
+            }
+        } else {
+            onCancel();
+        }
+    };
 
     useEffect(() => {
         if (!isSprint) {
@@ -577,92 +613,84 @@ export function ReviewSession({
     };
 
 
-    const submitReviewWithRating = async (rating: Rating, manualDays?: number) => {
-        if (isSubmitting || completedRef.current) return;
+    const submitReviewWithRating = (rating: Rating, manualDays?: number) => {
+        if (completedRef.current) return;
 
         const responseMs = Date.now() - cardStartTime.current;
-        setIsSubmitting(true);
 
         const result: ReviewResult = { card: currentCard, rating, responseMs };
         const newResults = [...results, result];
         setResults(newResults);
         resultsRef.current = newResults;
 
-        try {
-            await submitCardReview(currentCard.id, rating, responseMs, manualDays);
-            if (reviewNote !== (currentCard.metadata?.reviewNote || "")) {
-                await updateCard(currentCard.id, {
-                    metadata: { ...currentCard.metadata, reviewNote }
-                });
-            }
-        } catch (err) {
-            console.error("Failed to submit review:", err);
-        } finally {
-            setIsSubmitting(false);
-            advance(newResults, currentIndex + 1);
-        }
+        pendingReviewsRef.current.push({
+            cardId: currentCard.id,
+            rating,
+            responseMs,
+            manualReviewDays: manualDays,
+            reviewNote: reviewNote !== (currentCard.metadata?.reviewNote || "") ? reviewNote : undefined,
+        });
+
+        advance(newResults, currentIndex + 1);
     };
 
-    const submitFinalReview = async (manualDays?: number) => {
+    const submitFinalReview = (manualDays?: number) => {
         if (!pendingRating) return;
-        await submitReviewWithRating(pendingRating, manualDays);
+        submitReviewWithRating(pendingRating, manualDays);
     };
 
-    const handlePauseReview = async () => {
-        if (!pendingRating || isSubmitting || completedRef.current) return;
+    const handlePauseReview = () => {
+        if (!pendingRating || completedRef.current) return;
 
         const responseMs = Date.now() - cardStartTime.current;
-        setIsSubmitting(true);
 
         const result: ReviewResult = { card: currentCard, rating: pendingRating, responseMs };
         const newResults = [...results, result];
         setResults(newResults);
         resultsRef.current = newResults;
 
-        try {
-            // Submit the review first so it counts
-            await submitCardReview(currentCard.id, pendingRating, responseMs);
-            // Then pause the card
-            await pauseCardReview(currentCard.id);
-        } catch (err) {
-            console.error("Failed to pause review:", err);
-        } finally {
-            setIsSubmitting(false);
-            advance(newResults, currentIndex + 1);
-        }
+        pendingReviewsRef.current.push({
+            cardId: currentCard.id,
+            rating: pendingRating,
+            responseMs,
+            reviewNote: reviewNote !== (currentCard.metadata?.reviewNote || "") ? reviewNote : undefined,
+            action: "pause",
+        });
+
+        advance(newResults, currentIndex + 1);
     };
 
-    const handleMakeReference = async () => {
-        if (!pendingRating || isSubmitting || completedRef.current) return;
+    const handleMakeReference = () => {
+        if (!pendingRating || completedRef.current) return;
 
         const responseMs = Date.now() - cardStartTime.current;
-        setIsSubmitting(true);
 
         const result: ReviewResult = { card: currentCard, rating: pendingRating, responseMs };
         const newResults = [...results, result];
         setResults(newResults);
         resultsRef.current = newResults;
 
-        try {
-            // Submit the review first so it counts
-            await submitCardReview(currentCard.id, pendingRating, responseMs);
-            // Then update the card to be reference-only
-            await updateCard(currentCard.id, {
-                metadata: { ...currentCard.metadata, reference_only: true, reviewNote },
-                nextReview: "9999-12-31T23:59:59.999Z"
-            });
-        } catch (err) {
-            console.error("Failed to make card reference:", err);
-        } finally {
-            setIsSubmitting(false);
-            advance(newResults, currentIndex + 1);
-        }
+        pendingReviewsRef.current.push({
+            cardId: currentCard.id,
+            rating: pendingRating,
+            responseMs,
+            reviewNote: reviewNote !== (currentCard.metadata?.reviewNote || "") ? reviewNote : undefined,
+            action: "reference",
+        });
+
+        advance(newResults, currentIndex + 1);
     };
 
     if (!currentCard) return null;
 
     return (
         <div className={`transition-all duration-300 ease-in-out w-full mx-auto p-4 md:p-8 pb-32 flex flex-col gap-6 ${isFullscreen ? "fixed inset-0 z-50 bg-background/90 backdrop-blur-xl max-w-none overflow-y-auto pb-40" : "max-w-3xl pb-32"}`}>
+          {isSaving && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center gap-4 animate-in fade-in duration-200">
+              <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+              <p className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">Saving reviews...</p>
+            </div>
+          )}
           <div className={`w-full mx-auto flex flex-col gap-6 ${isFullscreen ? "max-w-4xl my-auto" : ""}`}>
             {/* Progress bar */}
             <div className="flex items-center justify-between gap-4">
@@ -707,18 +735,11 @@ export function ReviewSession({
                                 variant: "warning",
                             });
                             if (confirmed) {
-                                setIsSubmitting(true);
-                                try {
-                                    await updateCard(currentCard.id, {
-                                        metadata: { ...currentCard.metadata, reference_only: true },
-                                        nextReview: "9999-12-31T23:59:59.999Z"
-                                    });
-                                    advance(resultsRef.current, currentIndex + 1);
-                                } catch (err) {
-                                    console.error("Failed to mark card as reference:", err);
-                                } finally {
-                                    setIsSubmitting(false);
-                                }
+                                pendingReviewsRef.current.push({
+                                    cardId: currentCard.id,
+                                    action: "reference",
+                                });
+                                advance(resultsRef.current, currentIndex + 1);
                             }
                         }}
                         disabled={isSubmitting}
@@ -739,7 +760,7 @@ export function ReviewSession({
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={onCancel}
+                        onClick={handleCancelSession}
                         className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
                     >
                         End early

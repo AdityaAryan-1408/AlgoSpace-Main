@@ -8,6 +8,7 @@ interface KeyboardShortcutHandlers {
     onDashboard: () => void;
     onRefresh: () => void;
     onToggleTheme: () => void;
+    onSearch?: () => void;
     /** Whether a modal is currently open (shortcuts should be disabled) */
     isModalOpen: boolean;
     /** Whether keyboard shortcuts are globally disabled */
@@ -30,6 +31,7 @@ export function useKeyboardShortcuts({
     onDashboard,
     onRefresh,
     onToggleTheme,
+    onSearch,
     isModalOpen,
     disabled = false,
 }: KeyboardShortcutHandlers) {
@@ -68,10 +70,14 @@ export function useKeyboardShortcuts({
                     e.preventDefault();
                     onToggleTheme();
                     break;
+                case "/":
+                    e.preventDefault();
+                    onSearch?.();
+                    break;
             }
         };
 
         document.addEventListener("keydown", handler);
         return () => document.removeEventListener("keydown", handler);
-    }, [onAddCard, onReview, onDashboard, onRefresh, onToggleTheme, isModalOpen, disabled]);
+    }, [onAddCard, onReview, onDashboard, onRefresh, onToggleTheme, onSearch, isModalOpen, disabled]);
 }

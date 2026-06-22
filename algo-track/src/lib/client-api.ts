@@ -39,14 +39,11 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function fetchAllCards(): Promise<Flashcard[]> {
-    const data = await apiFetch<{ cards: Flashcard[] }>("/cards?light=true");
+    const data = await apiFetch<{ cards: Flashcard[] }>("/cards");
     return data.cards;
 }
 
-export async function searchCards(searchQuery: string): Promise<Flashcard[]> {
-    const data = await apiFetch<{ cards: Flashcard[] }>(`/cards?search=${encodeURIComponent(searchQuery)}`);
-    return data.cards;
-}
+
 
 export async function fetchDueCards(): Promise<Flashcard[]> {
     const data = await apiFetch<{ cards: Flashcard[] }>("/cards?dueOnly=true");
@@ -477,5 +474,26 @@ export async function updateUserProfile(updates: {
     return apiFetch<{ user: any }>("/users/me", {
         method: "PATCH",
         body: JSON.stringify(updates),
+    });
+}
+
+export interface BatchReviewItem {
+    cardId: string;
+    rating?: "AGAIN" | "HARD" | "GOOD" | "EASY";
+    responseMs?: number;
+    manualReviewDays?: number;
+    reviewNote?: string;
+    action?: "pause" | "reference";
+}
+
+export interface BatchReviewResponse {
+    updatedCards: Flashcard[];
+    reviewsToday: number;
+}
+
+export async function submitBatchReviews(reviews: BatchReviewItem[]): Promise<BatchReviewResponse> {
+    return apiFetch<BatchReviewResponse>("/reviews/batch", {
+        method: "POST",
+        body: JSON.stringify({ reviews }),
     });
 }

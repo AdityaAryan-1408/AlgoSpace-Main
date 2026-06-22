@@ -7,7 +7,7 @@ import type { Flashcard } from "@/data";
 import { isCardPaused } from "@/lib/card-utils";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
-import { searchCards } from "@/lib/client-api";
+// import { searchCards } from "@/lib/client-api"; // Removed: global search disabled
 import { extractTextFromRichNotes } from "@/lib/highlight";
 
 interface GlobalSearchModalProps {
@@ -79,6 +79,7 @@ export function GlobalSearchModal({ cards, onClose }: GlobalSearchModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Debounced API search when query changes
+  // Client-side search using already-loaded cards
   useEffect(() => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -87,19 +88,13 @@ export function GlobalSearchModal({ cards, onClose }: GlobalSearchModalProps) {
     }
 
     setIsLoading(true);
-    const handler = setTimeout(async () => {
-      try {
-        const results = await searchCards(query);
-        setSearchResults(results);
-      } catch (err) {
-        console.error("Global search failed:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 250); // 250ms debounce time
+    const handler = setTimeout(() => {
+      setSearchResults(cards);
+      setIsLoading(false);
+    }, 100);
 
     return () => clearTimeout(handler);
-  }, [query]);
+  }, [query, cards]);
 
   // Extract snippets for the matching cards using client logic
   const matches = useMemo(() => {

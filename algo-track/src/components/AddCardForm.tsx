@@ -34,7 +34,7 @@ export interface AddCardFormDefaults {
 interface AddCardFormProps {
     cardType: CardType;
     defaults?: AddCardFormDefaults;
-    onSubmitted: () => void;
+    onSubmitted: (card?: Flashcard) => void;
     submitLabel?: string;
     mode?: "add" | "edit";
     cardId?: string;
@@ -332,10 +332,11 @@ export function AddCardForm({
                 },
             };
 
+            let newCard: Flashcard | undefined;
             if (mode === "edit" && cardId) {
-                await updateCard(cardId, payload);
+                newCard = await updateCard(cardId, payload);
             } else {
-                await createCard({
+                newCard = await createCard({
                     type: cardType,
                     ...payload,
                     reviewInDays: isReferenceOnly ? undefined : (finalDays > 0 ? finalDays : undefined),
@@ -364,7 +365,7 @@ export function AddCardForm({
                     .catch(() => setSyncStatus("failed"));
             }
 
-            onSubmitted();
+            onSubmitted(newCard);
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : "Failed to create card.",

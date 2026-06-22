@@ -104,16 +104,14 @@ async function listReviewStatsForCards(userId: string, cardIds: string[]) {
   return buildReviewStats((data ?? []) as ReviewDbRow[]);
 }
 
-export async function listCardsForUser(userId: string, dueOnly = false, light = false, search?: string) {
+export async function listCardsForUser(userId: string, dueOnly = false, light = false) {
   const supabase = getSupabaseAdmin();
   const now = new Date();
   const endOfDayIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)).toISOString();
 
-  const isLight = search ? false : light;
-
   let selectFields = "id, type, title, description, url, notes, solution, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata";
 
-  if (isLight) {
+  if (light) {
     selectFields = "id, type, title, url, difficulty, last_rating, last_reviewed_at, next_review_at, tags, created_at, easiness_factor, interval_days, repetition_count, source, solved_at, topic_domain, topic_ids, metadata";
   }
 
@@ -124,11 +122,6 @@ export async function listCardsForUser(userId: string, dueOnly = false, light = 
 
   if (dueOnly) {
     query = query.lte("next_review_at", endOfDayIso);
-  }
-
-  if (search && search.trim()) {
-    const s = `%${search.trim()}%`;
-    query = query.or(`title.ilike.${s},description.ilike.${s},notes.ilike.${s},solution.ilike.${s},metadata->>richNotes.ilike.${s}`);
   }
 
   query = query
