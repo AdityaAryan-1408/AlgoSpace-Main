@@ -55,10 +55,10 @@ export function CardDetailsModal({
   const backdropRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const [tags, setTags] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>(propCard?.tags || []);
   const [newTag, setNewTag] = useState("");
-  const [notes, setNotes] = useState("");
-  const [reviewNote, setReviewNote] = useState("");
+  const [notes, setNotes] = useState(propCard?.notes || "");
+  const [reviewNote, setReviewNote] = useState((propCard?.metadata?.reviewNote as string) || "");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -166,10 +166,10 @@ export function CardDetailsModal({
     document.addEventListener("pointerup", handlePointerUp);
   };
   const [isPausing, setIsPausing] = useState(false);
-  const [richNotes, setRichNotes] = useState<string | undefined>(undefined);
+  const [richNotes, setRichNotes] = useState<string | undefined>(propCard?.richNotes);
   const [systemDesignTab, setSystemDesignTab] = useState<"richNotes" | "canvas" | "assistant">("richNotes");
   const [cardStudyTab, setCardStudyTab] = useState<"richNotes" | "aiTools">("richNotes");
-  const [canvasData, setCanvasData] = useState<string>("");
+  const [canvasData, setCanvasData] = useState<string>((propCard?.metadata?.systemDesignCanvas as string) || "");
   const [editorKey, setEditorKey] = useState("editor-details-desc");
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeOptions, setShowResumeOptions] = useState(false);
@@ -731,6 +731,7 @@ export function CardDetailsModal({
                 </div>
               ) : (
                 <RichNotesEditor
+                  key={`desc-${card.id}`}
                   readOnly
                   initialContent={card.description}
                   fallbackMarkdown={card.description}
@@ -787,7 +788,7 @@ export function CardDetailsModal({
                 {/* Tab Content */}
                 {systemDesignTab === "richNotes" && (
                   <RichNotesEditor
-                    key={`rich-notes-${editorKey}`}
+                    key={`rich-notes-${card.id}-${editorKey}`}
                     initialContent={richNotes}
                     fallbackMarkdown={notes}
                     onChange={(content) => {
@@ -850,6 +851,7 @@ export function CardDetailsModal({
                 {/* Tab Content */}
                 {cardStudyTab === "richNotes" && (
                   <RichNotesEditor
+                    key={`rich-notes-${card.id}-${editorKey}`}
                     initialContent={richNotes}
                     fallbackMarkdown={card.notes}
                     onChange={(content) => {
