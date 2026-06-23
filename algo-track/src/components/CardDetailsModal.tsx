@@ -320,22 +320,30 @@ export function CardDetailsModal({
       setRichNotes(propCard.richNotes);
       setReviewNote((propCard.metadata?.reviewNote as string) || "");
       setCanvasData((propCard.metadata?.systemDesignCanvas as string) || "");
-      setLoadingDetails(true);
-      fetchCardDetails(propCard.id)
-        .then((fullCard) => {
-          setCard(fullCard);
-          setTags(fullCard.tags);
-          setNotes(fullCard.notes);
-          setRichNotes(fullCard.richNotes);
-          setReviewNote((fullCard.metadata?.reviewNote as string) || "");
-          setCanvasData((fullCard.metadata?.systemDesignCanvas as string) || "");
-        })
-        .catch((err) => {
-          console.error("Failed to fetch card details:", err);
-        })
-        .finally(() => {
-          setLoadingDetails(false);
-        });
+
+      // If we already have the detailed fields, load instantly without network request or spinner
+      const hasDetails = !!(propCard.description || propCard.notes || propCard.richNotes || propCard.solution || (propCard.solutions && propCard.solutions.length > 0));
+
+      if (hasDetails) {
+        setLoadingDetails(false);
+      } else {
+        setLoadingDetails(true);
+        fetchCardDetails(propCard.id)
+          .then((fullCard) => {
+            setCard(fullCard);
+            setTags(fullCard.tags);
+            setNotes(fullCard.notes);
+            setRichNotes(fullCard.richNotes);
+            setReviewNote((fullCard.metadata?.reviewNote as string) || "");
+            setCanvasData((fullCard.metadata?.systemDesignCanvas as string) || "");
+          })
+          .catch((err) => {
+            console.error("Failed to fetch card details:", err);
+          })
+          .finally(() => {
+            setLoadingDetails(false);
+          });
+      }
       setAiReview(getStoredAiReview(propCard.id));
     }
   }, [propCard]);
